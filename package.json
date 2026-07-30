@@ -1,0 +1,50 @@
+{
+  "name": "@tayomi/cc-views",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Template-driven terminal rendering for Claude Code's MessageDisplay hook: data blocks in, coloured views on screen, zero tokens spent on presentation.",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "docs",
+    "examples"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "bin": {
+    "cc-views-messagedisplay": "./dist/bin/messagedisplay.js"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "executableFiles": [
+      "./dist/bin/messagedisplay.js"
+    ]
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint \"src/**/*.ts\" --max-warnings 0"
+  },
+  "dependencies": {
+    "@tayomi/utils": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "eslint": "^10.6.0",
+    "eslint-plugin-security": "^4.0.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.1",
+    "vitest": "^4.1.5"
+  }
+}

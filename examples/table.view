@@ -1,0 +1,5 @@
+# The decorator demo: a plain two-column pipe table, dressed on screen.
+@fields rows label content
+@each rows cap="1/3"
+{{key}}${label}{{/}}  ${content}
+@end

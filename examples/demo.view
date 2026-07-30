@@ -1,0 +1,10 @@
+# The front door demo: one map, one labelled loop, one box.
+@map verdicts ok=pass warn=warn fail=fail
+@fields checks verdict name detail
+@box
+@head ${service} deploy
+@right ${env}
+@each checks label="CHECKS"
+${#label}  ${verdict:verdicts} ${name}  ${detail}
+@end
+@endbox
