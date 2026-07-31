@@ -1,7 +1,6 @@
 {
   "name": "@tayomi/cc-views",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Template-driven terminal rendering for Claude Code's MessageDisplay hook: data blocks in, coloured views on screen, zero tokens spent on presentation.",
   "license": "MIT",
@@ -46,5 +45,9 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.1",
     "vitest": "^4.1.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mopi1402/tayomi-cc-views.git"
   }
 }
