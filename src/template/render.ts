@@ -71,8 +71,10 @@ export function renderView(
   // same reason: a dressing must never make an empty block look parsed.
   if (dressing?.type != null) full.type = dressing.type;
   // The width is platform policy, resolved ONCE here at the render entry and handed
-  // down as a value: the layers below never import platform/.
-  const out = renderBody(body, full, maps, objectLists, maxBoxWidth(options));
+  // down as a value: the layers below never import platform/. The search path travels
+  // the same way and for the same reason: an @aside names a view, and the dirs it
+  // resolves against are the caller's policy, not something the directive layer probes.
+  const out = renderBody(body, full, maps, objectLists, maxBoxWidth(options), dir);
   // The class filling the tone slot, MOST EXPLICIT FIRST: the carrier's own tone, the
   // block's `tone` field (the fenced form's only way in, since it carries no
   // attributes), then the kind under either of those two names, then what the template

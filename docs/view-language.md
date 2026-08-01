@@ -21,6 +21,10 @@ default form, never on an error. One asymmetry to know: the LAST directory is re
 unconditionally rather than existence-checked, so a view found nowhere fails with a
 real path (which the caller turns into the raw block on screen).
 
+A typed form is for a different SHAPE, and for nothing else. A view that only changes
+COLOUR under a kind needs no second file: it spends the tone slot (below), which is
+what keeps a near-copy of a template from existing per colour.
+
 ## Template anatomy
 
 - A line starting with `#` (leading whitespace allowed) is a template comment,
@@ -29,6 +33,9 @@ real path (which the caller turns into the raw block on screen).
   `@map verdicts ok=pass fail=fail`. Pairs missing either side are skipped.
 - `@fields <list> <field> <field> ...` declares that items of `<list>` split into
   named fields (see the data format below).
+- `@tone <tag>` declares the class this template's tone slot holds by DEFAULT, e.g.
+  `@tone key`. One tag name and nothing else on the line. A carrier that names a
+  class outranks it (see the tone slot below).
 - Every other line is body, rendered in order.
 
 ## The data a block carries
@@ -96,6 +103,48 @@ rendered. Boxes do not nest.
   substitutions, and the rule survives only between two lines that actually
   printed.
 
+### `@aside <view> [top|bottom] ... @endaside`
+
+Lays a SECOND column to the LEFT of every line up to `@endaside`. The column's
+content is the named view, resolved through the same ordered search path as any
+other view (shadowing included), and nothing else: a region NAMES its content and
+cannot carry it inline, which is the whole point of the primitive (raw art stays out
+of a readable template).
+
+```
+@box
+The health check, at the full content width.
+@rule
+@aside tayo
+ {{cyan}}LEARN  {{/}}  {{cyan}}▎{{/}} the first section, beside the picture
+@endaside
+@endbox
+```
+
+- The named view is read as PLAIN ROWS: no directive in it is honoured and no
+  substitution runs over it, so a file carrying `@box`, `@each`, `@map` or `@foot`
+  shows those lines as text. Art meant for a region therefore ships frameless.
+- The region spends the aside's own printed width plus FIVE columns before the main
+  flow: two spaces, the separator, two spaces. With a 28-cell picture that is 33
+  columns, and the main flow gets whatever is left of the box's content width.
+- Below **40 printed columns of box content** for the main flow (the box's width
+  ceiling less its 4 columns of border, not the terminal's width), the aside and its
+  separator are DROPPED whole and the flow takes the full width. A picture is
+  decoration; prose squeezed beside one is not readable.
+- The two columns CENTRE against each other, and an odd padding row goes below.
+  `@aside <view> top` and `@aside <view> bottom` pin the shorter column to that edge
+  instead. Anything else after the name makes the line plain text.
+- A view that resolves NOWHERE degrades to the full-width main flow: a decoration
+  never takes its box down.
+- An aside row is emitted verbatim, never wrapped, split or restyled: every composed
+  line is built to fit the box already, which is what keeps the wrapper from breaking
+  a picture on the spaces its transparent pixels are made of.
+- A BLANK main-flow line survives inside a region (the composed line still carries
+  the separator, so the box has no blank run to collapse). Outside a region, blank
+  collapsing is unchanged.
+- Regions do not nest, they carry no `@rule` (an inner rule is filled to the border,
+  which means nothing across two columns), and the column is always on the left.
+
 ## Substitutions
 
 `${...}` resolves against the block's fields (plus the loop's bookkeeping):
@@ -120,13 +169,46 @@ The built-in vocabulary (`style.ts`):
 - Weight: `b`, `dim`.
 - Colours: `red`, `green`, `yellow`, `cyan`, `orange`, `gold`.
 - Semantic foreground: `pass`, `warn`, `fail`, `high`, `med`, `low`, `key`.
+- Carrier names, aliases of the above: `warning` (= `warn`), `error` (= `fail`),
+  `success` (= `pass`), `info` (= `key`). They exist so a kind a carrier names
+  dresses a view with no template of its own.
 - Filled chips: `chip`, `title`, `pass_bg`, `warn_bg`, `fail_bg`, `high_bg`,
-  `med_bg`, `low_bg`.
+  `med_bg`, `low_bg`, `warning_bg`, `error_bg`, `success_bg`, `info_bg`.
 - Furniture: `box_rule`, `box_title`; `code` is the inline-code colour.
+- The tone slot: `tone`, `tone_bg` (below).
 
 A host adds its own tags process-wide with `extendTags` (see the integration
-reference). Inline backtick code spans (`` `like this` ``) render on every view in
+reference); a host's registration SHADOWS a built-in name, the last word going to
+the screen's owner, under the same law that lets a views dir shadow a bundled
+view. Inline backtick code spans (`` `like this` ``) render on every view in
 Claude Code's native inline-code colour; the backticks cost no width.
+
+### The tone slot
+
+`{{tone}}` and `{{tone_bg}}` are the one pair of tags whose colour the RENDER decides
+instead of the template. A view writes them where its accent goes; a carrier names the
+class that fills them, like sticking a class on it. Same template, any colour, no
+second file:
+
+```
+@tone key
+@each rows
+{{tone}}${label}{{/}}  ${content}
+@end
+```
+
+The class is a palette tag NAME (`warn`, `dim`, `gold`, a host's own tag, or a carrier
+name above). Resolution, most explicit first:
+
+1. `tone:` on the decorator line;
+2. the block's own `tone` field (the fenced block's way in: it carries no attributes);
+3. the kind, from `type:` on the decorator or a `type` field;
+4. the template's `@tone`;
+5. otherwise the neutral (`key`).
+
+Every candidate is checked against the palette and an unknown name falls THROUGH to
+the next one, so a typo costs a colour, never the render. `{{tone_bg}}` spends the
+class's `_bg` chip, or its foreground when the palette has no chip for it.
 
 ## The carriers
 
@@ -144,17 +226,29 @@ the screen and revealed rendered when it closes. On any failure (unknown view,
 zero fields parsed from a non-empty body, render error) the raw block shows,
 fences included: fail-open, never a blank.
 
+The block carries no attributes, so a `tone` or `type` FIELD is how it names the class
+filling the tone slot. They stay ordinary fields: a template that never spends the slot
+and never prints them renders exactly as it did without them.
+
 ### The decorator line
 
 ```
 @{view:<name>}
 @{view:<name>, type:<kind>}
+@{view:<name>, tone:<tag>}
+@{view:<name> type:<kind> tone:<tag>}
 ```
 
 Alone on its line (surrounding whitespace allowed), directly above a two-column
 pipe table: header row MANDATORY (its cells may be empty, `| | |`), then the
 delimiter row, then at least one data row. The zone ends by markdown's own block
 rule, at the first line that no longer starts with a pipe.
+
+A decorator with NO payload at all summons the view with no data: how a static
+view is asked for (`@{view:welcome}` alone is the whole health check). A
+data-driven view summoned bare renders nothing, and the hollow-render guard
+shows the raw line instead. A payload that exists but is not the supported
+table shape still fails open.
 
 - The payload stays plain markdown, so the FALLBACK is native: wherever the hook
   does not run, the reader gets an ordinary table under one extra line.
@@ -163,10 +257,16 @@ rule, at the first line that no longer starts with a pipe.
 - A cell may carry an escaped pipe (`\|`) and authored `**bold**` spans (rendered
   as bold, per span; nothing is added the message did not carry).
 - `type:` names the KIND of content (`warning`, `error`, `success`; think markdown
-  admonitions), resolved as a typed form (above). It is the only attribute: an
-  unknown attribute makes the line prose, as does a space before the comma. The
-  token must begin `@{view:` exactly, which keeps PowerShell's `@{Name='x'}` and
-  a quoted mention inside a sentence from engaging.
+  admonitions). It selects a typed form when one exists (above), reaches the template
+  as the `type` field (so `@frame type warning=fail` colours a border from it), and
+  fills the tone slot when the palette knows the name.
+- `tone:` names the LOOK: a palette tag stuck on this render, no file, no semantics,
+  and it outranks the kind. A look wearing a semantic name (`type:even`) would lie to
+  the model about what the content IS, which is why the two words stay apart.
+- Both attributes are OPTIONAL, come in any order, and are separated by a comma,
+  whitespace, or both. Any OTHER attribute makes the line prose. The token must begin
+  `@{view:` exactly, which keeps PowerShell's `@{Name='x'}` and a quoted mention
+  inside a sentence from engaging.
 - Streaming is withheld from the decorator line, anchored, and revealed when the
   zone's end is known. Fail-open on every path (unknown template, malformed
   payload, a template that reads none of the rows): the raw markdown shows,
