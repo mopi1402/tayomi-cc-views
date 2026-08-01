@@ -1,0 +1,7 @@
+#!/bin/sh
+# Pre-commit gate: the packed tarball must work as installed before anything ships.
+# Enable once per clone: git config core.hooksPath scripts/git-hooks
+set -e
+
+echo "pre-commit: pnpm verify:pack"
+pnpm verify:pack
