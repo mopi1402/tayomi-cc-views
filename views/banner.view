@@ -1,0 +1,19 @@
+# banner.view: ONE band, full-colour background, rounded Powerline caps.
+# Two flat fields, because a single line has no business declaring a list:
+#
+#   ```view:banner
+#   label: ⚠ WARNING
+#   content: two flaky suites, publication is blocked
+#   ```
+#
+# `type:` (or `tone:`) on a decorator picks the colour, same file for every
+# kind. SEVERAL bands are several blocks, never one list: the caps exist to
+# make ONE band read as a pill, and stacking them scallops both flanks.
+# The caps are U+E0B6/U+E0B4 (Powerline). A font without them shows two
+# hollow boxes around the band; swap them for ▐ and ▌ if yours does not.
+# The default is `info`: an undecorated @{view:banner} is a cyan NOTE band,
+# caps matching the fill. Only classes with a _bg chip fill a band (warning,
+# error, success, info, warn, fail, pass, high, med, low); `tone:gold` has
+# none, so it drops to gold TEXT between gold caps, no background.
+@tone info
+{{tone}}{{/}}{{tone_bg}} ${label}  ${content} {{/}}{{tone}}{{/}}

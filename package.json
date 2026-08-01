@@ -1,13 +1,12 @@
 {
   "name": "@tayomi/cc-views",
-  "version": "0.1.0",
+  "version": "0.1.1-rc.8",
   "type": "module",
   "description": "Template-driven terminal rendering for Claude Code's MessageDisplay hook: data blocks in, coloured views on screen, zero tokens spent on presentation.",
   "license": "MIT",
   "files": [
     "dist",
-    "docs",
-    "examples"
+    "views"
   ],
   "exports": {
     ".": {
@@ -33,7 +32,9 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint \"src/**/*.ts\" --max-warnings 0"
+    "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
+    "verify:pack": "pnpm build && node scripts/verify-pack.mjs",
+    "prepublishOnly": "pnpm lint && pnpm typecheck && pnpm test && pnpm verify:pack"
   },
   "dependencies": {
     "@tayomi/utils": "^0.1.0"
