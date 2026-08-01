@@ -63,8 +63,16 @@ export interface Prefix {
   complete: boolean;
 }
 
+/**
+ * Anything a message id may NOT put in a path. A host chooses the id, so a separator
+ * or a `..` in one would reach outside the scratch dir; folded to one safe character,
+ * which keeps the naming total instead of rejecting an id the host considers valid.
+ */
+const UNSAFE_IN_ID = /[^\w.-]/g;
+const SAFE_CHAR = "_";
+
 function messageDir(id: string, stateDir: string): string {
-  return path.join(streamDir(stateDir), id.replace(/[^\w.-]/g, "_"));
+  return path.join(streamDir(stateDir), id.replace(UNSAFE_IN_ID, SAFE_CHAR));
 }
 
 function deltaPath(dir: string, index: number): string {

@@ -4,9 +4,38 @@
 // itself (its enum tables, its object-list fields, the width of its label column)
 // are all resolvable before a single field value is known.
 
+import {
+  EACH,
+  FIELDS,
+  LABEL,
+  MAP,
+  PAIR_SEP,
+  TOKEN_SEP,
+  TONE,
+  declSource,
+} from "../data/language.js";
 import { printedWidth } from "../layout/measure.js";
 import type { Maps } from "../scope.js";
 import type { ObjectLists } from "./view-data.js";
+
+// Every pattern composes from the keyword table, so renaming a directive is one edit
+// there and no matcher is left answering to the old word.
+const NAME_AND_REST = String.raw`\s+(\S+)\s+(.*)$`;
+// eslint-disable-next-line security/detect-non-literal-regexp
+const re = (source: string, flags?: string): RegExp => new RegExp(source, flags);
+
+const MAP_RE = re(`^${MAP}${NAME_AND_REST}`);
+const FIELDS_RE = re(`^${FIELDS}${NAME_AND_REST}`);
+// @tone takes ONE tag name and nothing else: it names the template's default class, so
+// a pair (the @map shape) would be a second mapping table for a decision the palette
+// already holds. A malformed line is body, like every other near-miss in this parser.
+const TONE_RE = re(String.raw`^${TONE}[ \t]+(\w+)[ \t]*$`);
+const LABELS_RE = re(String.raw`^${EACH}[ \t]+\S+[ \t]*${declSource(LABEL)}`, "gm");
+
+/** A line the template author wrote for themselves: dropped before anything reads it. */
+const COMMENT_RE = /^\s*#/;
+/** Every CR, so a template saved on Windows parses as the same lines as one saved here. */
+const CR_RE = /\r/g;
 
 export interface Template {
   // enum-to-style tables, declared with @map <name> <val>=<tag> ...
@@ -26,36 +55,32 @@ export interface Template {
 }
 
 export function parseTemplate(text: string): Template {
-  const tmpl = text.replace(/\r/g, "");
+  const tmpl = text.replace(CR_RE, "");
   const maps: Maps = {};
   const objectLists: ObjectLists = {};
   const body: string[] = [];
   let tone: string | undefined;
   for (const line of tmpl.split("\n")) {
-    if (/^\s*#/.test(line)) continue; // template comment
-    const mm = line.match(/^@map\s+(\S+)\s+(.*)$/);
-    const ff = line.match(/^@fields\s+(\S+)\s+(.*)$/);
-    // @tone takes ONE tag name and nothing else: it names the template's default
-    // class, so a pair (the @map shape) would be a second mapping table for a
-    // decision the palette already holds. A malformed line is body, like every
-    // other near-miss in this parser.
-    const tn = line.match(/^@tone[ \t]+(\w+)[ \t]*$/);
+    if (COMMENT_RE.test(line)) continue;
+    const mm = line.match(MAP_RE);
+    const ff = line.match(FIELDS_RE);
+    const tn = line.match(TONE_RE);
     if (mm) {
       const map: Record<string, string> = {};
-      for (const pair of mm[2].trim().split(/\s+/)) {
-        const [k, v] = pair.split("=");
+      for (const pair of mm[2].trim().split(TOKEN_SEP)) {
+        const [k, v] = pair.split(PAIR_SEP);
         if (k && v) map[k] = v;
       }
       maps[mm[1]] = map;
     } else if (ff) {
-      objectLists[ff[1]] = ff[2].trim().split(/\s+/);
+      objectLists[ff[1]] = ff[2].trim().split(TOKEN_SEP);
     } else if (tn) {
       tone = tn[1];
     } else {
       body.push(line);
     }
   }
-  const labelWidth = [...tmpl.matchAll(/^@each\s+\S+\s+label="([^"]*)"/gm)].reduce(
+  const labelWidth = [...tmpl.matchAll(LABELS_RE)].reduce(
     (n, m) => Math.max(n, printedWidth(m[1])),
     0
   );

@@ -6,10 +6,12 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { transform } from "./pipeline.js";
-import { ANSI_RE } from "./style.js";
+import { transform } from "../../src/pipeline.js";
+import { ANSI_RE } from "../../src/style.js";
+import { BLOCK_HINT, DECORATOR_CLOSE, DECORATOR_HINT, FENCE } from "../../src/data/markup.js";
 
-const EXAMPLES = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "examples");
+const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const EXAMPLES = path.join(REPO, "examples");
 const options = { viewsPath: [EXAMPLES], width: 60 };
 const render = (msg: string): string => transform(msg, undefined, true, undefined, options);
 
@@ -17,14 +19,14 @@ const lines = (...rows: string[]): string => [...rows, ""].join("\n");
 
 describe("the demo view", () => {
   const BLOCK = lines(
-    "```view:demo",
+    BLOCK_HINT + "demo",
     "service: payments",
     "env: staging",
     "checks:",
     "- ok build the bundle compiles",
     "- warn tests 2 flaky suites skipped",
     "- fail lint 3 errors in api.ts",
-    "```"
+    FENCE
   );
 
   it("renders the map's chips for known values", () => {
@@ -57,11 +59,11 @@ describe("the demo view", () => {
 describe("the decorator demo", () => {
   const table = (deco: string): string =>
     lines(deco, "| | |", "| --- | --- |", "| Status | all green |");
-  const MSG = table("@{view:table}");
+  const MSG = table(`${DECORATOR_HINT}table${DECORATOR_CLOSE}`);
 
   it("dresses the plain table, decorator line and furniture gone", () => {
     const out = render(MSG);
-    expect(out).not.toContain("@{view:");
+    expect(out).not.toContain(DECORATOR_HINT);
     expect(out).not.toContain("|");
     const plain = out.replace(ANSI_RE, "");
     expect(plain).toContain("Status");
@@ -70,7 +72,7 @@ describe("the decorator demo", () => {
   });
 
   it("changes colour on the type, the one demo file dressing every kind", () => {
-    const warned = render(table("@{view:table, type:warning}"));
+    const warned = render(table(`${DECORATOR_HINT}table, type:warning${DECORATOR_CLOSE}`));
     expect(warned).toContain("\x1b[1;33m"); // yellow, spelled independently
     expect(warned).not.toBe(render(MSG));
     // Colour is the ONLY difference: no second template, no second wording.

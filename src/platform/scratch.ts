@@ -8,10 +8,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { SCRATCH_DIR } from "../data/markup.js";
 
 // The default only: a host that must not share scratch with another host on the
 // same machine passes its own dir through RenderOptions.stateDir.
-export const DEFAULT_STATE_DIR = path.join(os.tmpdir(), "cc-views");
+export const DEFAULT_STATE_DIR = path.join(os.tmpdir(), SCRATCH_DIR);
 
 export function writeScratch(file: string, data: string): void {
   try {

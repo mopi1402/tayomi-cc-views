@@ -12,7 +12,10 @@ import { transform, slice } from "../pipeline.js";
 import { handleMessageDisplay } from "../hook/runner.js";
 import { cutStreamingDecorated, DECORATOR_HINT } from "./decorator.js";
 import { VIEW_EXT } from "../template/load.js";
-import { ANSI_RE } from "../style.js";
+import { ANSI_RE, tagMark } from "../style.js";
+import { hasControlMark } from "../data/marks.js";
+import { EACH, END, FIELDS, TONE } from "../data/language.js";
+import { SCRATCH_DIR } from "../data/markup.js";
 
 const ESC = "\x1b";
 const RESET = `${ESC}[0m`;
@@ -69,13 +72,13 @@ const decorated = (deco: string, ...rows: string[]): string =>
 
 // Every fixture view is the same loop around one body line.
 const rowsView = (line: string, attrs = ""): string =>
-  lines("@fields rows label content", `@each rows${attrs}`, line, "@end");
+  lines(`${FIELDS} rows label content`, `${EACH} rows${attrs}`, line, END);
 const viewFile = (name: string, type?: string): string =>
   (type === undefined ? name : `${name}.${type}`) + VIEW_EXT;
 
 // Two view dirs, so the type-shadowing tests have an order to observe.
-const first = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-deco-a-"));
-const second = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-deco-b-"));
+const first = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-deco-a-`));
+const second = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-deco-b-`));
 const write = (dir: string, name: string, body: string): void =>
   fs.writeFileSync(path.join(dir, name), body);
 
@@ -84,7 +87,7 @@ write(second, viewFile(ITEM), rowsView("{{cyan}}${label}{{/}}" + SEP + "${conten
 const STATIC = "static";
 write(second, viewFile(STATIC), "the box is the template\n");
 write(second, viewFile(TONED), rowsView("{{tone}}${label}{{/}}" + SEP + "${content}"));
-write(second, viewFile(DEFAULTED), "@tone gold\n" + rowsView("{{tone}}${label}{{/}}" + SEP + "${content}"));
+write(second, viewFile(DEFAULTED), `${TONE} gold\n` + rowsView("{{tone}}${label}{{/}}" + SEP + "${content}"));
 write(second, viewFile(CHIPPED), rowsView("{{tone_bg}}${label}{{/}}" + SEP + "${content}"));
 write(second, viewFile(ITEM, ALERT), rowsView("!! ${label} ${content}"));
 write(first, viewFile(ITEM, LOUD), rowsView("A[${label}|${content}]"));
@@ -143,6 +146,23 @@ describe("a decorated payload", () => {
     const out = transform(decorated(decorator(ITEM), "| a | so **very** bold |"), undefined, true, undefined, options);
     expect(out).toContain(`${BOLD}very`);
     expect(out).not.toContain("*");
+  });
+
+  it("honours the `**` it derives, and nothing the cell wrote as markup itself", () => {
+    // Both live in one string by the time the template sees them, so the order in
+    // cell() is the whole guarantee: neutralise, then style.
+    const written = `${tagMark("fail")}not${tagMark("/")}`;
+    const out = transform(
+      decorated(decorator(ITEM), `| a | **real** and ${written} |`),
+      undefined,
+      true,
+      undefined,
+      options
+    );
+    expect(out).toContain(`${BOLD}real`);
+    expect(out.replace(ANSI_RE, "")).toContain(written);
+    expect(out).not.toContain(RED); // the tag never opened its colour
+    expect(hasControlMark(out)).toBe(false);
   });
 
   it("renders a cell holding an escaped pipe, pipe on screen", () => {
@@ -316,7 +336,7 @@ describe("fail-open, decorator line included", () => {
   it("shows the raw zone when the template exists but reads none of the rows", () => {
     // The old two-cell table.view shape: it throws nothing and renders only
     // whitespace, and a blank where content stood must fail open, not ship.
-    write(second, viewFile(STALE), lines("@fields left right", "${left}  ${right}"));
+    write(second, viewFile(STALE), lines(`${FIELDS} left right`, "${left}  ${right}"));
     const msg = decorated(decorator(STALE), KV_ROW);
     expect(raw(msg)).toBe(msg);
   });
@@ -352,7 +372,7 @@ describe("streaming", () => {
   });
 
   it("withholds through handleMessageDisplay, out-of-order flushes included", async () => {
-    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-deco-state-"));
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-deco-state-`));
     const opts = { ...options, stateDir };
     const id = `deco-stream-${process.pid}`;
     const payload = (index: number, delta: string, final = false): Record<string, unknown> => ({

@@ -20,13 +20,15 @@ import os from "node:os";
 import path from "node:path";
 import { slice, transform } from "../pipeline.js";
 import { cutUnclosedBlock } from "./scan.js";
+import { EACH, END } from "../data/language.js";
+import { SCRATCH_DIR, VIEW_EXT } from "../data/markup.js";
 
 // The view the witnesses carry: this file is about the CARRIER, so the template is
 // deliberately the most boring one that renders (no box, no frame, one loop).
-const NOTE_VIEW = ["@each note", " - ${.}", "@end", ""].join("\n");
+const NOTE_VIEW = [`${EACH} note`, " - ${.}", END, ""].join("\n");
 
-const views = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-scan-"));
-fs.writeFileSync(path.join(views, "note.view"), NOTE_VIEW);
+const views = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-scan-`));
+fs.writeFileSync(path.join(views, "note" + VIEW_EXT), NOTE_VIEW);
 afterAll(() => {
   fs.rmSync(views, { recursive: true, force: true });
 });
