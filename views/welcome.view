@@ -1,0 +1,70 @@
+# welcome.view, the package's health check and its smallest showcase.
+# Lines starting with # never render: this file is the tutorial, and the box
+# it draws tells you where to go next.
+# Two rules bite when you write your own: directives sit at column 0 (an
+# indented directive is plain text), and body whitespace is content, it is
+# what keeps the columns below aligned.
+
+# A titled, framed box. @head is the left end of the top rule, @right the
+# right end. The box sizes itself to its widest line.
+@box
+@head {{box_title}}Welcome!{{/}}
+@right @tayomi/cc-views
+
+# The health-check line is STATIC on purpose: an empty view:welcome block
+# renders this box word for word, so the agent has nothing to improvise and
+# the human recognises the canonical output at a glance. It stays FULL WIDTH,
+# above the two-column zone: the first thing read is never narrowed.
+# The backticks are the check, not decoration: the one word they wrap is the
+# one word that comes out coloured, so the line proves inline code rendering
+# on the very screen it greets you from.
+If you can read this with `style`, everything works! 🎉🎉
+# @rule draws an inner divider. Keep it glued to the lines around it: the box
+# collapses blank runs, and a rule floating between two blanks collapses with
+# them. It is full width too, filled to the border, which is exactly why the
+# language forbids one INSIDE a region: a border-wide dash across two columns
+# would mean nothing.
+@rule
+# @aside NAMES a view and lays its rows in a second column, on the LEFT of
+# every line up to @endaside. The named file is read as plain rows and no
+# directive in it is honoured, which is why views/tayo.view ships frameless.
+# The column costs its own printed width plus five columns (two spaces, the
+# separator, two spaces), and it is dropped WHOLE the moment that would leave
+# the main flow under 40 columns of box content: on a narrow terminal you get
+# the text, never a ribbon. The two columns centre against each other; add
+# `top` or `bottom` after the name to pin them to an edge instead.
+@aside tayo
+ {{dim}}what you can do now{{/}}
+
+# A section in the TL;DR style: a coloured label, a gutter bar, the text.
+# {{tags}} weigh zero columns, so the labels are padded BY HAND to seven
+# columns and the bars line up: that is the whitespace-is-content rule at
+# work. The bar is U+258E, full height, so consecutive lines join into one
+# frange. A blank label continues the section above.
+# A blank line inside the region SURVIVES: the composed line still carries
+# the art and the separator, so the box has no blank run to collapse.
+ {{cyan}}LEARN  {{/}}  {{cyan}}▎{{/}} this very box is a template: read
+ {{cyan}}       {{/}}  {{cyan}}▎{{/}} {{code}}views/welcome.view{{/}}, commented line by line
+
+ {{gold}}CREATE {{/}}  {{gold}}▎{{/}} drop {{code}}yours.view{{/}} in your project's {{code}}views/{{/}}
+ {{gold}}       {{/}}  {{gold}}▎{{/}} and write {{code}}view:yours{{/}} blocks: same name
+ {{gold}}       {{/}}  {{gold}}▎{{/}} shadows any view, even this one
+
+ {{green}}ASK    {{/}}  {{green}}▎{{/}} your agent can read this file and the docs,
+ {{green}}       {{/}}  {{green}}▎{{/}} then write your template for you
+
+# This box is deliberately static, but a real view is fed DATA. The worked
+# examples do not ship in the package (the tarball carries only dist/ and
+# views/), so this pointer goes to the repository instead.
+ {{orange}}EXPLORE{{/}}  {{orange}}▎{{/}} this box is all static, but views carry data:
+ {{orange}}       {{/}}  {{orange}}▎{{/}} fields, maps, chips, dressed by the template.
+ {{orange}}       {{/}}  {{orange}}▎{{/}} worked examples: github.com/mopi1402/tayomi-cc-views
+@endaside
+
+# @foot names a FIELD, never text: the bottom zone exists only when the block
+# carries `message:`, and vanishes without a trace when it does not. This is
+# the conditional the language does not otherwise have, and the one OPTIONAL
+# datum of this view: data decides presence, the template decides looks.
+# It sits below @endaside, so the zone stays full width like the rule above.
+@foot message
+@endbox

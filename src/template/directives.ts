@@ -4,13 +4,16 @@
 //             @each <field> ... @end          (repeat per list item)
 //             @box ... @endbox (+ @head, @right, @foot, @frame)
 //             @rule [prefix]                  (inner division, filled by the box)
+//             @aside <view> [top|bottom] ... @endaside   (a second column, left)
 // Substitutions: ${field}  ${field:mapname}  ${.}  ${#}  ${#label}  ${#bullet}
 
-import { frameBox } from "../layout/box.js";
+import { composeAside, type AsideAlign } from "../layout/aside.js";
+import { BOX_CHROME, frameBox } from "../layout/box.js";
 import { columnWidths, type PadCtx } from "../layout/columns.js";
 import { HANG_MARK, RULE_MARK } from "../layout/marks.js";
 import { printedWidth } from "../layout/measure.js";
 import { lookup, stringify, type Maps, type Scope } from "../scope.js";
+import { loadTemplate } from "./load.js";
 import { subst } from "./substitute.js";
 import type { ObjectLists } from "./view-data.js";
 
@@ -61,14 +64,45 @@ function frameTone(scope: Scope, field: string, pairs: string): string | undefin
   return undefined;
 }
 
-// `limit` is the box width ceiling, resolved once by the render entry (render.ts)
-// and carried down to every @box: the directives never ask the platform anything.
+// The rows an @aside puts in its left column: the named view's BODY lines, taken
+// as text. No directive in them is honoured and no substitution runs over them,
+// which is what keeps a region from opening a nested box or a loop it cannot close;
+// the art a region names therefore ships frameless.
+//
+// Resolved through the LOADER, the one module that knows a view is a file, and along
+// the very search path the render entry handed down: the shadowing contract holds
+// here exactly as it does for a top-level view, and this layer still probes nothing.
+//
+// A name that resolves nowhere yields no row, which composeAside reads as "no
+// column": a decoration must never take its box down with it.
+function asideRows(name: string, dirs: string | string[]): string[] {
+  let rows: string[];
+  try {
+    rows = loadTemplate(name, dirs).body;
+  } catch {
+    return [];
+  }
+  // The file's terminating newline leaves a last empty element, and a blank line
+  // around the art is a file's punctuation rather than a row of the picture. Both
+  // would shift the column against its flow, so the ends are trimmed; every row
+  // BETWEEN them is kept, blank ones included, and emitted verbatim.
+  let first = 0;
+  let last = rows.length;
+  while (first < last && printedWidth(rows[first]) === 0) first++;
+  while (last > first && printedWidth(rows[last - 1]) === 0) last--;
+  return rows.slice(first, last);
+}
+
+// `limit` is the box width ceiling and `viewsPath` the ordered template dirs, both
+// resolved once by the render entry (render.ts) and carried down: the directives ask
+// the platform nothing and search for nothing on their own.
 export function renderBody(
   body: string[],
   scope: Scope,
   maps: Maps,
   objectLists: ObjectLists,
-  limit: number
+  limit: number,
+  viewsPath: string | string[]
 ): string[] {
   const out: string[] = [];
   for (let i = 0; i < body.length; i++) {
@@ -100,10 +134,43 @@ export function renderBody(
         ...frameBox(
           head,
           right,
-          renderBody(inner, scope, maps, objectLists, limit),
+          renderBody(inner, scope, maps, objectLists, limit, viewsPath),
           zoneLines(scope, footField),
           tone,
           limit
+        )
+      );
+      continue;
+    }
+    // @aside <view> [top|bottom] ... @endaside: the region's lines render as an
+    // ordinary flow and are then composed against the named view's rows, which sit
+    // in a second column to their LEFT. The region NAMES its content and never
+    // carries it: the whole point of the primitive is to keep a wall of pixels out
+    // of a readable template.
+    //
+    // Not nestable, like @box and for the same reason. The optional alignment token
+    // rides here rather than on a line of its own so the region's shape is declared
+    // in one place.
+    //
+    // Parsed in two steps, the name then its token, for the reason @each is: one
+    // regex carrying an OPTIONAL quantified group plus a trailing \s*$ nests its
+    // quantifiers and backtracks on a near-miss. The strictness is kept where it
+    // matters: anything left over that is not an alignment word means this is NOT a
+    // region, and the line prints as text rather than swallowing the lines below it.
+    const aside = body[i].match(/^@aside[ \t]+(\S+)(.*)$/);
+    const token = aside ? aside[2].trim() : "";
+    const align: AsideAlign | null =
+      token === "" ? "center" : token === "top" ? "top" : token === "bottom" ? "bottom" : null;
+    if (aside && align != null) {
+      const inner: string[] = [];
+      i++;
+      for (; i < body.length && !/^@endaside\s*$/.test(body[i]); i++) inner.push(body[i]);
+      out.push(
+        ...composeAside(
+          asideRows(aside[1], viewsPath),
+          renderBody(inner, scope, maps, objectLists, limit, viewsPath),
+          align,
+          limit - BOX_CHROME
         )
       );
       continue;

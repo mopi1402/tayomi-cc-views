@@ -10,6 +10,15 @@ import { RULE_MARK, isRule } from "./marks.js";
 import { printedWidth } from "./measure.js";
 import { wrapLine } from "./wrap.js";
 
+/**
+ * What the frame itself spends on every line: "│ " on the left, " │" on the right.
+ * A body line is wrapped to `limit - BOX_CHROME`, so that difference IS the box's
+ * content width. Exported because a caller that must compose a line the frame will
+ * accept whole (the @aside region) has to measure against the same number, and two
+ * copies of a 4 would drift the day the border changes.
+ */
+export const BOX_CHROME = 4;
+
 // A blank line between two @each blocks is emitted unconditionally by the
 // engine, so a template that spaces its sections would show a gap for a section
 // that rendered nothing, and two gaps between two absent ones. The box absorbs
@@ -71,11 +80,11 @@ export function frameBox(
   limit: number
 ): string[] {
   const body = collapseBlanks(rawBody).flatMap((l) =>
-    isRule(l) ? [l] : wrapLine(l, limit - 4)
+    isRule(l) ? [l] : wrapLine(l, limit - BOX_CHROME)
   );
   // The zone wraps like body content but never carries a rule or a gutter prefix:
   // it is the one thing read last, flush against the border.
-  const zone = foot.flatMap((l) => wrapLine(l, limit - 4));
+  const zone = foot.flatMap((l) => wrapLine(l, limit - BOX_CHROME));
   const edge = tone ?? "dim";
   const h = printedWidth(head);
   const r = printedWidth(right);
