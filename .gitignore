@@ -1,8 +1,11 @@
 node_modules/
 dist/
-sandbox/*.tgz
-sandbox/package-lock.json
-sandbox/*.ansi
+# The eye-test bench, in full. Ignored rather than partially ignored because
+# shiki reads ANY non-authoring entry of `git status` as implementation in
+# flight, so an untracked `sandbox/` gates every contract written here the
+# moment it lands on disk. Whether the bench should live outside the repo
+# altogether, with its recipe versioned, is still open.
+sandbox/
 # Session state (mode locks, gate baselines, run results), never a contract.
 # Globbed, not anchored: shiki resolves `.tayomi/` from the directory it is
 # handed, so any folder a gate ever ran in acquires one holding nothing else.
