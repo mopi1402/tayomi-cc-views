@@ -28,6 +28,22 @@ import type { RenderOptions } from "./options.js";
 import type { Scope } from "./scope.js";
 
 /**
+ * A Windows line ending, flattened to a bare LF before any matcher reads the text.
+ *
+ * Done ONCE at the entry rather than in each carrier, because every matcher in this
+ * engine anchors on a line boundary: a CR the entry lets through is a CR each of them
+ * must spell a tolerance for, and the one that forgets fails open on a block that is
+ * perfectly well formed. That is not hypothetical, it is what both carriers did.
+ *
+ * A LONE trailing CR is deliberately left alone: it is the front half of a CRLF still
+ * arriving, which carrier/scan.ts reads as exactly that, and the flush that completes
+ * it normalises the pair here. The cost is that prose keeps no CR of its own, which a
+ * terminal never wanted.
+ */
+const CRLF = /\r\n/g;
+const NL = "\n";
+
+/**
  * What the HOST supplies to the engine, and the only channel by which anything
  * outside this subsystem reaches a render. Every member is optional: with no host
  * at all the engine still renders every block from the block's own text, which is
@@ -67,9 +83,10 @@ export function transform(
   cwd?: string,
   options?: RenderOptions
 ): string {
+  const text = full.replace(CRLF, NL);
   const strictView = host?.strict?.view;
   let outcome: { ok: boolean; error: string | null } | null = null;
-  let out = full.replace(BLOCK_RE, (m: string, name: string, bodyText: string) => {
+  let out = text.replace(BLOCK_RE, (m: string, name: string, bodyText: string) => {
     try {
       // The RAW block text: renderView parses it with the view's own @fields
       // directive. A total parser plus this catch means any oddity shows the raw
