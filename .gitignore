@@ -1,2 +1,9 @@
 node_modules/
 dist/
+sandbox/*.tgz
+sandbox/package-lock.json
+sandbox/*.ansi
+# Session state (mode locks, gate baselines, run results), never a contract.
+# Globbed, not anchored: shiki resolves `.tayomi/` from the directory it is
+# handed, so any folder a gate ever ran in acquires one holding nothing else.
+**/.tayomi/state/
