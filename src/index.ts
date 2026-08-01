@@ -15,9 +15,17 @@ export { transform, slice, type DisplayHost } from "./pipeline.js";
 // DisplayHost; the palette stays on extendTags (see options.ts for why).
 export type { RenderOptions } from "./options.js";
 
-// One view rendered by name, for a host that draws outside the hook flow.
-export { renderView } from "./template/render.js";
-export { loadTemplate, viewsDir, defaultViewsPath, VIEWS_PATH_ENV } from "./template/load.js";
+// One view rendered by name, for a host that draws outside the hook flow. Dressing is
+// what a carrier learned about the zone (its kind, its tone class), so a host drawing
+// outside the flow can dress a view exactly like the decorator does.
+export { renderView, type Dressing } from "./template/render.js";
+export {
+  loadTemplate,
+  viewsDir,
+  bundledViewsDir,
+  defaultViewsPath,
+  VIEWS_PATH_ENV,
+} from "./template/load.js";
 
 // The block-data format. Exported because a host may have a second reader of the
 // SAME format (a gate judging the block the engine draws): both must share this
@@ -30,6 +38,7 @@ export { stringify, type Scope, type Maps } from "./scope.js";
 // The {{tag}} markup, for a host that colours its own lines with the same vocabulary,
 // and the one seam by which a host adds tags of its own (process-global, additive).
 export { renderTags, renderCode, isTag, extendTags, ANSI_RE } from "./style.js";
+export type { TagReport } from "./style.js";
 
 // Printed width, for a host that aligns text beside a rendered view.
 export { displayWidth } from "./layout/width.js";

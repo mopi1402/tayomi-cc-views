@@ -6,6 +6,9 @@
 //   | --- | --- |
 //   | Decorator | one line above the payload |
 //
+// The separator is a comma, whitespace, or both, and the attributes come in any
+// order: `@{view:table tone:dim}` is the same token.
+//
 // The trade this carrier exists for: the payload IS ordinary markdown, so the
 // fallback costs nothing. Re-rendered from the transcript (the hook only ever
 // transforms what reaches the screen), the human gets the decorator line above a
@@ -18,12 +21,22 @@
 // `@{Name='x'}` and Perl writes `@{$ref}`, so a bare `@{` would capture them.
 // Bare, not HTML-commented, because terminals print `<!-- -->` verbatim.
 //
-// `type` names the KIND of content (warning, error, success), never a look:
-// markdown admonitions are the prior art, and the decorator is text the model
-// re-reads, so the name must inform. The template file is the sole owner of what
-// a type looks like (template/load.ts resolves `<name>.<type>.view`).
+// Two attributes, one axis each, because ONE of them could not serve both:
+//
+// `type` names the KIND of content (warning, error, success), never a look: markdown
+// admonitions are the prior art, and the decorator is text the model re-reads, so the
+// name must inform. It picks a typed template when the SHAPE differs (load.ts resolves
+// `<name>.<type>.view`), and dresses the default template when only the colour does.
+//
+// `tone` names the LOOK, a palette tag stuck on this render like a class: it selects
+// no file and carries no meaning. It exists because the alternative was a near-copy of
+// a template per colour, and because a look wearing a semantic name (`type:even`) lies
+// to the model about what the content IS.
+//
+// Both are OPTIONAL and both fail open. The template stays the sole owner of what it
+// spends them ON: the tone slot it writes, the file it is (see template/render.ts).
 
-import { renderView } from "../template/render.js";
+import { renderView, type Dressing } from "../template/render.js";
 import { RESET_MARK, tagMark } from "../style.js";
 import type { RenderOptions } from "../options.js";
 
@@ -36,28 +49,35 @@ const TOKEN_CLOSE = "}";
 // paid for), and the SAST gate rightly refuses the shape. Every pattern left is
 // a single anchored quantifier over one atom, which cannot backtrack.
 const NAME_RE = /^[\w-]+$/;
-const TYPE_RE = /^type:([\w-]+)$/;
+const ATTR_RE = /^(type|tone):([\w-]+)$/;
 
-interface Decorator {
+interface Decorator extends Dressing {
   view: string;
-  type?: string;
 }
 
 // The decorator must be ALONE on its line (surrounding whitespace aside), which
 // is what keeps a decorator QUOTED in prose from engaging anything.
+//
+// The view name comes first, its attributes follow in any order, and the separator is
+// a comma, whitespace, or both: a model writes all three, and requiring the comma
+// exactly voided the WHOLE token on a near-miss (`@{view:table type:warning}` used to
+// print raw, decorator line included, which reads as the engine being broken rather
+// than as a syntax slip). Anything that is not a known attribute still makes the line
+// prose, so the token stays as hard to trigger by accident as it was.
 function parseDecorator(line: string): Decorator | null {
   const t = line.trim();
   if (!t.startsWith(DECORATOR_HINT) || !t.endsWith(TOKEN_CLOSE)) return null;
   const inner = t.slice(DECORATOR_HINT.length, -TOKEN_CLOSE.length);
-  const comma = inner.indexOf(",");
-  const view = comma === -1 ? inner : inner.slice(0, comma);
-  if (!NAME_RE.test(view)) return null;
-  if (comma === -1) return { view };
-  const tm = inner
-    .slice(comma + 1)
-    .trim()
-    .match(TYPE_RE);
-  return tm ? { view, type: tm[1] } : null; // any other attribute is not the token
+  const [view, ...attrs] = inner.split(/[,\s]+/).filter((part) => part !== "");
+  if (view == null || !NAME_RE.test(view)) return null;
+  const deco: Decorator = { view };
+  for (const attr of attrs) {
+    const m = attr.match(ATTR_RE);
+    if (m === null) return null; // any other attribute is not the token
+    if (m[1] === "type") deco.type = m[2];
+    else deco.tone = m[2];
+  }
+  return deco;
 }
 
 /** Anything pipe-shaped: the payload's own line shape, and the block rule's boundary. */
@@ -130,13 +150,21 @@ export function renderDecorated(
     }
     let end = i + 1;
     while (end < lines.length && PIPE_LINE_RE.test(lines[end])) end++;
-    const rows = parseRows(lines.slice(i + 1, end));
-    if (rows === null) {
+    const payload = lines.slice(i + 1, end);
+    // A decorator with NO payload engages with no data at all: a static view
+    // (welcome, the health check) is summoned by its line alone. A payload that
+    // EXISTS but is not the supported shape still fails open: half a table is a
+    // mistake to show, never an empty scope to render. The hollow-render guard
+    // below keeps the trade safe: a data-driven view summoned bare renders
+    // whitespace and falls back to the raw line.
+    const rows = parseRows(payload);
+    if (payload.length > 0 && rows === null) {
       out.push(lines[i]);
       continue; // the payload lines follow untouched: raw markdown, valid anyway
     }
     try {
-      const rendered = renderView(deco.view, { rows }, dirs, undefined, options, deco.type);
+      const data = rows === null ? {} : { rows };
+      const rendered = renderView(deco.view, data, dirs, undefined, options, deco);
       // Raw over hollow, this carrier's side of render.ts's guard (which only
       // sees string data): a template that exists but reads none of the rows
       // renders whitespace, and a blank where content stood is worse than raw.

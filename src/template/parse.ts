@@ -15,6 +15,10 @@ export interface Template {
   objectLists: ObjectLists;
   // every remaining line, in order: the part that renders
   body: string[];
+  // The class this template's tone slot holds when no carrier names one, declared
+  // with @tone <tag>. A template's own DEFAULT look, not an override: a tone:
+  // or a type: on the carrier outranks it (the chain lives in render.ts).
+  tone?: string;
   // The label column is as wide as the WIDEST label the template declares, so a
   // section can be named REMINDER without every other section's bar shifting by
   // hand. It is computed here because a template line cannot see the others.
@@ -26,10 +30,16 @@ export function parseTemplate(text: string): Template {
   const maps: Maps = {};
   const objectLists: ObjectLists = {};
   const body: string[] = [];
+  let tone: string | undefined;
   for (const line of tmpl.split("\n")) {
     if (/^\s*#/.test(line)) continue; // template comment
     const mm = line.match(/^@map\s+(\S+)\s+(.*)$/);
     const ff = line.match(/^@fields\s+(\S+)\s+(.*)$/);
+    // @tone takes ONE tag name and nothing else: it names the template's default
+    // class, so a pair (the @map shape) would be a second mapping table for a
+    // decision the palette already holds. A malformed line is body, like every
+    // other near-miss in this parser.
+    const tn = line.match(/^@tone[ \t]+(\w+)[ \t]*$/);
     if (mm) {
       const map: Record<string, string> = {};
       for (const pair of mm[2].trim().split(/\s+/)) {
@@ -39,6 +49,8 @@ export function parseTemplate(text: string): Template {
       maps[mm[1]] = map;
     } else if (ff) {
       objectLists[ff[1]] = ff[2].trim().split(/\s+/);
+    } else if (tn) {
+      tone = tn[1];
     } else {
       body.push(line);
     }
@@ -47,5 +59,5 @@ export function parseTemplate(text: string): Template {
     (n, m) => Math.max(n, printedWidth(m[1])),
     0
   );
-  return { maps, objectLists, body, labelWidth };
+  return { maps, objectLists, body, labelWidth, tone };
 }

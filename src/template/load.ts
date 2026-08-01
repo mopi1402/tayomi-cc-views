@@ -15,16 +15,20 @@ const VIEWS_DIR = "views";
 
 // Inside a plugin hook the views ship beside the bundle and CLAUDE_PLUGIN_ROOT is
 // always set by the host, so that path is authoritative.
-//
-// The fallback covers the two runs that have no plugin root: the test suite (from
-// the source tree) and a hand-run of the repo's own dist/ (the documented way to
-// exercise a build without releasing it). Those two sit at DIFFERENT depths under
-// the plugin root, so the fallback searches upwards instead of counting hops.
-// Counting is what used to work only by coincidence, back when this module was one
-// level under the plugin root exactly like the bundle it compiles to.
 export function viewsDir(): string {
   const root = process.env.CLAUDE_PLUGIN_ROOT;
   if (root) return path.join(root, VIEWS_DIR);
+  return bundledViewsDir();
+}
+
+// The views shipped INSIDE the package (views/ at the package root, exposed in
+// package.json "files"), home of `welcome`, the health check that must resolve
+// wherever the engine runs. Found by searching upwards from this module: the
+// source tree, the compiled dist/ and an npm-installed copy sit at DIFFERENT
+// depths under the package root, so the search counts nothing. Counting is what
+// used to work only by coincidence, back when this module was one level under
+// the plugin root exactly like the bundle it compiles to.
+export function bundledViewsDir(): string {
   let dir = path.dirname(fileURLToPath(import.meta.url));
   for (let hop = 0; hop < 5; hop++) {
     const candidate = path.join(dir, VIEWS_DIR);
@@ -49,7 +53,13 @@ export const VIEWS_PATH_ENV = "CC_VIEWS_PATH";
 export function defaultViewsPath(): string[] {
   const configured = process.env[VIEWS_PATH_ENV] ?? "";
   const dirs = configured.split(path.delimiter).filter((dir) => dir !== "");
-  return [...dirs, path.join(process.cwd(), VIEWS_DIR), viewsDir()];
+  const search = [...dirs, path.join(process.cwd(), VIEWS_DIR), viewsDir()];
+  // The package's own views close the path UNCONDITIONALLY (under a plugin root
+  // they would otherwise never be consulted): `welcome` resolves wherever the
+  // engine runs, and every earlier dir can still shadow it by name.
+  const bundled = bundledViewsDir();
+  if (search[search.length - 1] !== bundled) search.push(bundled);
+  return search;
 }
 
 // An ORDERED search path, first hit wins: a consumer that lists its own dir before
