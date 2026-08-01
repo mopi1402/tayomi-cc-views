@@ -76,6 +76,39 @@ Still under study: the ceiling of what stays writable by hand (a 16x16 mark is
 the palette maps to tags only or also admits raw values, for the cases a theme
 must not repaint.
 
+## Respect the theme the user chose (under study)
+
+Nearly everything the engine draws already follows it. The palette spends ANSI
+slots (the base sixteen, plus `38;5;N` for the outline's grey), and a terminal
+maps those through whatever theme is loaded, so a box outline, a status chip and
+a tone are already the user's own colours rather than ours.
+
+Exactly two things override that, and both on purpose:
+
+- **The inline-code accent**, the ONE truecolor value in the whole palette.
+  `code` is pinned to `rgb(177,185,249)`, Claude Code's own "Claude periwinkle",
+  because CC spends no palette slot for a code span: it emits that fixed value.
+  Pinning the exact RGB is what makes a code span inside a view match the ones
+  CC draws around it, in every terminal. What it costs is stated by what it
+  buys: the value tracks CC's DARK theme and answers to no theme of the user's,
+  so the day CC moves its accent, or the day a light theme is loaded, the colour
+  is wrong and nothing on screen says so.
+- **Pre-rendered art**, which cements its palette by construction:
+  `views/tayo.view` carries 30 distinct 24-bit values that no theme and no
+  `@tone` can repaint. The grid primitive above is the answer to that half, and
+  it is already written down as one of its two motives.
+
+So the open question is the first one alone, and it is a real conflict rather
+than an oversight: matching Claude Code exactly and obeying the user's theme are
+one decision pulling two ways, and the engine has no way to ask which the user
+would rather have. A host-supplied override is the cheap shape, since the
+palette is a single unexported table with one reader and a seam there costs
+little, but a knob invites a view to be desaturated against its own design and
+it still does not answer what the DEFAULT should be.
+
+Cheap to leave open, and that is why it is only written down: whichever way it
+resolves, today it is one line in `src/style.ts`.
+
 ## Per-view opt-out configuration (under study)
 
 Let each level of the stack disable views it does not want, without forking
