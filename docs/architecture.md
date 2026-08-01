@@ -1,81 +1,92 @@
-# Architecture : les cinq décisions qui portent le moteur
+# Architecture: the five decisions that carry the engine
 
-Prose de conception, à lire avec le code sous les yeux. Les références normatives
-sont [view-language.md](view-language.md) et [display-host.md](display-host.md) ;
-ici on explique pourquoi le moteur a cette forme, et ce que chaque décision a coûté
-ou évité.
+Design prose, meant to be read with the code open. The normative references are
+[view-language.md](view-language.md) and [display-host.md](display-host.md); this
+document explains why the engine has this shape, and what each decision cost or
+avoided.
 
-## 1. La chaîne de couches
+## 1. The layer chain
 
-`style ← layout ← template ← carrier ← pipeline` : chaque couche n'importe que vers
-la gauche. `style.ts` est la feuille (le vocabulaire ANSI, aucune notion de
-géométrie ni de données) ; `layout/` mesure et encadre ; `template/` parse et
-substitue ; `carrier/` reconnaît les zones d'un message ; `pipeline.ts` est la
-seule pièce qui voit tout et compose dans le seul ordre sûr. `scope.ts` vit à la
-racine, à côté de `style.ts`, parce que deux couches qui ne doivent pas dépendre
-l'une de l'autre le consomment (le substituteur et le mesureur de colonnes).
+`style ← layout ← template ← carrier ← pipeline`: each layer imports only leftward.
 
-Trois règles complètent la chaîne, vérifiées par un gate dans le repo hôte : un
-seul `main()` par process (un module de bord importé dans un bundle a déjà volé le
-stdin d'un autre hook), le bord est une feuille (rien n'importe `hook/runner.ts`),
-et aucun cycle. La conséquence pratique : on peut tester chaque étage sans monter
-les étages au-dessus.
+- `style.ts` is the leaf: the ANSI vocabulary, with no notion of geometry or data.
+- `layout/` measures and frames.
+- `template/` parses and substitutes.
+- `carrier/` recognises the zones of a message.
+- `pipeline.ts` is the only piece that sees everything, and composes in the only
+  safe order.
 
-## 2. Le streaming en tranche pure
+`scope.ts` lives at the root, next to `style.ts`, because two layers that must not
+depend on each other both consume it: the substituter and the column measurer.
 
-MessageDisplay livre un message flush par flush, et des flushs CONCURRENTS.
-`slice()` est une fonction PURE du texte accumulé avant le flush et du delta du
-flush : elle recalcule la transformation du message entier, puis n'émet que la
-tranche nouvellement révélée. Aucun offset n'est mémorisé entre deux flushs ;
-c'était la version d'avant, et trois flushs en vol ont perdu des mises à jour sur
-cet état partagé. Payer une seconde transformation par flush est le prix de la
-convergence : les tranches concaténées égalent la cible, quel que soit
-l'entrelacement.
+Three rules complete the chain, enforced by a gate in the host repo: one `main()`
+per process (an edge module imported into a bundle once stole another hook's
+stdin), the edge is a leaf (nothing imports `hook/runner.ts`), and no cycles. The
+practical payoff: every storey can be tested without erecting the storeys above it.
 
-La rétention suit la même logique : une zone encore en train d'arriver (fence
-ouverte, zone décorée dont la fin n'est pas connue) est coupée de la sortie avant
-que le carrier la voie, puis révélée rendue au delta final. Un delta déjà montré ne
-peut pas être repris ; c'est la contrainte qui dicte tout le design, et elle
-laisse un résidu assumé : un marqueur coupé en plein milieu (`{{sta`, `@{view:ta`)
-peut atteindre l'écran brut avant de se compléter.
+## 2. Streaming as a pure slice
 
-## 3. Le polyfill de largeur
+MessageDisplay delivers a message flush by flush, and the flushes are CONCURRENT.
+`slice()` is a PURE function of the text accumulated before the flush and the
+flush's delta: it recomputes the transformation of the whole message, then emits
+only the newly revealed slice. No offset survives between two flushes. The previous
+version kept one, and three in-flight flushes lost updates on that shared state.
+Paying a second transformation per flush is the price of convergence: the
+concatenated slices equal the target, whatever the interleaving.
 
-Le process du hook ne voit pas le terminal : son stdout est un pipe, l'environnement
-ne porte pas la taille, `/dev/tty` répond ENXIO. Or la box doit envelopper son
-contenu elle-même, sinon le terminal replie les lignes longues à sa guise et
-déchiquette le cadre. La réponse est un polyfill assumé : remonter la chaîne des
-ancêtres par `ps`, ouvrir le tty du process `claude`, lire ses colonnes, et mettre
-en cache (TTL 3 s) parce que la sonde coûte ~25 ms et que le hook tourne à chaque
-delta.
+Retention follows the same logic. A zone still arriving (an open fence, a decorated
+zone whose end is unknown) is cut from the output before the carrier sees it, then
+revealed fully rendered on the final delta.
 
-L'ordre de résolution rend chaque étage débrayable : un nombre dans les options
-(le plafond forcé d'un oracle), la variable d'environnement (le plafond de
-l'opérateur), une fonction source, la sonde, 100 par défaut. Le déclencheur de
-réouverture est documenté : le jour où le payload du hook porte la taille du
-terminal, elle devient une source de plus, zéro changement d'API.
+> A delta already shown can never be taken back.
 
-## 4. Le trade du décorateur
+That constraint dictates the whole design, and it leaves an accepted residue: a
+marker cut mid-way (`{{sta`, `@{view:ta`) can reach the screen raw before it
+completes.
 
-Le bloc fencé a un défaut structurel : relu depuis le transcript (là où le hook ne
-tourne pas), il redevient un mur de code. Le décorateur inverse le marché : le
-payload EST du markdown ordinaire (un tableau à deux colonnes), et une seule ligne
-au-dessus nomme le template et le type sémantique. Le fallback devient natif par
-construction : au pire, le lecteur voit un tableau normal sous une ligne en plus.
+## 3. The width polyfill
 
-Deux principes en découlent. L'engagement se fait sur l'INTENTION, jamais sur la
-forme : un tableau non décoré, quel qu'il soit, traverse l'écran octet pour octet
-(la leçon du POC retiré, qui capturait les tableaux par leur forme). Et le
-fail-open est total, ligne de décorateur incluse : l'écran montre exactement ce que
-le transcript détient, y compris le cas du template creux qui ne lit aucun champ
-(un blanc à la place du contenu serait pire que le brut).
+The hook process cannot see the terminal: its stdout is a pipe, the environment
+carries no size, `/dev/tty` answers ENXIO. Yet the box must wrap its own content,
+otherwise the terminal folds long lines as it pleases and shreds the frame. The
+answer is an assumed polyfill: walk the ancestor chain with `ps`, open the tty of
+the `claude` process, read its columns, and cache the result (3 s TTL) because the
+probe costs ~25 ms and the hook runs on every delta.
 
-## 5. La palette process-global
+The resolution order makes every stage skippable:
 
-Le vocabulaire `{{tag}}` n'est pas une option par appel mais un registre global au
-process (`extendTags`), et c'est un choix de cohérence, pas de commodité : les
-feuilles du layout MESURENT à travers ce vocabulaire (un tag connu pèse zéro
-colonne, un tag inconnu est du texte), pendant que le renderer le RÉSOUT. Deux
-ensembles distincts feraient mentir toutes les largeurs. Le registre est additif
-seulement : redéfinir un tag existant lève une erreur, parce qu'une ombre changerait
-la langue sous les pieds de tous les templates déjà écrits.
+1. a number in the options (an oracle's forced ceiling),
+2. the environment variable (the operator's ceiling),
+3. a source function,
+4. the probe,
+5. 100 by default.
+
+The reopening trigger is documented: the day the hook payload carries the terminal
+size, it becomes one more source, zero API change.
+
+## 4. The decorator's trade
+
+The fenced block has a structural flaw: reread from the transcript (where the hook
+does not run), it turns back into a wall of code. The decorator flips the deal. The
+payload IS ordinary markdown (a two-column table), and a single line above it names
+the template and the semantic type. Fallback becomes native by construction: at
+worst, the reader sees a normal table under one extra line.
+
+Two principles follow.
+
+- **Commitment is on INTENT, never on shape**: an undecorated table, whatever it
+  looks like, crosses the screen byte for byte (the lesson of the withdrawn POC,
+  which captured tables by their shape).
+- **Fail-open is total**, decorator line included: the screen shows exactly what
+  the transcript holds, even in the hollow-template case where no field is read
+  (a blank where content should be would be worse than the raw text).
+
+## 5. The process-global palette
+
+The `{{tag}}` vocabulary is not a per-call option but a process-global registry
+(`extendTags`), and that is a coherence choice, not a convenience: the layout
+leaves MEASURE through this vocabulary (a known tag weighs zero columns, an unknown
+tag is text) while the renderer RESOLVES it. Two distinct sets would make every
+width a lie. The registry is additive only: redefining an existing tag raises an
+error, because a shadow would change the language under the feet of every template
+already written.
