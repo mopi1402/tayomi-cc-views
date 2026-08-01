@@ -18,12 +18,24 @@ const ESC = "\x1b";
 const RESET = `${ESC}[0m`;
 const CYAN = `${ESC}[1;36m`;
 const BOLD = `${ESC}[1m`;
+// The tone-slot sequences, spelled here like every other one: the assertions must be
+// able to disagree with the palette, or they only prove style.ts agrees with itself.
+const YELLOW = `${ESC}[1;33m`;
+const RED = `${ESC}[1;31m`;
+const GREEN = `${ESC}[1;32m`;
+const GOLD = `${ESC}[38;5;220m`;
+const YELLOW_CHIP = `${ESC}[1;30;43m`;
+const CYAN_CHIP = `${ESC}[1;30;46m`;
 
 // The token as a MODEL writes it, spelled independently of the production
 // constant on purpose: inputs built here, assertions on DECORATOR_HINT, so a
 // drift in either spelling is caught instead of shared.
 const decorator = (view: string, type?: string): string =>
   type === undefined ? `@{view:${view}}` : `@{view:${view}, type:${type}}`;
+// The same token carrying whatever attributes a test needs, comma-separated. The
+// SEPARATOR is spelled by the caller wherever it is what the test is about.
+const dressed = (view: string, ...attrs: string[]): string =>
+  `@{view:${view}${attrs.map((a) => `, ${a}`).join("")}}`;
 
 // The payload furniture, written once.
 const EMPTY_HEADER = "| | |";
@@ -39,6 +51,13 @@ const ALERT = "alert";
 const LOUD = "loud";
 const SHADE = "shade";
 const STALE = "stale";
+// The views that spend the TONE SLOT: `toned` takes whatever class a carrier names,
+// `defaulted` declares its own with @tone. Both exist ONCE, in one copy, which is the
+// property the whole slot exists for.
+const TONED = "toned";
+const DEFAULTED = "defaulted";
+// A view spending the CHIP side of the slot.
+const CHIPPED = "chipped";
 // The separator item.view renders between its two columns; the cap assertions
 // find the label column's end by it.
 const SEP = " > ";
@@ -61,6 +80,12 @@ const write = (dir: string, name: string, body: string): void =>
   fs.writeFileSync(path.join(dir, name), body);
 
 write(second, viewFile(ITEM), rowsView("{{cyan}}${label}{{/}}" + SEP + "${content}", ' cap="1/3"'));
+// A STATIC view, reading no field at all: what a payload-less decorator summons.
+const STATIC = "static";
+write(second, viewFile(STATIC), "the box is the template\n");
+write(second, viewFile(TONED), rowsView("{{tone}}${label}{{/}}" + SEP + "${content}"));
+write(second, viewFile(DEFAULTED), "@tone gold\n" + rowsView("{{tone}}${label}{{/}}" + SEP + "${content}"));
+write(second, viewFile(CHIPPED), rowsView("{{tone_bg}}${label}{{/}}" + SEP + "${content}"));
 write(second, viewFile(ITEM, ALERT), rowsView("!! ${label} ${content}"));
 write(first, viewFile(ITEM, LOUD), rowsView("A[${label}|${content}]"));
 write(second, viewFile(ITEM, LOUD), rowsView("B[${label}|${content}]"));
@@ -71,6 +96,24 @@ const CAP = Math.floor(WIDTH / 3);
 const options = { viewsPath: [first, second], width: WIDTH };
 
 const DECORATED = lines(decorator(ITEM), "| Item | Info |", DELIM, "| Decorator | one line above |");
+
+describe("a payload-less decorator", () => {
+  // The health-check ask: `@{view:welcome}` alone, no table below.
+  it("summons a static view with no data, the line consumed", () => {
+    const out = transform(lines("intro", decorator(STATIC), "after"), undefined, true, undefined, options);
+    expect(out).toContain("the box is the template");
+    expect(out).toContain("intro");
+    expect(out).toContain("after");
+    expect(out).not.toContain(DECORATOR_HINT);
+  });
+
+  it("falls back to the raw line when the view reads fields it does not get", () => {
+    // item.view loops over rows: summoned bare it renders whitespace, and the
+    // hollow guard shows the line instead of a blank.
+    const out = transform(lines("intro", decorator(ITEM), "after"), undefined, true, undefined, options);
+    expect(out).toContain(decorator(ITEM));
+  });
+});
 
 describe("a decorated payload", () => {
   it("renders through the named template, decorator line and furniture gone", () => {
@@ -176,6 +219,68 @@ describe("the type", () => {
     const out = transform(decorated(decorator(ITEM, "sarcastic"), KV_ROW), undefined, true, undefined, options);
     expect(out).toContain(CYAN);
     expect(out.replace(ANSI_RE, "")).toContain(KV_SHOWN);
+  });
+});
+
+// The promise of the tone slot, and the reason it exists: ONE template file renders in
+// any colour a carrier names, so a second colour never costs a second copy of a view.
+describe("the tone", () => {
+  const render = (deco: string): string =>
+    transform(decorated(deco, KV_ROW), undefined, true, undefined, options);
+
+  it("dresses one template in the class the decorator sticks on, text untouched", () => {
+    const neutral = render(decorator(TONED));
+    const warned = render(dressed(TONED, "tone:warn"));
+    expect(warned).toContain(YELLOW);
+    expect(neutral).toContain(CYAN);
+    expect(neutral).not.toContain(YELLOW);
+    // The SAME template, and the same screen but for its colours: what a typed copy
+    // of the file was the only way to get before the slot existed.
+    expect(warned.replace(ANSI_RE, "")).toBe(neutral.replace(ANSI_RE, ""));
+  });
+
+  it("colours from the KIND alone, with no typed file anywhere on the path", () => {
+    expect(render(decorator(TONED, "warning"))).toContain(YELLOW);
+    expect(render(decorator(TONED, "error"))).toContain(RED);
+    expect(render(decorator(TONED, "success"))).toContain(GREEN);
+  });
+
+  it("lets the tone outrank the kind: the look is the more explicit word", () => {
+    const out = render(dressed(TONED, "type:success", "tone:fail"));
+    expect(out).toContain(RED);
+    expect(out).not.toContain(GREEN);
+  });
+
+  it("holds the template's @tone default, and lets a carrier outrank it", () => {
+    expect(render(decorator(DEFAULTED))).toContain(GOLD);
+    const warned = render(dressed(DEFAULTED, "tone:warn"));
+    expect(warned).toContain(YELLOW);
+    expect(warned).not.toContain(GOLD);
+  });
+
+  it("falls through a class the palette does not know, down to the neutral", () => {
+    const out = render(dressed(TONED, "tone:chartreuse"));
+    expect(out).toContain(CYAN);
+    expect(out.replace(ANSI_RE, "")).toContain(KV_SHOWN);
+  });
+
+  it("spends the chip side, and falls back to the foreground for a class without one", () => {
+    expect(render(dressed(CHIPPED, "tone:warn"))).toContain(YELLOW_CHIP);
+    expect(render(dressed(CHIPPED, "tone:info"))).toContain(CYAN_CHIP);
+    // `gold` is a plain colour and carries no chip of its own.
+    expect(render(dressed(CHIPPED, "tone:gold"))).toContain(GOLD);
+  });
+
+  it("engages with no comma at all, the separator a model actually writes", () => {
+    const out = transform(
+      decorated(`@{view:${TONED} tone:warn}`, KV_ROW),
+      undefined,
+      true,
+      undefined,
+      options
+    );
+    expect(out).toContain(YELLOW);
+    expect(out).not.toContain(DECORATOR_HINT);
   });
 });
 

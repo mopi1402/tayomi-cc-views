@@ -14,8 +14,10 @@ import {
   renderView,
   loadTemplate,
   extendTags,
+  isTag,
   displayWidth,
   defaultViewsPath,
+  bundledViewsDir,
   VIEWS_PATH_ENV,
   ANSI_RE,
   type DisplayHost,
@@ -41,12 +43,19 @@ const NOTE_VIEW = [
   "",
 ].join("\n");
 
+// A view spending the TONE SLOT. The fenced block carries no attributes, so its own
+// `tone` field is the way in: one template, whatever colour the block asks for.
+const TONED_FILE = "toned.view";
+const TONED_VIEW = ["@tone key", "@each note", " {{tone}}${.}{{/}}", "@end", ""].join("\n");
+const YELLOW = "\x1b[1;33m";
+
 // Created at module scope, not in beforeAll: describe bodies run at collection,
 // so a `const options = { viewsPath: [builtins] }` written there would capture
 // undefined if the dirs were only assigned once the hooks fire.
 const builtins = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-builtin-"));
 const consumer = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-consumer-"));
 fs.writeFileSync(path.join(builtins, NOTE_FILE), NOTE_VIEW);
+fs.writeFileSync(path.join(builtins, TONED_FILE), TONED_VIEW);
 
 afterAll(() => {
   fs.rmSync(builtins, { recursive: true, force: true });
@@ -101,6 +110,17 @@ describe("rendering through explicit options", () => {
       viewsPath: [builtins, consumer],
     });
     expect(stripAnsi(upstream)).toContain("NOTE");
+  });
+
+  it("takes the tone from a fenced block's own field, one template in two colours", () => {
+    const block = (field: string): string =>
+      `\`\`\`view:toned\n${field}note:\n- row\n\`\`\``;
+    const neutral = transform(block(""), undefined, true, undefined, options);
+    const warned = transform(block("tone: warn\n"), undefined, true, undefined, options);
+    expect(warned).toContain(YELLOW);
+    expect(neutral).not.toContain(YELLOW);
+    // The field dresses the view without ever printing itself.
+    expect(stripAnsi(warned)).toBe(stripAnsi(neutral));
   });
 
   it("refuses an empty search path with a named error", () => {
@@ -161,6 +181,9 @@ describe("the default views path", () => {
   it("orders env dirs, then the project's views/, then the plugin resolution", () => {
     const a = path.join(os.tmpdir(), "cc-views-env-a");
     const b = path.join(os.tmpdir(), "cc-views-env-b");
+    // The length-4 assertion holds only without an ambient plugin root: isolate it.
+    const prev = process.env.CLAUDE_PLUGIN_ROOT;
+    delete process.env.CLAUDE_PLUGIN_ROOT;
     process.env[VIEWS_PATH_ENV] = [a, b].join(path.delimiter);
     try {
       const dirs = defaultViewsPath();
@@ -168,11 +191,45 @@ describe("the default views path", () => {
       expect(dirs).toHaveLength(4);
     } finally {
       delete process.env[VIEWS_PATH_ENV];
+      if (prev !== undefined) process.env.CLAUDE_PLUGIN_ROOT = prev;
     }
   });
 
   it("starts at the project's views/ when nothing is configured", () => {
     expect(defaultViewsPath()[0]).toBe(path.join(process.cwd(), "views"));
+  });
+
+  // The bundled dir closes the path even when a plugin root would otherwise be
+  // the final word: `welcome` is the health check, it must resolve EVERYWHERE.
+  it("closes with the package's bundled views, even under a plugin root", () => {
+    const prev = process.env.CLAUDE_PLUGIN_ROOT;
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-plugin-"));
+    process.env.CLAUDE_PLUGIN_ROOT = root;
+    try {
+      const dirs = defaultViewsPath();
+      expect(dirs[dirs.length - 2]).toBe(path.join(root, "views"));
+      expect(dirs[dirs.length - 1]).toBe(bundledViewsDir());
+    } finally {
+      if (prev === undefined) delete process.env.CLAUDE_PLUGIN_ROOT;
+      else process.env.CLAUDE_PLUGIN_ROOT = prev;
+    }
+  });
+
+  it("resolves welcome with zero options under a plugin that does not carry it", () => {
+    const prev = process.env.CLAUDE_PLUGIN_ROOT;
+    process.env.CLAUDE_PLUGIN_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-plugin-"));
+    try {
+      const out = transform(
+        "```view:welcome\ntitle: Welcome!\nmessage: the hook is wired\n```",
+        undefined,
+        true
+      );
+      expect(stripAnsi(out)).toContain("the hook is wired");
+      expect(stripAnsi(out)).not.toContain("```");
+    } finally {
+      if (prev === undefined) delete process.env.CLAUDE_PLUGIN_ROOT;
+      else process.env.CLAUDE_PLUGIN_ROOT = prev;
+    }
   });
 
   it("renders through a CC_VIEWS_PATH dir with zero options", () => {
@@ -194,15 +251,23 @@ describe("the palette registry", () => {
   });
 
   it("is idempotent on an identical re-registration", () => {
-    expect(() => extendTags({ engine_test_tone: MAGENTA })).not.toThrow();
+    const report = extendTags({ engine_test_tone: MAGENTA });
+    expect(report.shadowed).toEqual([]);
+    expect(report.skipped).toEqual([]);
   });
 
-  it("throws on redefining an existing tag, built-in or registered", () => {
-    expect(() => extendTags({ dim: MAGENTA })).toThrow(/already defined/);
-    expect(() => extendTags({ engine_test_tone: "\x1b[36m" })).toThrow(/already defined/);
+  it("lets a host shadow any tag, last registration winning, and reports it", () => {
+    const DIM = "\x1b[2m";
+    expect(extendTags({ dim: MAGENTA }).shadowed).toEqual(["dim"]);
+    expect(transform("{{dim}}x{{/}}")).toBe(`${MAGENTA}x\x1b[0m`);
+    // The same law hands the name back: the palette is restored for the suite.
+    expect(extendTags({ dim: DIM }).shadowed).toEqual(["dim"]);
+    expect(transform("{{dim}}x{{/}}")).toBe(`${DIM}x\x1b[0m`);
   });
 
-  it("rejects a name the {{tag}} shape cannot carry", () => {
-    expect(() => extendTags({ "not ok": MAGENTA })).toThrow(/shape/);
+  it("skips a name the {{tag}} shape cannot carry, reported, never thrown", () => {
+    const report = extendTags({ "not ok": MAGENTA });
+    expect(report.skipped).toEqual(["not ok"]);
+    expect(isTag("not ok")).toBe(false);
   });
 });

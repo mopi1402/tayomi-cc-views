@@ -55,7 +55,9 @@ describe("the demo view", () => {
 });
 
 describe("the decorator demo", () => {
-  const MSG = lines("@{view:table}", "| | |", "| --- | --- |", "| Status | all green |");
+  const table = (deco: string): string =>
+    lines(deco, "| | |", "| --- | --- |", "| Status | all green |");
+  const MSG = table("@{view:table}");
 
   it("dresses the plain table, decorator line and furniture gone", () => {
     const out = render(MSG);
@@ -65,5 +67,13 @@ describe("the decorator demo", () => {
     expect(plain).toContain("Status");
     expect(plain).toContain("all green");
     expect(out).not.toBe(MSG); // rendered, not fail-opened
+  });
+
+  it("changes colour on the type, the one demo file dressing every kind", () => {
+    const warned = render(table("@{view:table, type:warning}"));
+    expect(warned).toContain("\x1b[1;33m"); // yellow, spelled independently
+    expect(warned).not.toBe(render(MSG));
+    // Colour is the ONLY difference: no second template, no second wording.
+    expect(warned.replace(ANSI_RE, "")).toBe(render(MSG).replace(ANSI_RE, ""));
   });
 });
