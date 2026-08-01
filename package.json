@@ -33,8 +33,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
+    "check:sidecars": "node scripts/check-sidecars.mjs",
     "verify:pack": "pnpm build && node scripts/verify-pack.mjs",
-    "prepublishOnly": "pnpm lint && pnpm typecheck && pnpm test && pnpm verify:pack"
+    "verify": "pnpm lint && pnpm typecheck && pnpm check:sidecars && pnpm test && pnpm verify:pack",
+    "prepublishOnly": "pnpm verify"
   },
   "dependencies": {
     "@tayomi/utils": "^0.1.0"

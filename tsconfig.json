@@ -15,6 +15,9 @@
     "types": ["node"],
     "rootDir": "."
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.test.ts", "node_modules"]
+  // Tests are typechecked like everything else: a suite is code, and a fixture that no
+  // longer matches the shape it drives is a test proving nothing. What SHIPS excludes
+  // them, which tsconfig.build.json states for itself rather than inheriting from here.
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules"]
 }
