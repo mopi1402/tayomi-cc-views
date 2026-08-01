@@ -2,6 +2,7 @@
 
 import type { PadCtx } from "../layout/columns.js";
 import { fitCell, longestKey, padCell } from "../layout/measure.js";
+import { CHIP_CHROME, chip } from "../style.js";
 import { SUBST_RE, lookup, stringify, type Maps, type Scope } from "../scope.js";
 
 export function subst(text: string, scope: Scope, maps: Maps, pad?: PadCtx): string {
@@ -16,22 +17,20 @@ export function subst(text: string, scope: Scope, maps: Maps, pad?: PadCtx): str
     const text0 = stringify(val);
     const map = rawMap ? maps[rawMap.trim()] : undefined;
     if (map) {
-      // The enum resolves on the TRIMMED value, so column padding upstream can
-      // never lose a chip.
+      // The enum resolves on the TRIMMED value, so column padding upstream can never
+      // lose a chip.
       const key = text0.trim();
       const tag = map[key];
       if (tag) {
-        const label = aligned
-          ? Math.max(longestKey(map), cell == null ? 0 : cell - 2)
-          : 0;
-        return `{{${tag}}} ${padCell(key.toUpperCase(), label)} {{/}}`;
+        const label = aligned ? Math.max(longestKey(map), cell == null ? 0 : cell - CHIP_CHROME) : 0;
+        return chip(tag, padCell(key.toUpperCase(), label));
       }
-      // Off the map: bare text, no chip, but padded to the same cell so the
-      // following columns keep their offset.
+      // Off the map: bare text, no chip, but padded to the same cell so the following
+      // columns keep their offset.
       if (cell != null) return padCell(fitCell(key, cell), cell);
     }
-    // fitCell only ever bites under a capped column (see measure.ts): everywhere
-    // else the cell was measured over the values, so nothing exceeds it.
+    // fitCell only ever bites under a capped column (see measure.ts): everywhere else
+    // the cell was measured over the values, so nothing exceeds it.
     return cell == null ? text0 : padCell(fitCell(text0, cell), cell);
   });
 }

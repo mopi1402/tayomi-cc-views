@@ -10,13 +10,23 @@ import path from "node:path";
 import { handleMessageDisplay, type MessageContext } from "./runner.js";
 import { readEarlier } from "../platform/stream-state.js";
 import { ANSI_RE } from "../style.js";
+import { BOX, EACH, END, ENDBOX, HEAD } from "../data/language.js";
+import { SCRATCH_DIR, VIEW_EXT } from "../data/markup.js";
 
-const VIEW = ["@box", "@head {{box_title}}NOTE{{/}}", '@each note bullet="- "', " ${#bullet}${.}", "@end", "@endbox", ""].join("\n");
+const VIEW = [
+  BOX,
+  `${HEAD} {{box_title}}NOTE{{/}}`,
+  `${EACH} note bullet="- "`,
+  " ${#bullet}${.}",
+  END,
+  ENDBOX,
+  "",
+].join("\n");
 
-const views = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-runner-"));
-fs.writeFileSync(path.join(views, "note.view"), VIEW);
+const views = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-runner-`));
+fs.writeFileSync(path.join(views, "note" + VIEW_EXT), VIEW);
 // Its own state dir, so these tests never collide with another suite's messages.
-const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-runner-state-"));
+const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-runner-state-`));
 const options = { viewsPath: [views], width: 100, stateDir };
 
 let n = 0;

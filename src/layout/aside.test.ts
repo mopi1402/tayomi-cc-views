@@ -48,44 +48,47 @@ const mainWidth = (limit: number): number => contentWidth(limit) - ART_WIDTH - A
 const ABOVE = "ABOVE a line long enough to need more than the main column can give it";
 const BELOW = "BELOW the region, the flow returns to the whole width of the box content";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-aside-"));
+import { ASIDE, BOX, ENDASIDE, ENDBOX, HEAD } from "../data/language.js";
+import { SCRATCH_DIR, VIEW_EXT } from "../data/markup.js";
+
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-aside-`));
 const write = (name: string, lines: string[]): void =>
-  fs.writeFileSync(path.join(dir, name + ".view"), [...lines, ""].join("\n"));
+  fs.writeFileSync(path.join(dir, name + VIEW_EXT), [...lines, ""].join("\n"));
 
 write("art", ART);
 write("short", SHORT_ART);
 write("region", [
-  "@box",
-  "@head ASIDE",
+  BOX,
+  `${HEAD} ASIDE`,
   ABOVE,
-  "@aside art",
+  `${ASIDE} art`,
   "ONE the region's first line",
   "",
   "TWO after a breathing line",
-  "@endaside",
+  ENDASIDE,
   BELOW,
-  "@endbox",
+  ENDBOX,
 ]);
-write("tall", ["@box", "@aside art", "M1", "M2", "@endaside", "@endbox"]);
-write("tall-top", ["@box", "@aside art top", "M1", "M2", "@endaside", "@endbox"]);
-write("tall-bottom", ["@box", "@aside art bottom", "M1", "M2", "@endaside", "@endbox"]);
+write("tall", [BOX, `${ASIDE} art`, "M1", "M2", ENDASIDE, ENDBOX]);
+write("tall-top", [BOX, `${ASIDE} art top`, "M1", "M2", ENDASIDE, ENDBOX]);
+write("tall-bottom", [BOX, `${ASIDE} art bottom`, "M1", "M2", ENDASIDE, ENDBOX]);
 write("wide-flow", [
-  "@box",
-  "@aside short",
+  BOX,
+  `${ASIDE} short`,
   "M1",
   "M2",
   "M3",
   "M4",
   "M5",
-  "@endaside",
-  "@endbox",
+  ENDASIDE,
+  ENDBOX,
 ]);
 write("missing", [
-  "@box",
-  "@aside nowhere-on-the-path",
+  BOX,
+  `${ASIDE} nowhere-on-the-path`,
   "ONLY the main flow, and the box still stands",
-  "@endaside",
-  "@endbox",
+  ENDASIDE,
+  ENDBOX,
 ]);
 
 afterAll(() => {
@@ -97,9 +100,13 @@ const render = (name: string, width: number): string =>
 
 const rows = (out: string): string[] => out.replace(ANSI_RE, "").split("\n");
 // A framed line carries two borders; a line the region composed carries the
-// separator between them, so counting bars is what tells the two apart.
-const bars = (line: string): number => (line.match(/│/g) ?? []).length;
-const regionRows = (out: string): string[] => rows(out).filter((l) => bars(l) === 3);
+// separator between them, so counting bars is what tells the two apart. The glyph is
+// spelled here because box.ts keeps its own private.
+const BAR_RE = /│/g;
+const FRAME_BARS = 2;
+const REGION_BARS = FRAME_BARS + 1;
+const bars = (line: string): number => (line.match(BAR_RE) ?? []).length;
+const regionRows = (out: string): string[] => rows(out).filter((l) => bars(l) === REGION_BARS);
 const rowWith = (out: string, text: string): string[] =>
   rows(out).filter((l) => l.includes(text));
 

@@ -1,23 +1,21 @@
 // The display pipeline: one message in, the text to show on screen out.
 //
-// This is the only module that knows all the layers at once, which is exactly what
-// an orchestration is. It composes them in the one order that is safe on a stream:
-// render the closed blocks, withhold what is still arriving, then render the markup.
+// The only module that knows all the layers at once, which is what an orchestration
+// is. It composes them in the one order that is safe on a stream: render the closed
+// blocks, withhold what is still arriving, then render the zones a decorator names.
 //
 // MessageDisplay streams a message flush by flush, so slice() recomputes the target
 // transform of the WHOLE message so far and emits only the newly-revealed slice.
 // Concatenated slices equal the target, which masks a raw block while it streams and
-// reveals the render when its fence closes, or the raw text on the LAST delta when it
-// never does: withholding is a promise of a later flush, and the last one has none to
-// make. Fail-open throughout: any error shows the original text, never a crash or a
-// blank screen.
+// reveals the render when its fence closes. Fail-open throughout: any error shows the
+// original text, never a crash or a blank screen.
 //
 // slice() is a PURE function of the text before the flush and the flush's own delta.
 // It holds no offset from the flush before it, which is what lets the concurrent
 // flushes of one message compute their slices without agreeing on anything (see
 // platform/stream-state.ts for the lost update that carrying an offset produced).
 
-import { BLOCK_RE, cutUnclosedBlock } from "./carrier/scan.js";
+import { BLOCK_HINT, BLOCK_RE, cutUnclosedBlock } from "./carrier/scan.js";
 import {
   DECORATOR_HINT,
   cutStreamingDecorated,
@@ -59,9 +57,8 @@ export interface DisplayHost {
 /**
  * Render the view blocks of a message.
  *
- * `host` and `final` are OPTIONAL, so a caller with no host renders every block
- * from the block's own text and nothing else. That is the property that makes this
- * subsystem free-standing: it never imports the host's state, the host hands it in.
+ * `host` and `final` are OPTIONAL, so a caller with no host renders every block from
+ * the block's own text and nothing else: the engine never imports a host's state.
  */
 export function transform(
   full: string,
@@ -74,9 +71,9 @@ export function transform(
   let outcome: { ok: boolean; error: string | null } | null = null;
   let out = full.replace(BLOCK_RE, (m: string, name: string, bodyText: string) => {
     try {
-      // Pass the raw block text: renderView parses it with the view's own
-      // @fields directive. A total parser plus this catch means any oddity
-      // shows the raw block, never a blank screen.
+      // The RAW block text: renderView parses it with the view's own @fields
+      // directive. A total parser plus this catch means any oddity shows the raw
+      // block, never a blank screen.
       const rendered =
         renderView(
           name,
@@ -90,7 +87,8 @@ export function transform(
     } catch (e) {
       if (name === strictView && host?.strict !== undefined) {
         outcome = { ok: false, error: e instanceof Error ? e.message : String(e) };
-        return host.strict.failedLine + "\n"; // discreet, never the raw block nor its fences
+        // A host is a program, not a message: it may spend the palette.
+        return renderTags(host.strict.failedLine) + "\n"; // never the raw block nor its fences
       }
       return m; // fail-open: show the raw block
     }
@@ -100,23 +98,28 @@ export function transform(
     host?.onRendered?.(ok, error);
   }
   // Withholding is the NON-FINAL flush's business, both carriers under the one
-  // `final !== true` convention: a cut is a promise that a later flush reveals what
-  // it holds back, and on the last delta no later flush exists to keep it. So the
-  // final flush shows whatever it could not render, raw, rather than swallowing it
-  // (a block that never closes used to be cut away here and never came back).
-  // Withheld first, rendered second: a zone still arriving is gone before the
-  // carrier ever sees it, so a half-formed payload can never render.
+  // convention: a cut is a promise that a later flush reveals what it holds back, and
+  // on the last delta no later flush exists to keep it. So the final flush shows
+  // whatever it could not render, raw (a block that never closes used to be cut away
+  // here and never came back). Withheld first, rendered second: a zone still arriving
+  // is gone before the carrier sees it, so a half-formed payload can never render.
   if (final !== true) {
     out = cutUnclosedBlock(out);
     out = cutStreamingDecorated(out);
   }
-  out = renderDecorated(out, options?.viewsPath ?? defaultViewsPath(), options);
-  return renderTags(out);
+  // NO tag pass here, and the absence is the rule: only a template resolves a tag.
+  return renderDecorated(out, options?.viewsPath ?? defaultViewsPath(), options);
 }
 
-/** Does this message carry anything the engine has business touching at all? */
+/**
+ * Does this message carry anything the engine has business touching at all?
+ *
+ * The two carriers, and only them. `{{` is deliberately NOT a marker: engaging on one
+ * would take the delta from the host to hand back the same text, flattening the
+ * markdown the host would have drawn.
+ */
 function engaged(full: string): boolean {
-  return full.includes("```view:") || full.includes("{{") || full.includes(DECORATOR_HINT);
+  return full.includes(BLOCK_HINT) || full.includes(DECORATOR_HINT);
 }
 
 /** How many leading characters two strings share. */
@@ -137,8 +140,8 @@ function sharedPrefix(a: string, b: string): number {
  * updates on it.
  *
  * `null` on a message the engine has no business in, so the host keeps its own
- * rendering of the delta (Claude Code applies markdown to text it displays itself,
- * and returning the text here would flatten it).
+ * rendering (Claude Code applies markdown to text it displays itself, and returning
+ * the text here would flatten it).
  */
 export function slice(
   prev: string,
@@ -154,8 +157,8 @@ export function slice(
   const after = transform(full, host, final, cwd, options);
   // `before` is normally a prefix of `after`: prose is untouched, and a block still
   // arriving is withheld at the very position its render later occupies. The one shape
-  // that breaks it is markup CUT MID-MARKER at the end of `prev` ("{{sta"), which
-  // renders as itself there and as an escape sequence once complete. Slicing at the
+  // that breaks it is a CARRIER TOKEN cut mid-way at the end of `prev` ("@{view:ta"),
+  // which is prose to the cut there and an anchor once complete. Slicing at the
   // shared prefix rather than at before.length re-emits from the divergence, so the
   // corrected text always reaches the screen: the stale marker characters stay behind
   // (nothing can retract a delta already shown) and no content is dropped. The two

@@ -12,6 +12,7 @@
 // The LAST declared field, the opaque prose tail, is never padded.
 
 import { SUBST_RE, stringify, type Maps } from "../scope.js";
+import { CHIP_CHROME } from "../style.js";
 import { longestKey, printedWidth } from "./measure.js";
 
 // Alignment context for the inner lines of an @each: the cell width of every
@@ -50,7 +51,7 @@ export function columnWidths(
   if (!fields || fields.length < 2) return widths;
   for (const field of fields.slice(0, -1)) {
     const map = fieldMap(inner, field, maps);
-    let w = map ? longestKey(map) + 2 : 0; // + the chip's two inner spaces
+    let w = map ? longestKey(map) + CHIP_CHROME : 0;
     for (const item of items) {
       if (item == null || typeof item !== "object") continue;
       const raw = (item as Record<string, unknown>)[field];

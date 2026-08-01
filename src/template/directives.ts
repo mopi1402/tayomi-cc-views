@@ -6,7 +6,30 @@
 //             @rule [prefix]                  (inner division, filled by the box)
 //             @aside <view> [top|bottom] ... @endaside   (a second column, left)
 // Substitutions: ${field}  ${field:mapname}  ${.}  ${#}  ${#label}  ${#bullet}
+//
+// Every word above is spelled in data/language.ts, and every pattern below composes
+// from it: a rename is one edit there, never a sweep through these matchers.
 
+import {
+  ASIDE,
+  BOX,
+  BULLET,
+  CAP,
+  DECLS,
+  EACH,
+  END,
+  ENDASIDE,
+  ENDBOX,
+  FOOT,
+  FRAME,
+  HEAD,
+  LABEL,
+  PAIR_SEP,
+  RIGHT,
+  RULE,
+  TOKEN_SEP,
+  declSource,
+} from "../data/language.js";
 import { composeAside, type AsideAlign } from "../layout/aside.js";
 import { BOX_CHROME, frameBox } from "../layout/box.js";
 import { columnWidths, type PadCtx } from "../layout/columns.js";
@@ -17,18 +40,51 @@ import { loadTemplate } from "./load.js";
 import { subst } from "./substitute.js";
 import type { ObjectLists } from "./view-data.js";
 
-// @rule matches by string, not by regex (the parse site says why), so unlike the
-// other directives its spelling is a value, shared by the matcher and the slice.
-const RULE_WORD = "@rule";
-const RULE_PREFIX = `${RULE_WORD} `;
+// eslint-disable-next-line security/detect-non-literal-regexp
+const re = (source: string): RegExp => new RegExp(source);
 
-// One field value, read as the list a directive iterates. A lone value is the list
-// of one it obviously is: both readers below take fields a HUMAN wrote by hand, and
-// a single item there carries no dash. Accepting only an array made that content
-// vanish with no error anywhere, so the coercion is shared rather than left to each
-// directive to decide (they disagreed, and the disagreement was invisible).
-// Blank is not an item: a field holding only whitespace reads as empty, which keeps
-// it indistinguishable from a field that was never written.
+// A directive alone on its line, and one taking a name then the rest of the line.
+const ALONE = String.raw`\s*$`;
+const REST = String.raw`\s+(.*)$`;
+const NAME_THEN_REST = String.raw`[ \t]+(\S+)(.*)$`;
+
+const BOX_RE = re(`^${BOX}${ALONE}`);
+const ENDBOX_RE = re(`^${ENDBOX}${ALONE}`);
+const HEAD_RE = re(`^${HEAD}${REST}`);
+const RIGHT_RE = re(`^${RIGHT}${REST}`);
+// @foot names the field, it does not carry text: the zone is wired to the data, so a
+// template cannot render a cause the block never stated.
+const FOOT_RE = re(String.raw`^${FOOT}[ \t]+(\S+)[ \t]*$`);
+const FRAME_RE = re(String.raw`^${FRAME}[ \t]+(\S+)[ \t]+(.*)$`);
+const ASIDE_RE = re(`^${ASIDE}${NAME_THEN_REST}`);
+const ENDASIDE_RE = re(`^${ENDASIDE}${ALONE}`);
+const EACH_RE = re(`^${EACH}${NAME_THEN_REST}`);
+// NB: this cannot match "@endbox" or "@endaside", so the terminators never collide.
+const END_RE = re(`^${END}${ALONE}`);
+
+// @rule matches by STRING, not by regex (the match site says why), so its spelling is
+// a value shared by the matcher and the slice that follows it.
+const RULE_PREFIX = `${RULE} `;
+
+// One declaration each, from the language's own table. The matcher that READS a
+// declaration and the strip that decides whether anything is LEFT OVER are the same
+// fact, which is what keeps a malformed cap="soon" a near-miss rather than a cap.
+const declRe = (name: string): RegExp => re(declSource(name));
+const LABEL_RE = declRe(LABEL);
+const BULLET_RE = declRe(BULLET);
+const CAP_RE = declRe(CAP);
+const DECL_RES = Object.keys(DECLS).map(declRe);
+
+/** Whatever the fraction of a cap="1/3" yields, a clamp never erases a column. */
+const MIN_CELL = 1;
+
+// One field value, read as the list a directive iterates. A lone value is the list of
+// one it obviously is: both readers below take fields a HUMAN wrote by hand, and a
+// single item there carries no dash. Accepting only an array made that content vanish
+// with no error anywhere, so the coercion is shared rather than left to each directive
+// (they disagreed, and the disagreement was invisible).
+// Blank is not an item: a field holding only whitespace reads as empty, which keeps it
+// indistinguishable from a field that was never written.
 function asList(val: unknown): unknown[] {
   if (val == null) return [];
   if (Array.isArray(val)) return val;
@@ -36,10 +92,10 @@ function asList(val: unknown): unknown[] {
 }
 
 // The bottom zone of a box, fed by @foot <field>. Its content is a field like any
-// other, so a block that never sets that field renders exactly as it did before the
-// zone existed: no divider, no blank row, nothing. Blank ITEMS of a list are dropped
-// here and not in asList, because a list is what an author wrote item by item: the
-// zone is prose and wants none of them, while a loop leaves its rows alone.
+// other, so a block that never sets it renders exactly as it did before the zone
+// existed. Blank ITEMS are dropped here and not in asList, because a list is what an
+// author wrote item by item: the zone is prose and wants none of them, while a loop
+// leaves its rows alone.
 function zoneLines(scope: Scope, field: string | null): string[] {
   if (field == null) return [];
   return asList(lookup(scope, field))
@@ -47,34 +103,30 @@ function zoneLines(scope: Scope, field: string | null): string[] {
     .filter((l) => l.trim() !== "");
 }
 
-// The tone of the outline, fed by @frame <field> <key>=<tone> ... The state that
-// picks the badge picks the border too: one field decides both, so they cannot
-// drift apart. An unlisted (or absent) state leaves the tone undefined, and the
-// box keeps its default grey.
+// The tone of the outline, fed by @frame <field> <key>=<tone> ... The state that picks
+// the badge picks the border too: one field decides both, so they cannot drift apart.
+// An unlisted state leaves the tone undefined, and the box keeps its default grey.
 function frameTone(scope: Scope, field: string, pairs: string): string | undefined {
   const val = lookup(scope, field);
   if (val == null) return undefined;
   const key = stringify(val).trim();
   if (key === "") return undefined;
-  for (const pair of pairs.trim().split(/\s+/)) {
-    const eq = pair.indexOf("=");
+  for (const pair of pairs.trim().split(TOKEN_SEP)) {
+    const eq = pair.indexOf(PAIR_SEP);
     if (eq <= 0) continue;
-    if (pair.slice(0, eq) === key) return pair.slice(eq + 1) || undefined;
+    if (pair.slice(0, eq) === key) return pair.slice(eq + PAIR_SEP.length) || undefined;
   }
   return undefined;
 }
 
-// The rows an @aside puts in its left column: the named view's BODY lines, taken
-// as text. No directive in them is honoured and no substitution runs over them,
-// which is what keeps a region from opening a nested box or a loop it cannot close;
-// the art a region names therefore ships frameless.
+// The rows an @aside puts in its left column: the named view's BODY lines, taken as
+// text. No directive in them is honoured and no substitution runs over them, which is
+// what keeps a region from opening a nested box or a loop it cannot close.
 //
-// Resolved through the LOADER, the one module that knows a view is a file, and along
-// the very search path the render entry handed down: the shadowing contract holds
-// here exactly as it does for a top-level view, and this layer still probes nothing.
-//
-// A name that resolves nowhere yields no row, which composeAside reads as "no
-// column": a decoration must never take its box down with it.
+// Resolved through the LOADER, along the search path the render entry handed down: the
+// shadowing contract holds here exactly as it does for a top-level view, and this
+// layer still probes nothing. A name that resolves nowhere yields no row, which
+// composeAside reads as "no column": a decoration never takes its box down with it.
 function asideRows(name: string, dirs: string | string[]): string[] {
   let rows: string[];
   try {
@@ -94,8 +146,8 @@ function asideRows(name: string, dirs: string | string[]): string[] {
 }
 
 // `limit` is the box width ceiling and `viewsPath` the ordered template dirs, both
-// resolved once by the render entry (render.ts) and carried down: the directives ask
-// the platform nothing and search for nothing on their own.
+// resolved once by the render entry and carried down: the directives ask the platform
+// nothing and search for nothing on their own.
 export function renderBody(
   body: string[],
   scope: Scope,
@@ -106,24 +158,21 @@ export function renderBody(
 ): string[] {
   const out: string[] = [];
   for (let i = 0; i < body.length; i++) {
-    // @box ... @endbox, with the top rule fed by @head (left) and @right.
     // Deliberately NOT nestable: nothing needs it, and a depth counter would be
-    // untested surface. An unclosed @box frames the rest of the template, which
-    // is visibly wrong rather than silently dropped.
-    if (/^@box\s*$/.test(body[i])) {
+    // untested surface. An unclosed @box frames the rest of the template, which is
+    // visibly wrong rather than silently dropped.
+    if (BOX_RE.test(body[i])) {
       let head = "";
       let right = "";
       let footField: string | null = null;
       let tone: string | undefined;
       const inner: string[] = [];
       i++;
-      for (; i < body.length && !/^@endbox\s*$/.test(body[i]); i++) {
-        const hm = body[i].match(/^@head\s+(.*)$/);
-        const rm = body[i].match(/^@right\s+(.*)$/);
-        // @foot names the field, it does not carry text: the zone is wired to the
-        // data, so a template cannot render a cause the block never stated.
-        const fm = body[i].match(/^@foot[ \t]+(\S+)[ \t]*$/);
-        const cm = body[i].match(/^@frame[ \t]+(\S+)[ \t]+(.*)$/);
+      for (; i < body.length && !ENDBOX_RE.test(body[i]); i++) {
+        const hm = body[i].match(HEAD_RE);
+        const rm = body[i].match(RIGHT_RE);
+        const fm = body[i].match(FOOT_RE);
+        const cm = body[i].match(FRAME_RE);
         if (hm) head = subst(hm[1], scope, maps);
         else if (rm) right = subst(rm[1], scope, maps);
         else if (fm) footField = fm[1];
@@ -142,29 +191,23 @@ export function renderBody(
       );
       continue;
     }
-    // @aside <view> [top|bottom] ... @endaside: the region's lines render as an
-    // ordinary flow and are then composed against the named view's rows, which sit
-    // in a second column to their LEFT. The region NAMES its content and never
-    // carries it: the whole point of the primitive is to keep a wall of pixels out
-    // of a readable template.
+    // The region NAMES its content and never carries it: the whole point of the
+    // primitive is to keep a wall of pixels out of a readable template. Not nestable,
+    // like @box and for the same reason.
     //
-    // Not nestable, like @box and for the same reason. The optional alignment token
-    // rides here rather than on a line of its own so the region's shape is declared
-    // in one place.
-    //
-    // Parsed in two steps, the name then its token, for the reason @each is: one
-    // regex carrying an OPTIONAL quantified group plus a trailing \s*$ nests its
-    // quantifiers and backtracks on a near-miss. The strictness is kept where it
-    // matters: anything left over that is not an alignment word means this is NOT a
-    // region, and the line prints as text rather than swallowing the lines below it.
-    const aside = body[i].match(/^@aside[ \t]+(\S+)(.*)$/);
+    // Parsed in two steps, the name then its token, for the reason @each is: one regex
+    // carrying an OPTIONAL quantified group plus a trailing \s*$ nests its quantifiers
+    // and backtracks on a near-miss. The strictness is kept where it matters: a token
+    // that is not an alignment word means this is NOT a region, and the line prints as
+    // text rather than swallowing the lines below it.
+    const aside = body[i].match(ASIDE_RE);
     const token = aside ? aside[2].trim() : "";
     const align: AsideAlign | null =
       token === "" ? "center" : token === "top" ? "top" : token === "bottom" ? "bottom" : null;
     if (aside && align != null) {
       const inner: string[] = [];
       i++;
-      for (; i < body.length && !/^@endaside\s*$/.test(body[i]); i++) inner.push(body[i]);
+      for (; i < body.length && !ENDASIDE_RE.test(body[i]); i++) inner.push(body[i]);
       out.push(
         ...composeAside(
           asideRows(aside[1], viewsPath),
@@ -175,74 +218,55 @@ export function renderBody(
       );
       continue;
     }
-    // @rule [prefix]: an inner division of a section, filled by frameBox. Parsed
-    // by string rather than by regex: an optional trailing group around [\s\S]*
-    // is flagged as backtracking-prone, and the shape is too simple to need one.
-    if (body[i] === RULE_WORD || body[i].startsWith(RULE_PREFIX)) {
+    // Matched by string rather than by regex: an optional trailing group around
+    // [\s\S]* is flagged as backtracking-prone, and the shape is too simple to need it.
+    if (body[i] === RULE || body[i].startsWith(RULE_PREFIX)) {
       out.push(RULE_MARK + subst(body[i].slice(RULE_PREFIX.length), scope, maps));
       continue;
     }
-    // NB: /^@end\s*$/ cannot match "@endbox", so the two terminators never collide.
-    // An @each may DECLARE its label: ${#label} is then the text on the first item
-    // and spaces of the same width on every later one, so a section names itself
-    // ONCE instead of repeating its label down the block. Declared rather than
-    // inferred (say, by blanking whatever precedes the gutter bar) because the
-    // engine is shared: a view putting a per-row value there would see it silently
-    // vanish. The label carries its own padding, since aligning two sections is
-    // the template's business, not the engine's.
-    // An @each may also DECLARE an item marker, bullet="- ", substituted per item
-    // (so bullet="R${#} " numbers its rows) and exposed as ${#bullet}. Declared
-    // like the label rather than written into the body line, for one reason the
-    // body line cannot serve: the wrapper has to know where the marker ENDS, or a
-    // wrapped item repeats its bullet on every row.
-    // Parsed in two steps, the field then its declarations, because one regex
-    // carrying two optional quoted groups plus a trailing \s*$ backtracks on a
-    // near-miss. The strictness is kept where it matters: anything left over
-    // after the declarations means this is NOT a loop, and the line prints as
-    // text rather than silently registering a loop the template never declared.
-    const head = body[i].match(/^@each[ \t]+(\S+)(.*)$/);
+    // A label is DECLARED rather than inferred (say, by blanking whatever precedes the
+    // gutter bar) because the engine is shared: a view putting a per-row value there
+    // would see it silently vanish. A bullet is declared for one reason the body line
+    // cannot serve: the wrapper has to know where the marker ENDS, or a wrapped item
+    // repeats its bullet on every row. A cap exists because a cell is normally measured
+    // over its values, so one long label would push every content column to the margin.
+    //
+    // Parsed in two steps, the field then its declarations, because one regex carrying
+    // two optional quoted groups plus a trailing \s*$ backtracks on a near-miss.
+    const head = body[i].match(EACH_RE);
     const attrs = head ? head[2] : "";
-    const labelDecl = attrs.match(/[ \t]label="([^"]*)"/);
-    const bulletDecl = attrs.match(/[ \t]bullet="([^"]*)"/);
-    // An @each may CAP its leading columns at a fraction of the available width,
-    // cap="1/3": the width of a cell is normally measured over the values, so a
-    // long label would push every content column to the margin. The cap clamps
-    // the measured widths; an overflowing value is then cut on an ellipsis at
-    // substitution (fitCell). The fraction lives in the template because the
-    // container is the template's business, never the carrier's or the message's.
-    const capDecl = attrs.match(/[ \t]cap="(\d+)\/([1-9]\d*)"/);
-    const leftover = attrs
-      .replace(/[ \t]label="[^"]*"/, "")
-      .replace(/[ \t]bullet="[^"]*"/, "")
-      .replace(/[ \t]cap="\d+\/[1-9]\d*"/, "")
-      .trim();
+    const labelDecl = attrs.match(LABEL_RE);
+    const bulletDecl = attrs.match(BULLET_RE);
+    const capDecl = attrs.match(CAP_RE);
+    const leftover = DECL_RES.reduce((rest, re) => rest.replace(re, ""), attrs).trim();
     const eachField = head && leftover === "" ? head[1] : null;
     if (eachField != null) {
       const inner: string[] = [];
       i++;
-      while (i < body.length && !/^@end\s*$/.test(body[i])) {
+      while (i < body.length && !END_RE.test(body[i])) {
         inner.push(body[i]);
         i++;
       }
       const items = asList(lookup(scope, eachField));
-      // Column widths are measured over the items of THIS list and applied on
-      // the per-item scope built below, so nothing outside a list is padded.
+      // Measured over the items of THIS list and applied on the per-item scope built
+      // below, so nothing outside a list is padded.
       const fields = objectLists[eachField];
       const pad: PadCtx = {
         widths: columnWidths(items, fields, inner, maps),
         tail: fields && fields.length > 0 ? fields[fields.length - 1] : undefined,
       };
       if (capDecl) {
-        // Whatever the fraction yields, a clamp never erases a column entirely.
-        const MIN_CELL = 1;
-        const cap = Math.max(MIN_CELL, Math.floor((limit * Number(capDecl[1])) / Number(capDecl[2])));
+        const cap = Math.max(
+          MIN_CELL,
+          Math.floor((limit * Number(capDecl[1])) / Number(capDecl[2]))
+        );
         for (const f of Object.keys(pad.widths)) {
           pad.widths[f] = Math.min(pad.widths[f], cap);
         }
       }
       const label = labelDecl?.[1];
       const bullet = bulletDecl?.[1];
-      const labelCol = Number(scope.__labelWidth ?? 0);
+      const labelCol = scope.__labelWidth ?? 0;
       items.forEach((item: unknown, idx: number) => {
         const itemScope: Scope = {
           ...scope,
@@ -258,9 +282,9 @@ export function renderBody(
         if (item && typeof item === "object") {
           Object.assign(itemScope, item as Record<string, unknown>);
         }
-        // Substituted on the item scope, so a bullet may carry ${#} or a field of
-        // the item; the boundary is appended here, once, rather than being spelled
-        // out in every template that wants a marker.
+        // Substituted on the item scope, so a bullet may carry ${#} or a field of the
+        // item; the boundary is appended here, once, rather than being spelled out in
+        // every template that wants a marker.
         if (bullet != null) {
           itemScope.__bullet = subst(bullet, itemScope, maps) + HANG_MARK;
         }

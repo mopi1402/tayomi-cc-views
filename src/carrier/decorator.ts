@@ -1,5 +1,5 @@
-// The decorator carrier: a line that NAMES the template (and the semantic type)
-// dressing the plain-markdown payload below it.
+// The decorator carrier: a line that NAMES the template dressing the plain-markdown
+// payload below it.
 //
 //   @{view:table, type:warning}
 //   | Item | Info |
@@ -9,40 +9,28 @@
 // The separator is a comma, whitespace, or both, and the attributes come in any
 // order: `@{view:table tone:dim}` is the same token.
 //
-// The trade this carrier exists for: the payload IS ordinary markdown, so the
-// fallback costs nothing. Re-rendered from the transcript (the hook only ever
-// transforms what reaches the screen), the human gets the decorator line above a
-// native table instead of the fenced block's code wall. It engages on INTENT,
-// never on shape: an undecorated table, whatever its rows or columns, is not this
-// carrier's business (the lesson of the retired table POC, which matched shape and
-// hijacked ordinary tables; see .tayomi/tickets/decorated-views.md).
+// The trade it exists for: the payload IS ordinary markdown, so the fallback costs
+// nothing. Re-rendered from the transcript, the human gets the decorator line above a
+// native table instead of the fenced block's code wall. It engages on INTENT, never on
+// shape: an undecorated table is not this carrier's business, whatever its columns
+// (the lesson of the retired table POC, which matched shape and hijacked ordinary
+// tables; see .tayomi/tickets/decorated-views.md). Bare rather than HTML-commented,
+// because terminals print `<!-- -->` verbatim.
 //
-// The token begins with `@{view:` and nothing shorter: PowerShell writes
-// `@{Name='x'}` and Perl writes `@{$ref}`, so a bare `@{` would capture them.
-// Bare, not HTML-commented, because terminals print `<!-- -->` verbatim.
-//
-// Two attributes, one axis each, because ONE of them could not serve both:
-//
-// `type` names the KIND of content (warning, error, success), never a look: markdown
-// admonitions are the prior art, and the decorator is text the model re-reads, so the
-// name must inform. It picks a typed template when the SHAPE differs (load.ts resolves
-// `<name>.<type>.view`), and dresses the default template when only the colour does.
-//
-// `tone` names the LOOK, a palette tag stuck on this render like a class: it selects
-// no file and carries no meaning. It exists because the alternative was a near-copy of
-// a template per colour, and because a look wearing a semantic name (`type:even`) lies
-// to the model about what the content IS.
-//
-// Both are OPTIONAL and both fail open. The template stays the sole owner of what it
-// spends them ON: the tone slot it writes, the file it is (see template/render.ts).
+// Two attributes, one axis each, because one of them could not serve both. `type`
+// names the KIND of content and may pick a typed template FILE; `tone` names the LOOK,
+// a palette tag stuck on this render like a class, selecting no file and carrying no
+// meaning. A look wearing a semantic name (`type:even`) would lie to the model about
+// what the content IS. Both are OPTIONAL, both fail open, and the template stays the
+// sole owner of what it spends them on (template/render.ts).
 
+import { DECORATOR_CLOSE, DECORATOR_HINT } from "../data/markup.js";
 import { renderView, type Dressing } from "../template/render.js";
-import { RESET_MARK, tagMark } from "../style.js";
+import { RESET_MARK, inert, tagMark } from "../style.js";
 import type { RenderOptions } from "../options.js";
 
 /** What engages the pipeline, and what the line pattern anchors on. */
-export const DECORATOR_HINT = "@{view:";
-const TOKEN_CLOSE = "}";
+export { DECORATOR_HINT };
 
 // Parsed by string, not by one composed regex: an optional inner group plus a
 // trailing anchor backtracks on a near-miss (the lesson directives.ts already
@@ -50,25 +38,25 @@ const TOKEN_CLOSE = "}";
 // a single anchored quantifier over one atom, which cannot backtrack.
 const NAME_RE = /^[\w-]+$/;
 const ATTR_RE = /^(type|tone):([\w-]+)$/;
+/** A comma, whitespace, or both: `@{view:table, type:warning}` is `@{view:table type:warning}`. */
+const ATTR_SEP = /[,\s]+/;
 
 interface Decorator extends Dressing {
   view: string;
 }
 
-// The decorator must be ALONE on its line (surrounding whitespace aside), which
-// is what keeps a decorator QUOTED in prose from engaging anything.
+// The decorator must be ALONE on its line (surrounding whitespace aside), which is
+// what keeps a decorator QUOTED in prose from engaging anything.
 //
-// The view name comes first, its attributes follow in any order, and the separator is
-// a comma, whitespace, or both: a model writes all three, and requiring the comma
-// exactly voided the WHOLE token on a near-miss (`@{view:table type:warning}` used to
-// print raw, decorator line included, which reads as the engine being broken rather
-// than as a syntax slip). Anything that is not a known attribute still makes the line
-// prose, so the token stays as hard to trigger by accident as it was.
+// Requiring the comma exactly voided the WHOLE token on a near-miss: `@{view:table
+// type:warning}` used to print raw, decorator line included, which reads as the engine
+// being broken rather than as a syntax slip. Anything that is not a known attribute
+// still makes the line prose, so the token stays as hard to trigger by accident.
 function parseDecorator(line: string): Decorator | null {
   const t = line.trim();
-  if (!t.startsWith(DECORATOR_HINT) || !t.endsWith(TOKEN_CLOSE)) return null;
-  const inner = t.slice(DECORATOR_HINT.length, -TOKEN_CLOSE.length);
-  const [view, ...attrs] = inner.split(/[,\s]+/).filter((part) => part !== "");
+  if (!t.startsWith(DECORATOR_HINT) || !t.endsWith(DECORATOR_CLOSE)) return null;
+  const inner = t.slice(DECORATOR_HINT.length, -DECORATOR_CLOSE.length);
+  const [view, ...attrs] = inner.split(ATTR_SEP).filter((part) => part !== "");
   if (view == null || !NAME_RE.test(view)) return null;
   const deco: Decorator = { view };
   for (const attr of attrs) {
@@ -83,29 +71,35 @@ function parseDecorator(line: string): Decorator | null {
 /** Anything pipe-shaped: the payload's own line shape, and the block rule's boundary. */
 const PIPE_LINE_RE = /^[ \t]*\|/;
 
-// A two-column row. Each cell accepts an escaped pipe (`\|`), which markdown
-// renders correctly: the POC's cell pattern rejected it and silently fell back,
-// so the escape is part of the contract here.
+// A two-column row. Each cell accepts an escaped pipe (`\|`), which markdown renders
+// correctly: the POC's cell pattern rejected it and silently fell back, so the escape
+// is part of the contract here.
 const ROW_RE = /^[ \t]*\|((?:\\\||[^|\n])*)\|((?:\\\||[^|\n])*)\|[ \t]*$/;
 const DELIM_RE = /^[ \t]*\|[ \t]*:?-+:?[ \t]*\|[ \t]*:?-+:?[ \t]*\|[ \t]*$/;
+/** That escape, unwritten: inside a cell the pipe is content, not a column boundary. */
+const ESCAPED_PIPE_RE = /\\\|/g;
 
+/** One payload row as the template receives it. */
 export interface DecoratedRow {
   label: string;
   content: string;
 }
 
-// The cell as the template receives it. Unescapes the pipe, and converts the
-// AUTHORED bold spans to the engine's markup: the emphasis lives in the markdown
-// per span (so it survives every re-render from the transcript), and the screen
-// honours it as ANSI. Nothing is added the message did not carry, which is what
-// buried the POC's whole-cell bolding.
+// The emphasis lives in the markdown PER SPAN, so it survives every re-render from the
+// transcript and the screen honours it as ANSI. Nothing is added the message did not
+// carry, which is what buried the POC's whole-cell bolding.
 const BOLD_SPAN_RE = /\*\*([^*\n]+)\*\*/g;
 
+/** A template file ends on a newline, and that blank is not part of the zone it fills. */
+const TRAILING_BLANKS_RE = /\n+$/;
+
+// Neutralised FIRST, styled second: both end up in one string, so the order is what
+// separates the model's own markup from the emphasis this carrier derives.
 function cell(raw: string): string {
-  return raw
-    .trim()
-    .replace(/\\\|/g, "|")
-    .replace(BOLD_SPAN_RE, `${tagMark("b")}$1${RESET_MARK}`);
+  return inert(raw.trim().replace(ESCAPED_PIPE_RE, "|")).replace(
+    BOLD_SPAN_RE,
+    `${tagMark("b")}$1${RESET_MARK}`
+  );
 }
 
 /**
@@ -175,7 +169,7 @@ export function renderDecorated(
       // The render replaces the whole zone; its own trailing blank line (a
       // template file ends on a newline) is dropped so the zone keeps exactly
       // the line structure the raw table had around it.
-      out.push(...rendered.replace(/\n+$/, "").split("\n"));
+      out.push(...rendered.replace(TRAILING_BLANKS_RE, "").split("\n"));
       i = end - 1;
     } catch {
       out.push(lines[i]); // fail-open: the decorator stays, the table follows raw
