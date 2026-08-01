@@ -9,6 +9,17 @@ avoided.
 
 `style ← layout ← template ← carrier ← pipeline`: each layer imports only leftward.
 
+Under all of them sits `src/data/`, a leaf every layer may read and that reads nothing:
+the FORMS the engine recognises (`markup.ts`: the tag delimiters, the code tick, the
+two carrier tokens), the WORDS a template author types (`language.ts`: every
+`@directive`, the declarations their tails carry, and the pseudo-fields an `@each` puts
+in scope), and the control codes it reserves (`marks.ts`). They live there rather than
+in the module that spends each one because several modules must AGREE on them, and
+nothing else would make them agree: a directive is matched in `template/directives.ts`,
+declared in `template/parse.ts`, and typed out in the fixtures the tests write, so
+renaming one costs one edit here rather than a sweep. Forms only: what a tag NAME means
+stays private to `style.ts`.
+
 - `style.ts` is the leaf: the ANSI vocabulary, with no notion of geometry or data.
 - `layout/` measures and frames.
 - `template/` parses and substitutes.
@@ -41,7 +52,7 @@ revealed fully rendered on the final delta.
 > A delta already shown can never be taken back.
 
 That constraint dictates the whole design, and it leaves an accepted residue: a
-marker cut mid-way (`{{sta`, `@{view:ta`) can reach the screen raw before it
+carrier token cut mid-way (`@{view:ta`) can reach the screen raw before it
 completes.
 
 ## 3. The width polyfill
@@ -87,6 +98,36 @@ The `{{tag}}` vocabulary is not a per-call option but a process-global registry
 (`extendTags`), and that is a coherence choice, not a convenience: the layout
 leaves MEASURE through this vocabulary (a known tag weighs zero columns, an unknown
 tag is text) while the renderer RESOLVES it. Two distinct sets would make every
-width a lie. The registry is additive only: redefining an existing tag raises an
-error, because a shadow would change the language under the feet of every template
-already written.
+width a lie. Registering a name that already exists is allowed and the LAST
+registration wins, the same law the views live under: the screen's owner has the
+last word, and what was taken over comes back in the report rather than as a throw
+(`extendTags` is total, because the one thing a startup call must never cost is the
+screen).
+
+### Only a template writes presentation
+
+Who may spend the vocabulary: a template, and the host. Not a message. A tag resolves
+at the end of a view's render (`template/render.ts`) and at the one point a
+host-authored string enters the output (`strict.failedLine`). The pipeline runs no tag
+pass, so `{{warn}}` typed in prose is eight characters of text like any other.
+
+The reason is not tidiness. Text that can open a colour can close one a render meant
+to keep, and can paint a line in a tone that contradicts what the line says: the
+engine would then be corrupting the model's OUTPUT, not just its display. A message
+names a template and supplies its data. Presentation comes from a file on disk.
+
+Prose is covered by the absent pass alone. A block's DATA needs a second seam, because
+it is substituted INTO a template and would otherwise be indistinguishable from the
+template's own text by the time the tags resolve. So message text is neutralised where
+it becomes a scope value: `inert` (`style.ts`) follows every brace with an invisible
+C0 control, which breaks the tag shape while `width.ts` already counts a C0 as zero
+columns, so the value measures and wraps as the text it now is. `render.ts` drops the
+marks after the tag pass.
+
+Two callers neutralise, and only two: `render.ts` when a block's raw text is parsed
+into a scope, and `cell()` (`carrier/decorator.ts`) for a decorated table. `parseData`
+itself does NOT, because a host's gate reads the same parse to judge a block and must
+see the values as the block typed them. In `cell()` the ORDER carries the rule:
+neutralise the cell, then derive emphasis from `**`, or the carrier's own markup dies
+with the model's. Fields a host injects are never neutralised: a host is a program, on
+the same footing as `strict.failedLine`.

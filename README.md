@@ -41,6 +41,12 @@ on it. A typed file (`table.warning.view`) is for a different SHAPE, not a colou
 `extendTags` adds your own `{{tags}}` process-wide, measured and rendered alike,
 and yours shadow the built-ins: the screen's owner has the last word.
 
+**✓ Only a template writes presentation.**  
+Tags resolve inside a view, never in a message. A model names a template and hands it
+data; a `{{tag}}` it types in its own prose stays on screen as text. So a message can
+never open a colour the render meant to close, nor paint a line in a tone that
+contradicts what the line says.
+
 **✓ Fail-open.**  
 A failing view shows its original text in place; the rest of the message still
 renders. Never a blank.
@@ -210,6 +216,8 @@ the rest of `RenderOptions` are covered in the integration reference below.
 - [Contributing](CONTRIBUTING.md): the verification ladder, from the render
   one-liner to the pack gate, the sandbox eye test and the local-registry
   dress rehearsal.
+- [Eye test](docs/verify-pack.md): reading the screen against the packed
+  tarball, the one thing no script can judge.
 
 ## Caveats
 
