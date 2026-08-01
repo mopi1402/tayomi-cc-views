@@ -7,5 +7,7 @@
     "paths": {
       "@tayomi/utils": ["../utils/dist/index.d.ts"]
     }
-  }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "node_modules"]
 }

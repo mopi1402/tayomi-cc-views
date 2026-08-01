@@ -1,7 +1,10 @@
 #!/bin/sh
-# Pre-commit gate: the packed tarball must work as installed before anything ships.
+# Pre-commit gate: lint, types, the suite, and the packed tarball working as installed.
 # Enable once per clone: git config core.hooksPath scripts/git-hooks
+#
+# It runs `pnpm verify`, the SAME target prepublishOnly runs, so the commit gate and
+# the publish gate cannot drift apart. Add a check to that one script, never here.
 set -e
 
-echo "pre-commit: pnpm verify:pack"
-pnpm verify:pack
+echo "pre-commit: pnpm verify"
+pnpm verify
