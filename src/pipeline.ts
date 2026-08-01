@@ -7,8 +7,10 @@
 // MessageDisplay streams a message flush by flush, so slice() recomputes the target
 // transform of the WHOLE message so far and emits only the newly-revealed slice.
 // Concatenated slices equal the target, which masks a raw block while it streams and
-// reveals the render when its fence closes. Fail-open throughout: any error shows the
-// original text, never a crash or a blank screen.
+// reveals the render when its fence closes, or the raw text on the LAST delta when it
+// never does: withholding is a promise of a later flush, and the last one has none to
+// make. Fail-open throughout: any error shows the original text, never a crash or a
+// blank screen.
 //
 // slice() is a PURE function of the text before the flush and the flush's own delta.
 // It holds no offset from the flush before it, which is what lets the concurrent
@@ -97,10 +99,17 @@ export function transform(
     const { ok, error } = outcome as { ok: boolean; error: string | null };
     host?.onRendered?.(ok, error);
   }
-  out = cutUnclosedBlock(out);
+  // Withholding is the NON-FINAL flush's business, both carriers under the one
+  // `final !== true` convention: a cut is a promise that a later flush reveals what
+  // it holds back, and on the last delta no later flush exists to keep it. So the
+  // final flush shows whatever it could not render, raw, rather than swallowing it
+  // (a block that never closes used to be cut away here and never came back).
   // Withheld first, rendered second: a zone still arriving is gone before the
   // carrier ever sees it, so a half-formed payload can never render.
-  if (final !== true) out = cutStreamingDecorated(out);
+  if (final !== true) {
+    out = cutUnclosedBlock(out);
+    out = cutStreamingDecorated(out);
+  }
   out = renderDecorated(out, options?.viewsPath ?? defaultViewsPath(), options);
   return renderTags(out);
 }

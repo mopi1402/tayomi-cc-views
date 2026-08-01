@@ -102,9 +102,6 @@ What it would improve in [docs/caveats.md](docs/caveats.md):
   view means the message no longer engages at all, so Claude Code's native
   markdown pass comes back for the whole message. The user chooses, view by
   view, whether the dressing is worth that trade.
-- **Unclosed fence swallowing the tail** (main caveat 1): a disabled view is
-  never withheld, so disabling doubles as a coarse mitigation while the real
-  fail-open fix lands.
 
 Under study, and the hard question is the boundary of what a USER may disable:
 a plugin that relies on cc-views for a load-bearing display (a strict view

@@ -17,13 +17,18 @@ the engine finds the end at the first line that is no longer part of the table.
 While the message is still streaming, the end is unknown by nature, so an open
 zone is withheld and revealed on the final flush, rendered or raw.
 
-Known failure mode of that hunt, confirmed by execution on 2026-07-31: a
-` ```view: ` fence the model never closes currently swallows everything from
-the fence to the end of the message. The fix is to fail open on the final
-flush, as the decorator carrier already does.
+That hunt swallowed the tail until 2026-08-01: a ` ```view: ` fence the model
+never closed took everything from itself to the end of the message with it, 43
+characters gone without a trace on the witness. Both carriers now withhold on
+the non-final flush alone, so a cut is always a promise a later flush keeps,
+and the last delta shows raw whatever it could not render.
 
-> **Boundary:** the start marker is a deliberate choice and will not move;
-> the tail-swallowing on an unclosed fence is an engine bug, fix planned here.
+> **Boundary:** the start marker is a deliberate choice and will not move. One
+> residue survives, and it is not the carrier's to answer: a flush ending
+> INSIDE the eight characters of the opening hint carries no view fence yet, so
+> the engine declines the whole message and the host draws that fragment
+> itself. Nothing can retract a delta already on screen, which is the same
+> standing limit a tag cut mid-marker lives with.
 
 ### 2. Code can be mistaken for a view and break the display
 
