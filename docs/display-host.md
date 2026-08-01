@@ -83,6 +83,12 @@ word), and the call returns a `TagReport` naming what did not apply silently:
 should not change in silence), `skipped` the names the `{{tag}}` shape cannot
 carry (`\w+`). Re-registering an identical pair is a no-op.
 
+**Where a registered tag resolves: in a view.** The engine runs no tag pass over the
+message, so your name is spent by a template file, and by your own `strict.failedLine`
+(the one host-authored string the engine inserts). A `{{brand}}` typed in the model's
+prose stays on screen as those nine characters. See "Only a template writes
+presentation" in `architecture.md` for why.
+
 One consequence to plan for: the engine's own vocabulary GROWS over versions
 (the tone-slot work added `warning`, `error`, `success`, `info` and their
 chips). A name you registered may BECOME a built-in later: your registration
@@ -135,7 +141,7 @@ Walk the causes:
   throwaway project: identical fresh sessions, the relative form rendered nothing,
   the placeholder form rendered.)
 - **Nothing renders, but the hook did run.** The message carries none of the engagement markers
-  (` ```view: `, `{{`, `@{view:`), so the engine returns `null` and the host's own
+  (` ```view: `, `@{view:`), so the engine returns `null` and the host's own
   rendering stands. That is by design: returning text would flatten the host's
   markdown.
 - **The box wraps at a surprising column.** Walk the width resolution order above:

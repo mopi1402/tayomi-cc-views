@@ -164,6 +164,17 @@ The health check, at the full content width.
 
 `{{tag}}` opens a style, `{{/}}` resets. An UNKNOWN tag name stays on screen
 verbatim (it is text, not markup), and every width measurement agrees with that.
+
+This is the VIEW language, and it is spoken in a `.view` file only. A tag written in a
+MESSAGE is inert, in its prose and inside a block's data alike: `{{warn}}` typed by the
+model prints as those eight characters, and it is measured as eight columns because
+that is what it costs. Only the template you wrote opens a style. That is what keeps
+presentation on disk, where you can read it and change it, instead of in whatever a
+model happened to emit.
+
+The one thing a message still influences is the tone SLOT (below), which names a class
+the template chose to spend. It cannot invent a style the template did not ask for.
+
 The built-in vocabulary (`style.ts`):
 
 - Weight: `b`, `dim`.

@@ -9,10 +9,12 @@ full dress rehearsal of `npm publish`.
 
 ```bash
 pnpm install
-pnpm build        # tsc -> dist/
-pnpm test         # vitest, the whole suite
+pnpm build            # tsc -> dist/
+pnpm test             # vitest, the whole suite
 pnpm lint
 pnpm typecheck
+pnpm check:sidecars   # every module answers for itself
+pnpm verify           # all of the above, then the pack gate
 ```
 
 ## The inner loop: render without any hook
@@ -32,6 +34,33 @@ layout code, seconds per cycle. The test suite drives the same storeys
 (`transform`, `slice`, `handleMessageDisplay`) with parsed payloads, so most
 behaviour is provable here too: streaming included (the tests chunk messages
 flush by flush exactly the way the live dispatcher does).
+
+## Where a test goes: the sidecar, and the gate that keeps it honest
+
+`foo.ts` is answered by `foo.test.ts` beside it. The sidecar is where that module's
+OWN contract is written, so the day the contract changes the failure lands on the
+module and not three layers away. Coverage does not stand in for it: a suite driving
+the whole engine from the front door executes a module's lines without ever pinning
+its edges.
+
+A module with no sidecar says why IN WRITING, in the exclusion table of
+`scripts/check-sidecars.mjs`, which `pnpm check:sidecars` gates. The gate bites both
+ways, or the table rots into a list of excuses: an entry naming a module that has
+since gained a test, or that no longer exists, fails too. A reason there is a
+decision; anything reading "not yet" belongs in the suite instead.
+
+Two other kinds sit outside the rule. A suite answering for a PATH rather than a
+module lives in `tests/`, exempt by LOCATION so there is no allowlist to keep in step
+(`tests/integration/examples.test.ts` drives `examples/` through the real engine, so
+the front door's demo cannot rot). End to end is `scripts/verify-pack.mjs` alone, the
+only thing here that crosses a process.
+
+Two habits go with it. Tests typecheck like the rest of the code, so a fixture that no
+longer matches the shape it drives proves nothing (`tsconfig.json` includes them;
+`tsconfig.build.json` declares its own scope so none of them reach `dist`). And write
+the NEAR-MISS as well as the hit: every matcher here is built so a malformed line
+falls through to the body, where an author sees it printed, and a test fed only valid
+input cannot tell that apart from a matcher that swallows.
 
 ## The pack gate: `pnpm verify:pack`
 
@@ -61,7 +90,9 @@ cd sandbox && npm install ./tayomi-cc-views-*.tgz
 ```
 
 Open Claude Code in `sandbox/` and paste the prompt from
-[sandbox/README.md](sandbox/README.md). The `eyetest` view it asks for is static
+[docs/verify-pack.md](docs/verify-pack.md), which holds the whole recipe (the
+folder itself is gitignored, so nothing that matters is kept inside it). The
+`eyetest` view it asks for is static
 and NAMES ITS OWN ORIGIN on screen, which is what makes the verdict readable: a
 user-scoped plugin's MessageDisplay hook fires in that folder too, so a box drawn
 from a view both engines carry would prove nothing. `Ctrl+O` (`Cmd+O` on macOS)

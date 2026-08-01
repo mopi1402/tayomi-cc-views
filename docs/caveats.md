@@ -27,8 +27,11 @@ and the last delta shows raw whatever it could not render.
 > residue survives, and it is not the carrier's to answer: a flush ending
 > INSIDE the eight characters of the opening hint carries no view fence yet, so
 > the engine declines the whole message and the host draws that fragment
-> itself. Nothing can retract a delta already on screen, which is the same
-> standing limit a tag cut mid-marker lives with.
+> itself. Measured 2026-08-01 at 5 cut points out of 43, worth up to eight
+> stray characters above the rendered box. Nothing can retract a delta already
+> on screen, and widening what engages is worse than the residue: a message
+> whose tail is momentarily a bare ` ``` ` would be taken over and its markdown
+> flattened, or its fence withheld and never re-emitted.
 
 ### 2. Code can be mistaken for a view and break the display
 
