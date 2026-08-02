@@ -15,8 +15,14 @@ export const TAG_CLOSE = "}}";
 export const CODE_TICK = "`";
 
 export const FENCE = "```";
+/**
+ * The INFO STRING marking a fence as this engine's own carrier rather than an ordinary
+ * code block. It is what tells the fence scanner which fences to shield and which one
+ * to hand to the block carrier, so the two readings cannot drift.
+ */
+export const BLOCK_INFO = `${VIEW}:`;
 /** What an opening fence starts with, and what ENGAGES the pipeline. */
-export const BLOCK_HINT = `${FENCE}${VIEW}:`;
+export const BLOCK_HINT = `${FENCE}${BLOCK_INFO}`;
 
 /**
  * Nothing shorter than `@{view:`: PowerShell writes `@{Name='x'}` and Perl writes

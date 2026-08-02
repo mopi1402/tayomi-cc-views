@@ -27,6 +27,7 @@
 import { DECORATOR_CLOSE, DECORATOR_HINT } from "../data/markup.js";
 import { renderView, type Dressing } from "../template/render.js";
 import { RESET_MARK, inert, tagMark } from "../style.js";
+import { fenceAt, fenceSpans } from "./fences.js";
 import type { RenderOptions } from "../options.js";
 
 /** What engages the pipeline, and what the line pattern anchors on. */
@@ -68,8 +69,37 @@ function parseDecorator(line: string): Decorator | null {
   return deco;
 }
 
-/** Anything pipe-shaped: the payload's own line shape, and the block rule's boundary. */
+/**
+ * Does a decorator have a payload at all? The line below it exists and is not blank.
+ *
+ * Its EXISTENCE and its EXTENT are two questions, and conflating them was the defect.
+ * The extent belongs to the payload's own shape (a table ends on the first line that
+ * no longer starts with a pipe, which is markdown's rule and not this carrier's), but
+ * asking the pipe scanner where the zone ends made everything it cannot read look like
+ * NOTHING: the run came back empty, an empty zone is how a static view is summoned,
+ * and a data-driven view was handed `{}` and drew its furniture around no content.
+ *
+ * A blank line is the one boundary every markdown block agrees on, so it is the one
+ * this question is allowed to use. Below it, a payload EXISTS, and a payload no parser
+ * here claims fails open with the decorator line and the text left exactly as written.
+ */
+function hasPayload(lines: string[], below: number, stop: number): boolean {
+  return below < stop && lines[below].trim() !== "";
+}
+
+/** Anything pipe-shaped: the table payload's own line shape, and where its zone ends. */
 const PIPE_LINE_RE = /^[ \t]*\|/;
+
+/** Where each line of a text begins, so a line can be placed against a fence's span. */
+function lineStarts(lines: string[]): number[] {
+  const starts: number[] = [];
+  let at = 0;
+  for (const line of lines) {
+    starts.push(at);
+    at += line.length + 1; // the newline split() consumed
+  }
+  return starts;
+}
 
 // A two-column row. Each cell accepts an escaped pipe (`\|`), which markdown renders
 // correctly: the POC's cell pattern rejected it and silently fell back, so the escape
@@ -135,33 +165,39 @@ export function renderDecorated(
 ): string {
   if (!text.includes(DECORATOR_HINT)) return text;
   const lines = text.split("\n");
+  const fences = fenceSpans(text);
+  const starts = lineStarts(lines);
   const out: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const deco = parseDecorator(lines[i]);
-    if (deco === null) {
+    // A decorator inside a code fence is being SHOWN, not written, which is what
+    // documentation about this package is made of. Nothing here has an escape of its
+    // own, so the fence is it.
+    if (deco === null || fenceAt(fences, starts[i]) !== undefined) {
       out.push(lines[i]);
       continue;
     }
-    let end = i + 1;
-    while (end < lines.length && PIPE_LINE_RE.test(lines[end])) end++;
-    const payload = lines.slice(i + 1, end);
     // A decorator with NO payload engages with no data at all: a static view
     // (welcome, the health check) is summoned by its line alone. A payload that
-    // EXISTS but is not the supported shape still fails open: half a table is a
-    // mistake to show, never an empty scope to render. The hollow-render guard
-    // below keeps the trade safe: a data-driven view summoned bare renders
-    // whitespace and falls back to the raw line.
-    const rows = parseRows(payload);
-    if (payload.length > 0 && rows === null) {
+    // EXISTS but is not a shape a parser here claims fails open: half a table is a
+    // mistake to show, never an empty scope to render. hasPayload is what tells the
+    // two apart, and it does not consult the table parser to do it.
+    const has = hasPayload(lines, i + 1, lines.length);
+    let end = i + 1;
+    while (end < lines.length && PIPE_LINE_RE.test(lines[end])) end++;
+    const rows = has ? parseRows(lines.slice(i + 1, end)) : null;
+    if (has && rows === null) {
       out.push(lines[i]);
       continue; // the payload lines follow untouched: raw markdown, valid anyway
     }
     try {
       const data = rows === null ? {} : { rows };
       const rendered = renderView(deco.view, data, dirs, undefined, options, deco);
-      // Raw over hollow, this carrier's side of render.ts's guard (which only
-      // sees string data): a template that exists but reads none of the rows
-      // renders whitespace, and a blank where content stood is worse than raw.
+      // Raw over hollow, the OTHER half. render.ts asks whether data arrived, which
+      // catches a template drawing furniture around nothing; this asks whether the
+      // render put anything on screen, which catches the opposite case, a template
+      // handed rows it reads none of. The two are not one question asked twice: each
+      // one alone leaves the other's failure shipping.
       if (rendered.trim() === "") {
         out.push(lines[i]);
         continue;
@@ -198,11 +234,16 @@ export function renderDecorated(
 export function cutStreamingDecorated(text: string): string {
   if (!text.includes(DECORATOR_HINT)) return text;
   const lines = text.split("\n");
+  const fences = fenceSpans(text);
+  const starts = lineStarts(lines);
   let end = lines.length;
   if (end > 0 && lines[end - 1] === "") end--; // a line terminator, not a line
   let last = -1;
   for (let i = 0; i < end; i++) {
-    if (parseDecorator(lines[i]) !== null) last = i;
+    // A fenced decorator anchors nothing, for the same reason it renders nothing:
+    // otherwise a quoted example at the tail of a message withholds everything below
+    // it until the flush that closes the fence.
+    if (parseDecorator(lines[i]) !== null && fenceAt(fences, starts[i]) === undefined) last = i;
   }
   if (last === -1) return text;
   let after = last + 1;

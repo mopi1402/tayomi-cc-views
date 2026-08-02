@@ -272,6 +272,16 @@ chip included.
 
 ## The carriers
 
+Neither carrier looks inside a FENCED CODE BLOCK. The fences of a text are read
+before anything else, and the outermost one decides: if its info string opens
+`view:` it is the block carrier's own and renders, and every other fence is a
+shield whose contents are text, a nested `view:` block and a decorator line
+included. A fence closes on a run at least as long as its opening carrying no
+info string, which is what lets a longer fence quote a shorter one, and an
+unclosed fence shields to the end of the message. This is what makes it possible
+to SHOW the syntax: a page of examples is a page, not a render of itself. An
+indented four-space code block does not shield.
+
 ### The fenced block
 
 ````
@@ -304,11 +314,22 @@ pipe table: header row MANDATORY (its cells may be empty, `| | |`), then the
 delimiter row, then at least one data row. The zone ends by markdown's own block
 rule, at the first line that no longer starts with a pipe.
 
-A decorator with NO payload at all summons the view with no data: how a static
-view is asked for (`@{view:welcome}` alone is the whole health check). A
-data-driven view summoned bare renders nothing, and the hollow-render guard
-shows the raw line instead. A payload that exists but is not the supported
-table shape still fails open.
+A decorator has NO payload when the line under it is blank or absent, and only
+then. That is how a static view is asked for: `@{view:welcome}` alone, ending the
+message or with a blank line under it, is the whole health check. Prose on the
+very next line IS a payload, no parser claims it, and the zone fails open.
+
+Whether a payload exists and how far it reaches are two questions, deliberately
+kept apart. Existence is decided by that blank line, the one boundary every
+markdown block agrees on. Extent belongs to the payload's own shape: a table ends
+at the first line that no longer starts with a pipe, which is markdown's rule, so
+a table followed straight by prose is still a table. Asking the table scanner
+where the zone ended made everything it could not read look like nothing at all,
+which is how a quoted example became a view summoned with no data.
+
+A payload that exists but is not a shape a parser here claims fails open, and so
+does a hollow render, under either of two readings: no data reached a template
+that spends a substitution, or data reached one that reads none of it.
 
 - The payload stays plain markdown, so the FALLBACK is native: wherever the hook
   does not run, the reader gets an ordinary table under one extra line.

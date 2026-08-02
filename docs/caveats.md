@@ -22,14 +22,22 @@ what engages costs more than the residue.
 
 ### Code can be mistaken for a view
 
-Two shapes only. A tight Objective-C literal `@{view:x}` alone on its line, and
-only while a template of that name resolves *and* renders without data. And a
-code fence quoting a working carrier example — which is what documentation about
-this package looks like. Fail-open bounds both to a mis-rendered zone, never lost
-text. See the collision catalogue below for why the surface is that narrow.
+One shape, and it is narrow: a tight Objective-C literal `@{view:x}` alone on its
+line, while a template of that name resolves *and* spends no substitution at all.
+A template that spends one is handed nothing and fails open, so it can no longer
+draw an empty skeleton where content stood. Fail-open bounds the rest to a
+mis-rendered zone, never lost text. See the collision catalogue below for why the
+surface is that narrow.
 
-> **Boundary:** the token's surface is a tested trade; fence-quoting is an engine
-> bug, fence tracking planned here.
+A fenced code block no longer collides. Both carriers read a text's fences before
+they read anything else, and the outermost fence decides, so a quoted example is
+text: a `view:` block shown inside a longer fence, and a decorator line shown
+inside any fence, are left exactly as written. What does NOT shield is an
+indented four-space code block; fenced blocks are what agents and hooks emit, and
+nobody has produced the other.
+
+> **Boundary:** the token's surface is a tested trade; the indented block is a gap
+> left open on purpose.
 
 ### Resize the terminal and the print is broken
 
