@@ -15,7 +15,7 @@ import {
   declSource,
 } from "../data/language.js";
 import { printedWidth } from "../layout/measure.js";
-import type { Maps } from "../scope.js";
+import { SUBST_RE, type Maps } from "../scope.js";
 import type { ObjectLists } from "./view-data.js";
 
 // Every pattern composes from the keyword table, so renaming a directive is one edit
@@ -52,6 +52,15 @@ export interface Template {
   // section can be named REMINDER without every other section's bar shifting by
   // hand. It is computed here because a template line cannot see the others.
   labelWidth: number;
+  // Does the body spend a SLOT, `${...}` in any of its forms? What it separates is a
+  // template that is static (welcome, the health check, which renders perfectly with
+  // no data at all) from one that is waiting for some, and that is the only honest
+  // way to ask whether a render came out hollow: a template drawing literal furniture
+  // always puts ink on screen, so measuring the OUTPUT can never tell.
+  //
+  // Bookkeeping refs (`${#}`, `${#label}`) count, deliberately. A template spending
+  // one with no list to walk renders a column of spaces, which is the same skeleton.
+  spendsSlots: boolean;
 }
 
 export function parseTemplate(text: string): Template {
@@ -84,5 +93,8 @@ export function parseTemplate(text: string): Template {
     (n, m) => Math.max(n, printedWidth(m[1])),
     0
   );
-  return { maps, objectLists, body, labelWidth, tone };
+  // Over the BODY alone: a comment documenting a slot is not a template spending one,
+  // and comments are exactly where an author writes the shape out to explain it.
+  const spendsSlots = body.join("\n").match(SUBST_RE) !== null;
+  return { maps, objectLists, body, labelWidth, tone, spendsSlots };
 }

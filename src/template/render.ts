@@ -46,18 +46,37 @@ export function renderView(
   options?: RenderOptions,
   dressing?: Dressing
 ): string {
-  const { maps, objectLists, body, labelWidth, tone } = loadTemplate(name, dir, dressing?.type);
+  const { maps, objectLists, body, labelWidth, tone, spendsSlots } = loadTemplate(
+    name,
+    dir,
+    dressing?.type
+  );
   // Either pre-parsed data (callers, tests) or the raw block text (the hook). Parsed
   // here so the view's @fields directive drives the split, and neutralised here because
   // raw block text came from the MESSAGE. A caller handing pre-parsed data owns its own
   // provenance (the decorator does its cells).
   const scope: Scope =
     typeof data === "string" ? (inertData(parseData(data, objectLists)) as Scope) : data;
-  // "Raw over hollow": a non-empty block that parsed to zero fields is not a data block
-  // we understand. Throw, so the caller fails open to the raw text rather than
-  // rendering an empty skeleton that silently drops the content.
-  if (typeof data === "string" && data.trim() !== "" && Object.keys(scope).length === 0) {
-    throw new Error(`view ${name}: no fields parsed`);
+  // "Raw over hollow", and the question is whether DATA arrived, never whether the
+  // template printed. Asking the output was the bug: a view drawing literal furniture
+  // (banner.view fills a band and draws two caps against it) always puts ink on screen,
+  // so an ink test read a pill around nothing as a successful render.
+  //
+  // Two ways to be hollow, one throw, so the caller fails open to the raw text. The
+  // author WROTE a body that parsed to no field, whatever the template wanted; or the
+  // template spends a slot and nothing came to fill it. A template spending none is
+  // STATIC and renders on empty data, which is what keeps `@{view:welcome}` a health
+  // check summoned by its line alone.
+  //
+  // The carrier's KIND counts as data arriving, because it becomes a field below and a
+  // template may spend it alone. What that leaves standing is narrow and deliberate: a
+  // slot-spending view named with a `type:` and no payload still draws its furniture,
+  // since a field it never reads did reach it.
+  if (Object.keys(scope).length === 0 && dressing?.type == null) {
+    if (typeof data === "string" && data.trim() !== "") {
+      throw new Error(`view ${name}: no fields parsed`);
+    }
+    if (spendsSlots) throw new Error(`view ${name}: nothing to fill its slots`);
   }
   // Injected fields come from the DISPLAY layer: state the model never wrote and must
   // not be trusted to remember. Merged AFTER the hollow check, so they can never make

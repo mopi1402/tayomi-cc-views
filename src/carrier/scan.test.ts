@@ -39,6 +39,8 @@ const options = { viewsPath: [views], width: 60 };
 // the production spelling of what it forbids on screen cannot catch a drift in it.
 const FENCE = "```";
 const HINT = `${FENCE}view:`;
+/** One tick longer, which is how markdown quotes a fence inside a fence. */
+const LONGER = FENCE + "`";
 
 // The witness, character by character: 7 characters of prose, the 13-character
 // opening fence line (7 to 19), the body, the closing fence.
@@ -231,5 +233,34 @@ describe("cutUnclosedBlock", () => {
     const above = `${PROSE}${OPEN}note:\n- a\n${FENCE}\nmore\n`;
     expect(cutUnclosedBlock(`${above}${OPEN}note:\n- b`)).toBe(above);
     expect(cutUnclosedBlock(`${above}${HINT}no`)).toBe(above);
+  });
+});
+
+describe("what the block carrier must not render", () => {
+  const raw = (msg: string): string => transform(msg, undefined, true, undefined, options);
+
+  it("leaves a block QUOTED inside a longer fence exactly as written", () => {
+    // What documentation about this package looks like. BLOCK_RE is a global regex
+    // with no notion of nesting, so the example used to render itself and take the
+    // fences around it with it.
+    const quoted = `${LONGER}\n${OPEN}note:\n- first\n${FENCE}\n${LONGER}\n`;
+    expect(raw(quoted)).toBe(quoted);
+  });
+
+  it("still renders the block that is NOT quoted, in the same message", () => {
+    const both = `${LONGER}\n${OPEN}note:\n- shown\n${FENCE}\n${LONGER}\n\n${OPEN}note:\n- rendered\n${FENCE}\n`;
+    const out = raw(both);
+    expect(out).toContain("- shown"); // still inside its fence, raw
+    expect(out).toContain(HINT); // the quoted opening survives
+    expect(out).toContain("rendered");
+    expect(out.split(HINT)).toHaveLength(2); // and only the quoted one is left
+  });
+
+  it("shows an EMPTY block raw rather than rendering its skeleton", () => {
+    // note.view spends a slot, so nothing arrived to fill it. The old guard only
+    // covered a NON-empty body, which left a template drawing furniture around
+    // nothing looking like a successful render.
+    const hollow = `${PROSE}${OPEN}${FENCE}\n`;
+    expect(raw(hollow)).toBe(hollow);
   });
 });

@@ -42,6 +42,10 @@ const decorator = (view: string, type?: string): string =>
 const dressed = (view: string, ...attrs: string[]): string =>
   `@{view:${view}${attrs.map((a) => `, ${a}`).join("")}}`;
 
+// The fence, spelled here rather than imported: a test sharing the production
+// spelling of what it forbids on screen cannot catch a drift in it.
+const FENCE = "```";
+
 // The payload furniture, written once.
 const EMPTY_HEADER = "| | |";
 const DELIM = "| --- | --- |";
@@ -103,20 +107,38 @@ const options = { viewsPath: [first, second], width: WIDTH };
 const DECORATED = lines(decorator(ITEM), "| Item | Info |", DELIM, "| Decorator | one line above |");
 
 describe("a payload-less decorator", () => {
-  // The health-check ask: `@{view:welcome}` alone, no table below.
+  // The health-check ask: `@{view:welcome}` alone, no table below. Payload-LESS is
+  // now a blank line or the end of the message, because a zone is measured before it
+  // is parsed and prose on the very next line is a payload nobody can read.
   it("summons a static view with no data, the line consumed", () => {
-    const out = transform(lines("intro", decorator(STATIC), "after"), undefined, true, undefined, options);
+    const msg = lines("intro", decorator(STATIC), "", "after");
+    const out = transform(msg, undefined, true, undefined, options);
     expect(out).toContain("the box is the template");
     expect(out).toContain("intro");
     expect(out).toContain("after");
     expect(out).not.toContain(DECORATOR_HINT);
   });
 
+  it("summons one ending the message, with no line below at all", () => {
+    const out = transform(lines("intro", decorator(STATIC)), undefined, true, undefined, options);
+    expect(out).toContain("the box is the template");
+    expect(out).not.toContain(DECORATOR_HINT);
+  });
+
+  it("summons NOTHING when prose sits on the very next line", () => {
+    // The behaviour change this carrier's zone fix costs, and the point of it: that
+    // prose was always a payload on screen, the pipe-only scanner simply could not
+    // see it, so a static view rendered as if the author had written nothing.
+    const msg = lines("intro", decorator(STATIC), "after");
+    expect(transform(msg, undefined, true, undefined, options)).toBe(msg);
+  });
+
   it("falls back to the raw line when the view reads fields it does not get", () => {
     // item.view loops over rows: summoned bare it renders whitespace, and the
-    // hollow guard shows the line instead of a blank.
-    const out = transform(lines("intro", decorator(ITEM), "after"), undefined, true, undefined, options);
-    expect(out).toContain(decorator(ITEM));
+    // hollow guard shows the line instead of a blank. The blank line is what makes
+    // this the HOLLOW path rather than the unclaimed-payload one.
+    const msg = lines("intro", decorator(ITEM), "", "after");
+    expect(transform(msg, undefined, true, undefined, options)).toContain(decorator(ITEM));
   });
 });
 
@@ -348,10 +370,42 @@ describe("fail-open, decorator line included", () => {
     for (const msg of [
       lines(decorator(ITEM), ...THREE_COLS), // three columns
       lines(decorator(ITEM), EMPTY_HEADER, DELIM), // no data row
-      lines(decorator(ITEM), "no table at all"), // no payload
+      lines(decorator(ITEM), "no table at all"), // a payload no parser here claims
     ]) {
       expect(raw(msg)).toBe(msg);
     }
+  });
+});
+
+describe("a decorator inside a code fence", () => {
+  // Documentation about this package is made of working examples, and running one is
+  // what the fence used to be unable to prevent: nothing here has an escape of its own.
+  const raw = (msg: string): string => transform(msg, undefined, true, undefined, options);
+
+  it("renders nothing, and the fence survives byte for byte", () => {
+    const msg = lines("shown below:", FENCE, decorator(ITEM), EMPTY_HEADER, DELIM, KV_ROW, FENCE);
+    expect(raw(msg)).toBe(msg);
+  });
+
+  it("renders nothing for a payload-less one either, which would summon a view", () => {
+    const msg = lines(FENCE, decorator(STATIC), FENCE);
+    expect(raw(msg)).toBe(msg);
+    expect(raw(msg)).not.toContain("the box is the template");
+  });
+
+  it("still renders the one OUTSIDE, in the same message", () => {
+    const msg = lines(FENCE, decorator(STATIC), FENCE, "", decorator(STATIC), "");
+    const out = raw(msg);
+    expect(out).toContain("the box is the template");
+    // The quoted one is still there, whole, and only it.
+    expect(out.split(DECORATOR_HINT)).toHaveLength(2);
+  });
+
+  it("anchors no withholding while a fenced example streams", () => {
+    // The cut reads the same fences the render does, or a quoted example at the tail
+    // of a message blanks everything under it until the fence closes.
+    const before = lines("intro", FENCE, decorator(ITEM), "");
+    expect(slice("", before, undefined, false, undefined, options)).toContain("intro");
   });
 });
 

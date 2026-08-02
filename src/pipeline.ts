@@ -15,6 +15,7 @@
 // flushes of one message compute their slices without agreeing on anything (see
 // platform/stream-state.ts for the lost update that carrying an offset produced).
 
+import { fenceAt, fenceSpans } from "./carrier/fences.js";
 import { BLOCK_HINT, BLOCK_RE, cutUnclosedBlock } from "./carrier/scan.js";
 import {
   DECORATOR_HINT,
@@ -86,7 +87,16 @@ export function transform(
   const text = full.replace(CRLF, NL);
   const strictView = host?.strict?.view;
   let outcome: { ok: boolean; error: string | null } | null = null;
-  let out = text.replace(BLOCK_RE, (m: string, name: string, bodyText: string) => {
+  // Measured on THIS text, before the pass that rewrites it. The decorator measures
+  // again on its own input further down, because these offsets no longer name the same
+  // characters once the blocks below have been replaced by their renders.
+  const fences = fenceSpans(text);
+  let out = text.replace(BLOCK_RE, (m: string, name: string, bodyText: string, at: number) => {
+    // A block quoted inside an ordinary fence is an EXAMPLE, and running it is what
+    // made documentation about this package render itself. Its own fence is a span
+    // too, and the one it is allowed to be inside.
+    const fence = fenceAt(fences, at);
+    if (fence !== undefined && !fence.carrier) return m;
     try {
       // The RAW block text: renderView parses it with the view's own @fields
       // directive. A total parser plus this catch means any oddity shows the raw
