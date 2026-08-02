@@ -63,7 +63,7 @@ One consequence to plan for: the engine's own vocabulary GROWS over versions (th
 | `RenderOptions` | The configuration above. |
 | `renderView` | One view rendered by name, outside the hook flow. |
 | `Dressing` | What a carrier learned about a zone beyond its data: `type` (the kind) and `tone` (the class filling the view's tone slot). Both optional, both fail open. |
-| `loadTemplate`, `viewsDir`, `bundledViewsDir`, `defaultViewsPath`, `VIEWS_PATH_ENV` | Template resolution, the plugin and bundled views dirs, and the default search path with its env var. A host composing its own `viewsPath` appends `bundledViewsDir()` to keep `welcome` resolvable. If you BUNDLE the engine, read the next section first. |
+| `loadTemplate`, `viewsDir`, `bundledViewsDir`, `defaultViewsPath`, `VIEWS_PATH_ENV` | Template resolution, the plugin and bundled views dirs, and the default search path with its env var. A host composing its own `viewsPath` appends `bundledViewsDir()` to keep `welcome` resolvable. If you BUNDLE the engine, mark it external: see the next section. |
 | `parseData`, `ObjectLists` | The block-data parser. Exported because a host may have a SECOND reader of the same format (a gate judging the block the engine draws): both must share this parser or they diverge. |
 | `stringify`, `Scope`, `Maps` | The scope a template resolves against, for hosts that inject. |
 | `renderTags`, `renderCode`, `isTag`, `ANSI_RE` | The markup vocabulary, for a host colouring its own lines the same way. |
@@ -74,13 +74,19 @@ One consequence to plan for: the engine's own vocabulary GROWS over versions (th
 
 ## If your host BUNDLES the engine
 
-`bundledViewsDir()` locates the package through `import.meta.url`, which inlining rewrites to your own bundle, and an installed plugin runs with no `node_modules` at all. So the bundled views resolve to nothing, and a bundling host must COPY them into its own views dir at build time:
+Mark the package EXTERNAL. With esbuild:
 
-```bash
-cp -f node_modules/@tayomi/cc-views/views/*.view views/
+```
+--external:@tayomi/cc-views
 ```
 
-Pick the copy semantics deliberately: `-f` tracks engine updates but forbids shadowing an engine view by file, since the copy overwrites it every build; `-n` preserves file shadowing but never refreshes a stale copy.
+The engine owns files it opens at RUNTIME (`views/`, and the art an `@aside` names). A bundler inlines a module; it cannot inline a file read later. This is the ordinary shape for a package with runtime assets, and it is the same instruction esbuild itself prints when you bundle IT.
+
+Nothing else is needed, and in particular **do NOT copy the views into your own directory**. A copy has to be refreshed by hand at every engine update, and it silently overwrites a view of your own that happens to share a name. Earlier releases of this document recommended exactly that, and it was wrong: shadowing is what `viewsPath` ORDER is for, and it costs nothing.
+
+An inlined engine still works, as long as the package remains installed: `bundledViewsDir()` asks Node where `@tayomi/cc-views` LIVES rather than where the calling code sits, and that question survives the move. External is the recommendation because the dependency is then honest, declared where a reader can see it, instead of a bundle that looks self-contained and is not.
+
+What an inlined engine will NOT do is fall back on YOUR `views/`. It sits one hop above the bundle, so the upward search walks straight into it; taking it would serve your templates as the engine's own, silently, and that is precisely how a copy became necessary in the first place. The engine checks the manifest beside a candidate directory and takes it only if it names this package. With the package gone entirely, the health check therefore shows its raw block rather than a wrong box.
 
 ## Troubleshooting
 

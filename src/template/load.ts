@@ -5,6 +5,11 @@
 // file at all, which makes it the single place a decorator's type resolves to a file.
 
 import fs from "node:fs";
+// Aliased, and that is not cosmetic: a host bundling the engine commonly prepends
+// `import { createRequire } from "node:module"` as an interop banner (esbuild's own
+// documented recipe), and a bundle declaring the name twice is a SyntaxError before a
+// line runs. The alias is the engine's side of never breaking a host's screen.
+import { createRequire as requireFrom } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { VIEWS_DIR, VIEWS_PATH_ENV, VIEW_EXT } from "../data/markup.js";
@@ -21,23 +26,61 @@ export function viewsDir(): string {
 }
 
 // The views shipped INSIDE the package, home of `welcome`, the health check that must
-// resolve wherever the engine runs. Found by searching UPWARDS from this module: the
-// source tree, the compiled dist/ and an npm-installed copy sit at different depths
-// under the package root, so the search counts nothing. Counting used to work only by
-// coincidence, back when this module sat one level under the plugin root exactly like
-// the bundle it compiles to.
+// resolve wherever the engine runs. Searched UPWARDS from a starting point: the source
+// tree, the compiled dist/ and an npm-installed copy sit at different depths under the
+// package root, so the search counts nothing.
 const MAX_HOPS = 5;
 
-export function bundledViewsDir(): string {
-  let dir = path.dirname(fileURLToPath(import.meta.url));
+// The package's own NAME, and the only place it is spelled. Asking Node where the
+// package is INSTALLED is the one question that keeps a right answer from inside a
+// host's bundle, where a path relative to this module has none: a bundler rewrites
+// import.meta.url into its own output, so the walk then measures the HOST's tree.
+// load.test.ts pins this against package.json, so a rename cannot leave it behind.
+const PKG_NAME = "@tayomi/cc-views";
+
+/** Whether `dir` is the root of THIS package, judged on the manifest lying in it. */
+function isPackageRoot(dir: string): boolean {
+  try {
+    const manifest: unknown = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+    return (manifest as { name?: unknown }).name === PKG_NAME;
+  } catch {
+    return false;
+  }
+}
+
+// The package's views/ at or above `from`, or null when nothing up there is this
+// package. The manifest check is what makes the answer OURS: a host that bundles the
+// engine has its own views/ one hop above the bundle, and returning that directory is
+// how the engine used to claim the host's templates as its own, silently, which is the
+// defect a `cp` into the host's tree was papering over.
+function packageViewsAbove(from: string): string | null {
+  let dir = from;
   for (let hop = 0; hop < MAX_HOPS; hop++) {
     const candidate = path.join(dir, VIEWS_DIR);
-    if (fs.existsSync(candidate)) return candidate;
+    if (fs.existsSync(candidate) && isPackageRoot(dir)) return candidate;
     dir = path.dirname(dir);
   }
-  // Nothing found: return the shallowest guess so the read that follows fails with a
-  // path a human can act on, which the caller turns into the raw block on screen.
-  return path.join(dir, VIEWS_DIR);
+  return null;
+}
+
+export function bundledViewsDir(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  // By NAME first, which answers for an ordinary install AND from inside a host's
+  // bundle, since the package still lies in the host's node_modules either way.
+  try {
+    const resolved = packageViewsAbove(path.dirname(requireFrom(import.meta.url).resolve(PKG_NAME)));
+    if (resolved) return resolved;
+  } catch {
+    // Not resolvable from here (no node_modules to reach). The walk below still
+    // answers for a checkout of this repo, where no package is installed at all.
+  }
+  const walked = packageViewsAbove(here);
+  if (walked) return walked;
+  // Nothing found. Name a path under THIS module, never one belonging to the host, so
+  // the read that follows fails with something a human can act on, which the caller
+  // turns into the raw block on screen. A host that bundles the engine and reaches
+  // here has not marked the package external: see docs/display-host.md.
+  return path.join(here, VIEWS_DIR);
 }
 
 // The DEFAULT search path: the adopter's explicit dirs first (CC_VIEWS_PATH, split
