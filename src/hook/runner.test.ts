@@ -1,7 +1,6 @@
-// handleMessageDisplay: the whole edge dance minus the process, which is exactly
-// why it exists as its own storey. Every scenario here is one the live hook meets
-// on ordinary turns: flushes landing out of order, a predecessor that never lands,
-// the final flush cleaning up, a payload that is not the protocol at all.
+// handleMessageDisplay: the whole edge dance minus the process, which is exactly why it exists as its own storey. Every
+// scenario here is one the live hook meets on ordinary turns: flushes landing out of order, a predecessor that never
+// lands, the final flush cleaning up, a payload that is not the protocol at all.
 
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
@@ -45,8 +44,8 @@ const shown = (envelope: string | null): string =>
 describe("handleMessageDisplay", () => {
   it("reassembles a message whose flushes land out of order", async () => {
     const id = msg();
-    // Flush 1 (the body) is dispatched but SLOW: it lands while flush 2 (the final,
-    // carrying the closing fence) is already waiting on it.
+    // Flush 1 (the body) is dispatched but SLOW: it lands while flush 2 (the final, carrying the closing fence) is
+    // already waiting on it.
     await handleMessageDisplay(payload(id, 0, "```view:note\n"), undefined, options);
     setTimeout(() => {
       void handleMessageDisplay(payload(id, 1, "note:\n- carried\n"), undefined, options);
@@ -73,8 +72,8 @@ describe("handleMessageDisplay", () => {
   });
 
   it("hands the payload meta to a factory host", async () => {
-    // Written once on each side of the rename: the test is about the MAPPING
-    // (snake_case payload -> camelCase context), not about the values.
+    // Written once on each side of the rename: the test is about the MAPPING (snake_case payload -> camelCase context),
+    // not about the values.
     const meta = { prompt_id: "p1", session_id: "s1", cwd: "/somewhere" };
     const seen: MessageContext[] = [];
     const id = msg();

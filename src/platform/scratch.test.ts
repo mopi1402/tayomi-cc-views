@@ -1,7 +1,6 @@
-// The one place on disk this subsystem writes, and the one property that matters:
-// TOTALITY. Both things it holds are caches rather than records, so a failure costs a
-// re-probe or a message rendered from scratch. A throw here would reach a display hook,
-// where the price is the screen.
+// The one place on disk this subsystem writes, and the one property that matters: TOTALITY. Both things it holds are
+// caches rather than records, so a failure costs a re-probe or a message rendered from scratch. A throw here would
+// reach a display hook, where the price is the screen.
 
 import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";

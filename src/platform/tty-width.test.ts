@@ -1,14 +1,12 @@
 // Where a render's width comes from, resolved ONCE and handed down as a value.
 //
-// The resolution ORDER is the contract: an explicit number outranks the operator's env
-// var, which outranks any probing. That order is what lets a render oracle pin a width
-// so a verdict never depends on the window the suite ran in, and it is asserted here
-// rather than trusted, because every layer below takes the answer on faith.
+// The resolution ORDER is the contract: an explicit number outranks the operator's env var, which outranks any probing.
+// That order is what lets a render oracle pin a width so a verdict never depends on the window the suite ran in, and it
+// is asserted here rather than trusted, because every layer below takes the answer on faith.
 //
-// What the probe ANSWERS is deliberately not asserted: it shells out to `ps` and walks
-// the process tree, so the number is the machine's and not a fact a test can state.
-// What IS asserted is every rule around it, through the options.width FUNCTION, the
-// seam that stands in for the probe.
+// What the probe ANSWERS is deliberately not asserted: it shells out to `ps` and walks the process tree, so the number
+// is the machine's and not a fact a test can state. What IS asserted is every rule around it, through the options.width
+// FUNCTION, the seam that stands in for the probe.
 
 import { describe, it, expect, afterAll, beforeEach } from "vitest";
 import fs from "node:fs";
@@ -17,8 +15,8 @@ import path from "node:path";
 import { WIDTH_ENV } from "../data/markup.js";
 import { maxBoxWidth } from "./tty-width.js";
 
-// The bounds tty-width.ts keeps private, restated here as the numbers a caller can
-// actually observe: a width outside them comes back clamped, never as it was asked.
+// The bounds tty-width.ts keeps private, restated here as the numbers a caller can actually observe: a width outside
+// them comes back clamped, never as it was asked.
 const MIN_WIDTH = 40;
 const MAX_FORCED = 400;
 const MAX_PROBED = 180;

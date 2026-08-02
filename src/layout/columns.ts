@@ -1,17 +1,15 @@
 // Column alignment, computed at RENDER time only.
 //
-// Inside a list the render lines up into columns. Every width below is computed
-// HERE, over the items actually rendered: the parse layer keeps returning verbatim,
-// unpadded values.
+// Every width is computed HERE, over the items actually rendered: the parse layer keeps returning verbatim, unpadded
+// values.
 //
 // Three rules compose on a leading declared field:
-//   - a field rendered through an @map renders a chip, so its cell is at least the
-//     longest key of that map plus the chip's two inner spaces;
-//   - an OFF-MAP value renders as bare text (no chip) and can raise the cell
-//     past that bound: alignment wins, the chip label then pads to the same cell.
-//   - a field rendered through an @text table is measured on the WORD that comes out,
-//     never on the key that chose it: `warning` is seven columns and `⚠ WARNING` is
-//     nine, and measuring the key would cap the cell below what has to fit in it.
+//   - an @map field renders a chip, so its cell is at least that map's longest key plus the
+//     chip's two inner spaces;
+//   - an OFF-MAP value renders as bare text and can raise the cell past that bound:
+//     alignment wins, and the chip label then pads to the same cell;
+//   - an @text field is measured on the WORD that comes out, never on the key that chose it
+//     (`warning` is seven columns, `⚠ WARNING` is nine).
 // The LAST declared field, the opaque prose tail, is never padded.
 
 import {
@@ -26,15 +24,15 @@ import {
 import { CHIP_CHROME } from "../style.js";
 import { longestKey, printedWidth } from "./measure.js";
 
-// Alignment context for the inner lines of an @each: the cell width of every
-// leading declared field, plus the tail field that is exempt from all padding.
+// Alignment context for the inner lines of an @each: the cell width of every leading declared field, plus the tail
+// field that is exempt from all padding.
 export interface PadCtx {
   widths: Record<string, number>;
   tail?: string;
 }
 
-// The table a field is rendered through, read from the template line that
-// substitutes it (`${field:tablename}`); undefined when the column is unmapped.
+// The table a field is rendered through, read from the template line that substitutes it (`${field:tablename}`);
+// undefined when the column is unmapped.
 function fieldTable(inner: string[], field: string, tables: Tables): Table | undefined {
   for (const line of inner) {
     for (const m of line.matchAll(SUBST_RE)) {
@@ -63,9 +61,8 @@ export function columnWidths(
       if (item == null || typeof item !== "object") continue;
       const raw = (item as Record<string, unknown>)[field];
       if (table?.kind === TEXT_TABLE) {
-        // An item that never carried the field still shows the reserved entry, so it
-        // takes a cell like any other: skipping it here is how a column comes out one
-        // word too narrow for the row that has no value.
+        // An item that never carried the field still shows the reserved entry, so it takes a cell like any other:
+        // skipping it here is how a column comes out one word too narrow for the row that has no value.
         w = Math.max(w, printedWidth(tableWord(table, raw == null ? "" : stringify(raw).trim())));
         continue;
       }

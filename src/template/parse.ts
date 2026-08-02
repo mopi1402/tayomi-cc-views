@@ -1,8 +1,7 @@
 // The .view language, parse half: template text in, a Template struct out.
 //
-// Pure text-to-struct, no disk and no data: the declarations a template makes about
-// itself (its enum tables, its object-list fields, the width of its label column)
-// are all resolvable before a single field value is known.
+// Pure text-to-struct, no disk and no data: the declarations a template makes about itself are all resolvable before a
+// single field value is known.
 
 import {
   EACH,
@@ -20,8 +19,7 @@ import { printedWidth } from "../layout/measure.js";
 import { STYLE_TABLE, SUBST_RE, TEXT_TABLE, type Table, type Tables } from "../scope.js";
 import type { ObjectLists } from "./view-data.js";
 
-// Every pattern composes from the keyword table, so renaming a directive is one edit
-// there and no matcher is left answering to the old word.
+// Every pattern composes from the keyword table, so renaming a directive is one edit there.
 const NAME_AND_REST = String.raw`\s+(\S+)\s+(.*)$`;
 // eslint-disable-next-line security/detect-non-literal-regexp
 const re = (source: string, flags?: string): RegExp => new RegExp(source, flags);
@@ -30,9 +28,9 @@ const MAP_RE = re(`^${MAP}${NAME_AND_REST}`);
 const TEXT_RE = re(`^${TEXT}${NAME_AND_REST}`);
 const TEXT_PAIR_RE = re(TEXT_PAIR, "g");
 const FIELDS_RE = re(`^${FIELDS}${NAME_AND_REST}`);
-// @tone takes ONE tag name and nothing else: it names the template's default class, so
-// a pair (the @map shape) would be a second mapping table for a decision the palette
-// already holds. A malformed line is body, like every other near-miss in this parser.
+// @tone takes ONE tag name and nothing else: it names the template's default class, so a pair (the @map shape) would be
+// a second mapping table for a decision the palette already holds. A malformed line is body, like every other near-miss
+// in this parser.
 const TONE_RE = re(String.raw`^${TONE}[ \t]+(\w+)[ \t]*$`);
 const LABELS_RE = re(String.raw`^${EACH}[ \t]+\S+[ \t]*${declSource(LABEL)}`, "gm");
 
@@ -42,30 +40,25 @@ const COMMENT_RE = /^\s*#/;
 const CR_RE = /\r/g;
 
 export interface Template {
-  // the lookup tables, declared with @map <name> <val>=<tag> ... (enum to style) and
-  // @text <name> <val>="..." ... (enum to word). One registry, because one substitution
-  // form spends both and the table is what decides which answer comes out.
+  // @map <name> <val>=<tag> (enum to style) and @text <name> <val>="..." (enum to word). One registry, because one
+  // substitution form spends both.
   tables: Tables;
   // the lists whose items split into fields, declared with @fields <list> a b c
   objectLists: ObjectLists;
   // every remaining line, in order: the part that renders
   body: string[];
-  // The class this template's tone slot holds when no carrier names one, declared
-  // with @tone <tag>. A template's own DEFAULT look, not an override: a tone:
-  // or a type: on the carrier outranks it (the chain lives in render.ts).
+  // The class the tone slot holds when no carrier names one, declared with @tone <tag>. A DEFAULT, not an override: a
+  // tone: or a type: on the carrier outranks it (render.ts).
   tone?: string;
-  // The label column is as wide as the WIDEST label the template declares, so a
-  // section can be named REMINDER without every other section's bar shifting by
-  // hand. It is computed here because a template line cannot see the others.
+  // As wide as the WIDEST label the template declares, so a section can be named REMINDER without every other section's
+  // bar shifting by hand. Computed here because a template line cannot see the others.
   labelWidth: number;
-  // Does the body spend a SLOT, `${...}` in any of its forms? What it separates is a
-  // template that is static (welcome, the health check, which renders perfectly with
-  // no data at all) from one that is waiting for some, and that is the only honest
-  // way to ask whether a render came out hollow: a template drawing literal furniture
-  // always puts ink on screen, so measuring the OUTPUT can never tell.
+  // Does the body spend a SLOT, `${...}` in any of its forms? It separates a template that is static (welcome, the
+  // health check) from one waiting for data, and that is the only honest way to ask whether a render came out hollow: a
+  // template drawing literal furniture always puts ink on screen, so measuring the OUTPUT can never tell.
   //
-  // Bookkeeping refs (`${#}`, `${#label}`) count, deliberately. A template spending
-  // one with no list to walk renders a column of spaces, which is the same skeleton.
+  // Bookkeeping refs (`${#}`, `${#label}`) count, deliberately: spending one with no list to walk renders a column of
+  // spaces, which is the same skeleton.
   spendsSlots: boolean;
 }
 
@@ -89,11 +82,10 @@ function textPairs(tail: string): Record<string, string> {
 /**
  * Declare a table under its name.
  *
- * A name claimed by BOTH directives is a template error rather than a merge: the two
- * answer the very same `${field:name}`, so a merge would leave which of them wins to the
- * order the lines happen to sit in, and one of the two authors would never see their
- * declaration take effect. Thrown, so the carrier fails open and the raw block shows,
- * which is where the author is looking.
+ * A name claimed by BOTH directives is a template error rather than a merge: the two answer the very same
+ * `${field:name}`, so a merge would leave the winner to the order the lines happen to sit in and one of the two authors
+ * would never see their declaration take effect. Thrown, so the carrier fails open and the raw block shows, which is
+ * where the author is looking.
  */
 function declare(tables: Tables, name: string, table: Table): void {
   const prior = tables[name];
@@ -131,8 +123,8 @@ export function parseTemplate(text: string): Template {
     (n, m) => Math.max(n, printedWidth(m[1])),
     0
   );
-  // Over the BODY alone: a comment documenting a slot is not a template spending one,
-  // and comments are exactly where an author writes the shape out to explain it.
+  // Over the BODY alone: a comment documenting a slot is not a template spending one, and comments are exactly where an
+  // author writes the shape out to explain it.
   const spendsSlots = body.join("\n").match(SUBST_RE) !== null;
   return { tables, objectLists, body, labelWidth, tone, spendsSlots };
 }

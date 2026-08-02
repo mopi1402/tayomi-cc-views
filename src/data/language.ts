@@ -1,9 +1,6 @@
-// The .view language's own vocabulary: every word an AUTHOR types in a template.
-//
-// Shared here because each word has several readers that must agree on its spelling.
-// A directive is matched in template/directives.ts, declared in template/parse.ts,
-// referred to by the layout it drives, and typed out in the fixtures the tests write.
-// Renaming one is a MAJOR version, and it should cost one edit here, not a sweep.
+// The .view language's own vocabulary: every word an AUTHOR types in a template. Shared here because each has several
+// readers that must agree on its spelling (docs/architecture.md, "The layer chain"), so renaming one, a MAJOR version,
+// costs one edit.
 
 const AT = "@";
 const keyword = (name: string): string => AT + name;
@@ -30,25 +27,16 @@ export const ENDASIDE = closes(ASIDE);
 /** What separates a key from its value in an @map pair, an @frame pair or an @text pair. */
 export const PAIR_SEP = "=";
 
-/**
- * The entry a lookup table reserves for a value that never arrived. Spelled once,
- * because the directive that DECLARES it and the lookup that SPENDS it are two modules,
- * and a table whose default key is `*` in one and `default` in the other holds an entry
- * nothing can ever reach. A literal `default` would also be a plausible enum value.
- */
+/** The entry a lookup table reserves for a value that never arrived. Punctuation: `default` is a plausible enum value. */
 export const DEFAULT_KEY = "*";
 
-/**
- * What separates the TOKENS in a directive's tail: an @map's pairs, an @fields' names,
- * an @frame's pairs. Any run of whitespace, so a template may align its declarations
- * in columns and still parse.
- */
+/** Any run of whitespace, so a template may align its declarations in columns and still parse. */
 export const TOKEN_SEP = /\s+/;
 
 /**
- * The declarations an @each may carry, with the value shape each accepts. One table,
- * so the matcher that READS a declaration, the scan that measures the label column and
- * the strip that decides whether anything is LEFT OVER cannot drift apart.
+ * The declarations an @each may carry, with the value shape each accepts. One table, so the matcher that READS a
+ * declaration, the scan that measures the label column and the strip that decides whether anything is LEFT OVER cannot
+ * drift apart.
  */
 export const LABEL = "label";
 export const BULLET = "bullet";
@@ -65,36 +53,22 @@ export const DECLS: Record<string, string> = {
 export const declSource = (name: string): string => String.raw`[ \t]${name}${PAIR_SEP}${DECLS[name]}`;
 
 /**
- * One `<key>="<value>"` pair of an @text table.
- *
- * QUOTED where @map's pairs are not, and that is the whole difference between the two
- * readers: a tag name has no space in it, so @map splits its tail on whitespace, while a
- * text value has spaces by definition. Reusing that splitter would cut `"⚠ WARNING"` at
- * its first space and do it silently. The key stops at the separator, so the pattern is
- * one anchored quantifier over an atom that cannot contain what follows it.
+ * One `<key>="<value>"` pair of an @text table. QUOTED where @map's pairs are not: a tag name has no space in it, so
+ * @map splits its tail on whitespace, while reusing that splitter here would cut `"⚠ WARNING"` at its first space.
  */
 export const TEXT_PAIR = String.raw`([^\s${PAIR_SEP}]+)${PAIR_SEP}${QUOTED}`;
 
 /**
- * The KIND marker a decorated blockquote may open with, `[!WARNING]`.
- *
- * ONE uppercase run, and the narrowness is the point: the moment a space is legal,
- * `[!📦 VERSION]` and `[!THE BUILD FAILED ON NODE 20]` are the same shape and the marker
- * has become the label slot a template's table exists to remove. Anything wider is not a
- * marker, and the line stays the first line of the content, printed where the author can
- * see it.
- *
- * It lives HERE, beside the directives, rather than with the message forms in markup.ts,
- * because what the token names is a KEY of an @text table: the word a model writes in a
- * message and the word an author declares in a template are one vocabulary, and they are
- * spelled once.
+ * The KIND marker a decorated blockquote may open with, `[!WARNING]`. ONE uppercase run, and the narrowness is the
+ * point: the moment a space is legal, `[!THE BUILD FAILED ON NODE 20]` is the same shape and the marker has become the
+ * label slot a template's table exists to remove. Anything wider stays the first line of the content.
  */
 export const MARKER_TOKEN = String.raw`[A-Z][A-Z0-9_-]*`;
 export const MARKER_SOURCE = String.raw`\[!(${MARKER_TOKEN})\]`;
 
 /**
- * What a template writes to reach the engine's own bookkeeping (scope.ts). Punctuation
- * rather than names, so a block's own field can never shadow one.
+ * What a template writes to reach the engine's own bookkeeping (scope.ts). Punctuation rather than names, so a block's
+ * own field can never shadow one.
  */
 const PSEUDO = "#";
 export const ITEM_REF = ".";

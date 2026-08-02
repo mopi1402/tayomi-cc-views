@@ -1,9 +1,9 @@
-// The @box frame: the one thing a template cannot express, because the width of the
-// top rule depends on every line the body has not produced yet.
+// The @box frame: the one thing a template cannot express, because the width of the top rule depends on every line the
+// body has not produced yet.
 //
-// The invariant every case below re-checks is that ALL rows print the same width. A box
-// is the most visible thing on screen and the least forgiving: one row off by a column
-// and the border is visibly broken, so the arithmetic is asserted rather than eyeballed.
+// The invariant every case below re-checks is that ALL rows print the same width. A box is the most visible thing on
+// screen and the least forgiving: one row off by a column and the border is visibly broken, so the arithmetic is
+// asserted rather than eyeballed.
 
 import { describe, it, expect } from "vitest";
 import { RESET_MARK, tagMark } from "../style.js";
@@ -144,10 +144,9 @@ describe("an inner rule", () => {
     oneWidth(frameBox("", "", ["above", RULE_MARK, "below"], [], NO_TONE, LIMIT));
   });
 
-  // The regression this section exists for. A rule row spends its prefix, then a gap and
-  // at least one dash into the border, so a frame sized on the prefix ALONE is one column
-  // short and that single row breaks the outline. It only shows when the rule is the
-  // widest line, which is why rendering real views never caught it.
+  // The regression this section exists for. A rule row spends its prefix, then a gap and at least one dash into the
+  // border, so a frame sized on the prefix ALONE is one column short and that single row breaks the outline. It only
+  // shows when the rule is the widest line, which is why rendering real views never caught it.
   describe("when the rule is the WIDEST line in the box", () => {
     const narrow = ["ab", RULE_MARK + LABEL, "cd"];
 

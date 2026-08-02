@@ -1,9 +1,8 @@
 // Where a template comes from: an ORDERED search path, first hit wins.
 //
-// The order IS the override contract, so it is asserted rather than assumed. A project
-// that names a view the engine also ships must win, or an adopter can never redress a
-// standard view; and a TYPE must never outrank the path, or the same reasoning breaks
-// one level down.
+// The order IS the override contract, so it is asserted rather than assumed. A project that names a view the engine
+// also ships must win, or an adopter can never redress a standard view; and a TYPE must never outrank the path, or the
+// same reasoning breaks one level down.
 
 import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";
@@ -119,13 +118,11 @@ describe("the default search path", () => {
     expect(fs.existsSync(path.join(bundledViewsDir(), BUNDLED + VIEW_EXT))).toBe(true);
   });
 
-  // The defect this pins: the dir is found by walking UPWARDS, and a host that bundles
-  // the engine has its own views/ one hop above the bundle. Claiming it made the engine
-  // serve the host's templates as its own, silently, which is what a `cp` into the
-  // host's tree was papering over. Whatever comes back, the manifest beside it must
-  // name US. This also gates the package name the resolution is spelled with: a name
-  // that no longer matches the manifest makes every candidate fail the check, and the
-  // dir handed back then holds no manifest at all.
+  // The defect this pins: the dir is found by walking UPWARDS, and a host that bundles the engine has its own views/
+  // one hop above the bundle. Claiming it made the engine serve the host's templates as its own, silently, which is
+  // what a `cp` into the host's tree was papering over. Whatever comes back, the manifest beside it must name US. This
+  // also gates the package name the resolution is spelled with: a name that no longer matches the manifest makes every
+  // candidate fail the check, and the dir handed back then holds no manifest at all.
   it("answers with a dir belonging to THIS package, never one it merely found above", () => {
     const parent = path.dirname(bundledViewsDir());
     const manifest: unknown = JSON.parse(fs.readFileSync(path.join(parent, "package.json"), "utf8"));

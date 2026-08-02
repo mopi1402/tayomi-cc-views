@@ -1,9 +1,9 @@
-// How wide a line will PRINT. Every frame in the engine is padded against this number,
-// so a disagreement here is a ragged border everywhere.
+// How wide a line will PRINT. Every frame in the engine is padded against this number, so a disagreement here is a
+// ragged border everywhere.
 //
-// The invariant worth stating first: a KNOWN tag costs nothing and an UNKNOWN one costs
-// its literal width, because an unknown tag is left on screen verbatim. A measurer that
-// stripped both would size a line mentioning a literal {{tag}} in its prose short.
+// The invariant worth stating first: a KNOWN tag costs nothing and an UNKNOWN one costs its literal width, because an
+// unknown tag is left on screen verbatim. A measurer that stripped both would size a line mentioning a literal {{tag}}
+// in its prose short.
 
 import { describe, it, expect } from "vitest";
 import {
@@ -59,8 +59,8 @@ describe("printedWidth", () => {
   });
 
   it("charges nothing for either mark of a span, wherever on the line it sits", () => {
-    // BETWEEN two characters, which is the case a mark measured alone cannot answer:
-    // a mark the measurer read as text moves every column on the line and says nothing.
+    // BETWEEN two characters, which is the case a mark measured alone cannot answer: a mark the measurer read as text
+    // moves every column on the line and says nothing.
     expect(printedWidth(`a${RESUME_MARK}b`)).toBe("ab".length);
     expect(printedWidth(`a${SPAN_MARK}b`)).toBe("ab".length);
     expect(printedWidth(`${tagMark(KNOWN)}text${RESUME_MARK}`)).toBe("text".length);
@@ -119,18 +119,17 @@ describe("fitCell", () => {
     const head = `${tagMark(KNOWN)}ab${spanOpen(SECOND)}${RESUME_MARK}`;
     const tail = "cdefghij";
     const room = CAP - printedWidth(ELLIPSIS) - printedWidth(head);
-    // The span closed before the cut, so it leaves nothing behind it: both its marks are
-    // walked for the notion, and neither costs the budget a column.
+    // The span closed before the cut, so it leaves nothing behind it: both its marks are walked for the notion, and
+    // neither costs the budget a column.
     expect(fitCell(head + tail, CAP)).toBe(
       `${SPAN_MARK}${head}${tail.slice(0, room)}${RESUME_MARK}${ELLIPSIS}`
     );
   });
 
   it("frames the value's OWN tags, so the resume closing them cannot reach the row's", () => {
-    // Two tags and no span of the engine's: they belong to no frame, so the cut opens one
-    // around them. Without it the closing resume finds no boundary and unwinds the tags
-    // the TEMPLATE opened around the cell along with the cell's, and the ellipsis and
-    // everything after it print plain.
+    // Two tags and no span of the engine's: they belong to no frame, so the cut opens one around them. Without it the
+    // closing resume finds no boundary and unwinds the tags the TEMPLATE opened around the cell along with the cell's,
+    // and the ellipsis and everything after it print plain.
     const head = `${tagMark(KNOWN)}${tagMark(SECOND)}a`;
     const tail = "bcdefghij";
     const room = CAP - printedWidth(ELLIPSIS) - printedWidth(head);
@@ -140,9 +139,8 @@ describe("fitCell", () => {
   });
 
   it("closes ONE resume per FRAME the cut left half-open, never one per tag", () => {
-    // The cut lands inside the engine's own span: one resume ends that frame, a second
-    // ends the one the cut opened around the value's tag. Counting tags would write
-    // three here, and the third would unwind the row.
+    // The cut lands inside the engine's own span: one resume ends that frame, a second ends the one the cut opened
+    // around the value's tag. Counting tags would write three here, and the third would unwind the row.
     const head = `${tagMark(KNOWN)}${spanOpen(SECOND)}a`;
     const tail = "bcdefghij";
     const room = CAP - printedWidth(ELLIPSIS) - printedWidth(head);
@@ -152,17 +150,16 @@ describe("fitCell", () => {
   });
 
   it("counts the frame it opens ITSELF, where the value left only a boundary standing", () => {
-    // A chip whose class the palette cannot answer for: the name reaches the screen as
-    // text, so it stacks nothing and the boundary stands alone. Count the frames on the
-    // value's stack rather than on the one the ROW will see and this writes one resume
-    // too few, leaving the cut's own boundary open for the next resume to stop at.
+    // A chip whose class the palette cannot answer for: the name reaches the screen as text, so it stacks nothing and
+    // the boundary stands alone. Count the frames on the value's stack rather than on the one the ROW will see and this
+    // writes one resume too few, leaving the cut's own boundary open for the next resume to stop at.
     const out = fitCell(`${spanOpen(UNKNOWN)}aaaa`, CAP);
     expect(out.endsWith(RESUME_MARK.repeat(2) + ELLIPSIS)).toBe(true);
   });
 
   it("gives the ROW back the colour the template opened around a cut", () => {
-    // The end of the chain, and the only assertion here that reads what reaches a screen:
-    // the marks above are right only if what follows the ellipsis is the row's own style.
+    // The end of the chain, and the only assertion here that reads what reaches a screen: the marks above are right
+    // only if what follows the ellipsis is the row's own style.
     const cell = fitCell(`${spanOpen(KNOWN)}aaaaaaaaaa`, CAP);
     const rendered = renderTags(`${tagMark(SECOND)}${cell} tail${RESET_MARK}`);
     const before = rendered.split(ELLIPSIS)[0];

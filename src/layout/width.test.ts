@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { displayWidth, clusterWidth, clusterMap } from "./width.js";
 
-// The numbers below are the ones a terminal actually prints, and they are what
-// every frame in a view is padded against. Each case is a way `.length` lies.
+// The numbers below are the ones a terminal actually prints, and they are what every frame in a view is padded against.
+// Each case is a way `.length` lies.
 describe("displayWidth", () => {
   it("measures ASCII as one column per character", () => {
     expect(displayWidth("done in 3 files")).toBe(15);
@@ -24,9 +24,8 @@ describe("displayWidth", () => {
   });
 
   it("leaves a text-presentation symbol at one column", () => {
-    // The half of the "emoji" set that is NOT wide: these print in the text style
-    // unless a variation selector asks otherwise, so widening them would rag the
-    // frame the other way.
+    // The half of the "emoji" set that is NOT wide: these print in the text style unless a variation selector asks
+    // otherwise, so widening them would rag the frame the other way.
     expect(displayWidth("✔")).toBe(1);
     expect(displayWidth("⚠")).toBe(1);
     expect(displayWidth("★")).toBe(1);
@@ -65,8 +64,8 @@ describe("displayWidth", () => {
   });
 
   it("measures a mixed line as the sum of its clusters", () => {
-    // 4 ASCII + space + 2 ideographs at 2 + space + emoji at 2, the frame
-    // arithmetic in miniature: 12 columns for 9 code units.
+    // 4 ASCII + space + 2 ideographs at 2 + space + emoji at 2, the frame arithmetic in miniature: 12 columns for 9
+    // code units.
     expect("spec 仕様 ✅".length).toBe(9);
     expect(displayWidth("spec 仕様 ✅")).toBe(12);
   });

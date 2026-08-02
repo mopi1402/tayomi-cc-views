@@ -1,14 +1,10 @@
-// The one module that knows every layer at once, and the two properties nothing else
-// can state.
+// The two properties nothing else can state.
 //
-// FAIL-OPEN: every failure path here has to end on the block as the model wrote it. A
-// blank where content stood is the worst outcome the engine has, worse than the raw
-// fence, because it looks like the model said nothing.
+// FAIL-OPEN: every failure path ends on the block as the model wrote it. A blank where content stood is worse than the
+// raw fence, because it looks like the model said nothing.
 //
-// THE SLICE CONTRACT: concatenated slices equal the target transform of the whole
-// message. slice() holds no offset between flushes on purpose (three flushes in flight
-// lost updates on a remembered one), so the property is checked by replaying a message
-// at several chunk sizes and comparing the concatenation against one whole render.
+// THE SLICE CONTRACT: concatenated slices equal the target transform of the whole message. Checked by replaying a
+// message at several chunk sizes against one whole render.
 
 import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";
@@ -59,9 +55,8 @@ const everyNth = (msg: string, size: number): number[] => {
 };
 
 /**
- * A flush boundary at every line end. Both carrier tokens live INSIDE one line, so no
- * boundary here can fall in the middle of one: this is the shape where the identity is
- * exact, whatever the message holds.
+ * A flush boundary at every line end. Both carrier tokens live INSIDE one line, so no boundary here can fall in the
+ * middle of one: this is the shape where the identity is exact, whatever the message holds.
  */
 const everyLine = (msg: string): number[] => {
   const at = [...msg].flatMap((c, i) => (c === "\n" ? [i + 1] : []));
@@ -198,11 +193,10 @@ describe("the slice contract", () => {
     });
   }
 
-  // The ACCEPTED RESIDUAL, pinned so it cannot quietly get worse. A carrier token cut
-  // mid-way is prose to the cut that sees it, and a delta already shown cannot be
-  // retracted, so its first characters can reach the screen before the token completes.
-  // What the design promises even then is that NOTHING IS LOST: the corrected text is
-  // re-emitted from the divergence, and only the stale marker characters stay behind.
+  // The ACCEPTED RESIDUAL, pinned so it cannot quietly get worse. A carrier token cut mid-way is prose to the cut that
+  // sees it, and a delta already shown cannot be retracted, so its first characters can reach the screen before the
+  // token completes. What the design promises even then is that NOTHING IS LOST: the corrected text is re-emitted from
+  // the divergence, and only the stale marker characters stay behind.
   for (const [what, msg] of Object.entries(cases)) {
     it(`loses no line of ${what}, down to one character per flush`, () => {
       const whole = render(msg);
@@ -253,11 +247,10 @@ describe("a message written with Windows line endings", () => {
     "",
   ].join("\n");
 
-  // BOTH carriers used to fail open on this, and that is why the normalisation sits at
-  // the entry rather than in either of them: every matcher here anchors on a line
-  // boundary, so a CR standing between the boundary and what the matcher expects on it
-  // defeats the match. The block showed its raw fence and the decorator left its token
-  // on screen, on input that is perfectly well formed.
+  // BOTH carriers used to fail open on this, and that is why the normalisation sits at the entry rather than in either
+  // of them: every matcher here anchors on a line boundary, so a CR standing between the boundary and what the matcher
+  // expects on it defeats the match. The block showed its raw fence and the decorator left its token on screen, on
+  // input that is perfectly well formed.
   it("renders a fenced block exactly as the LF message renders", () => {
     expect(render(crlf(FENCED))).toBe(render(FENCED));
   });
@@ -271,32 +264,30 @@ describe("a message written with Windows line endings", () => {
     expect(render(crlf(prose))).toBe(prose);
   });
 
-  // The normalisation is CRLF to LF, never "drop every CR". The distinction is what
-  // keeps the two cases below working, and a blunt strip would pass the tests above
-  // while breaking both.
+  // The normalisation is CRLF to LF, never "drop every CR". The distinction is what keeps the two cases below working,
+  // and a blunt strip would pass the tests above while breaking both.
   it("keeps a lone CR that no LF follows: it is content, not a boundary", () => {
     const prose = "prose with a \r bare CR in it\n";
     expect(render(prose)).toBe(prose);
   });
 
   it("still withholds an opening fence cut on the CR of its own line ending", () => {
-    // The front half of a CRLF still arriving, which carrier/scan.ts reads as exactly
-    // that. Flattened away here, the cut would go blind and show the raw fence.
+    // The front half of a CRLF still arriving, which carrier/scan.ts reads as exactly that. Flattened away here, the
+    // cut would go blind and show the raw fence.
     expect(render(`${BLOCK_HINT}${NAME}\r`, undefined, false)).not.toContain(BLOCK_HINT);
   });
 
   it("replays to the same screen, flushed line by line, once a carrier is in view", () => {
-    // No leading prose, so the FIRST flush already carries the hint and every delta
-    // from then on goes through the engine: the identity is exact.
+    // No leading prose, so the FIRST flush already carries the hint and every delta from then on goes through the
+    // engine: the identity is exact.
     const msg = crlf(block(NAME, "said: it works") + "after");
     expect(replayAt(msg, everyLine(msg))).toBe(render(msg));
   });
 
-  // What CRLF costs on a stream, and it is the residual the slice contract already
-  // names. Prose flushed BEFORE any carrier is in view went out through the HOST, which
-  // returns null there so the host keeps its own markdown, and no delta already on
-  // screen can be retracted. Nothing is lost: the flattening starts at the flush that
-  // first sees a carrier, and everything after it matches the whole render.
+  // What CRLF costs on a stream, and it is the residual the slice contract already names. Prose flushed BEFORE any
+  // carrier is in view went out through the HOST, which returns null there so the host keeps its own markdown, and no
+  // delta already on screen can be retracted. Nothing is lost: the flattening starts at the flush that first sees a
+  // carrier, and everything after it matches the whole render.
   it("leaves a CR already shown as prose before the engine engaged", () => {
     const msg = crlf(FENCED);
     const shown = replayAt(msg, everyLine(msg));

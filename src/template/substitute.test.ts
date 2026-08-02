@@ -1,11 +1,10 @@
 // ${field} and ${field:tablename}, resolved against the scope.
 //
-// The padding rules are the part worth pinning: a cell measured in one place and spent
-// in another is how a column silently decouples, and the tail's EXEMPTION is what keeps
-// prose from being padded to a ragged right edge.
+// The padding rules are the part worth pinning: a cell measured in one place and spent in another is how a column
+// silently decouples, and the tail's EXEMPTION is what keeps prose from being padded to a ragged right edge.
 //
-// One expression, two kinds of table behind it. Which answer comes out is the TABLE's
-// business, so both are driven here through the same call.
+// One expression, two kinds of table behind it. Which answer comes out is the TABLE's business, so both are driven here
+// through the same call.
 
 import { describe, it, expect } from "vitest";
 import { DEFAULT_KEY } from "../data/language.js";
@@ -69,9 +68,9 @@ describe("a mapped expression", () => {
   });
 });
 
-// The three outcomes a text table has to serve with ONE slot: a kind it declares, a kind
-// it has never heard of, and no kind at all. Collapsing any two of them would cost the
-// band either its word or a second field on the line to carry one.
+// The three outcomes a text table has to serve with ONE slot: a kind it declares, a kind it has never heard of, and no
+// kind at all. Collapsing any two of them would cost the band either its word or a second field on the line to carry
+// one.
 describe("a text expression", () => {
   it("renders a DECLARED entry verbatim, the author's glyph and casing byte for byte", () => {
     expect(plain("${type:kinds}", { type: "warning" })).toBe(WARNING);
@@ -127,9 +126,9 @@ describe("inside a list, where the columns align", () => {
   });
 
   it("pads a text table's WORD to its cell, exactly as an off-map value pads", () => {
-    // Measured on what comes OUT, never on the key that chose it. Asserted in COLUMNS
-    // rather than in characters: the words carry glyphs, and a cell counting a glyph as
-    // one character is the very defect the shared measure exists to prevent.
+    // Measured on what comes OUT, never on the key that chose it. Asserted in COLUMNS rather than in characters: the
+    // words carry glyphs, and a cell counting a glyph as one character is the very defect the shared measure exists to
+    // prevent.
     const wide = printedWidth(WARNING) + 3;
     const ctx: PadCtx = { widths: { type: wide }, tail: "text" };
     const declared = padded("${type:kinds}", { type: "warning" }, ctx);

@@ -1,9 +1,8 @@
-// The template parser: what a template DECLARES about itself, resolved before a
-// single field value is known.
+// The template parser: what a template DECLARES about itself, resolved before a single field value is known.
 //
-// Every declaration here is matched against a near-miss as well as a hit. A directive
-// that half-matches must fall through to the BODY, where an author sees it printed and
-// fixes their line; a parser that swallowed it would delete the line in silence.
+// Every declaration here is matched against a near-miss as well as a hit. A directive that half-matches must fall
+// through to the BODY, where an author sees it printed and fixes their line; a parser that swallowed it would delete
+// the line in silence.
 
 import { describe, it, expect } from "vitest";
 import { BOX, DEFAULT_KEY, EACH, FIELDS, MAP, TEXT, TONE } from "../data/language.js";
@@ -43,9 +42,9 @@ describe("@map", () => {
   });
 });
 
-// @text is where a naive reuse of @map's reader would break, and break QUIETLY: the
-// pairs are quote-aware because a text value has spaces by definition, where a tag name
-// never does. Every case below is one a whitespace splitter would get wrong.
+// @text is where a naive reuse of @map's reader would break, and break QUIETLY: the pairs are quote-aware because a
+// text value has spaces by definition, where a tag name never does. Every case below is one a whitespace splitter would
+// get wrong.
 describe("@text", () => {
   it("builds the enum-to-word table its pairs declare", () => {
     const t = parseTemplate(`${TEXT} kinds warning="WARNING" error="ERROR"`);
@@ -81,8 +80,8 @@ describe("@text", () => {
   });
 
   it("refuses a name the two directives both claim, rather than merging them", () => {
-    // One `${field:kinds}` asks both, so a merge would leave the winner to line order
-    // and one of the two authors would never see their declaration take effect.
+    // One `${field:kinds}` asks both, so a merge would leave the winner to line order and one of the two authors would
+    // never see their declaration take effect.
     const clash = lines(`${MAP} kinds ok=success`, `${TEXT} kinds ok="OK"`);
     expect(() => parseTemplate(clash)).toThrow(/kinds/);
     expect(() => parseTemplate(lines(`${TEXT} kinds ok="OK"`, `${MAP} kinds ok=success`))).toThrow();

@@ -1,13 +1,10 @@
 // One view rendered, and the two decisions this composition owns alone.
 //
-// The TONE CHAIN is the first: four candidates, most explicit first, each falling
-// through to the next when the palette does not know the name. It is the reason one
-// template renders in any colour without a second copy of itself existing, so the
-// precedence is asserted rather than described.
+// The TONE CHAIN: four candidates, most explicit first, each falling through when the palette does not know the name.
+// It is why one template renders in any colour, so the precedence is asserted rather than described.
 //
-// "RAW OVER HOLLOW" is the second: a non-empty block that parsed to no fields throws,
-// so the carrier above shows the block as written. An empty skeleton on screen looks
-// like the engine works and the model said nothing, which is the worst of both.
+// "RAW OVER HOLLOW": a non-empty block that parsed to no fields throws, so the carrier shows the block as written. An
+// empty skeleton looks like the model said nothing.
 
 import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";
@@ -62,10 +59,9 @@ describe("rendering a view", () => {
   });
 
   it("hands a code span's line back the style the TEMPLATE opened around it", () => {
-    // The chain is the assertion: markCode has to run before fillTone and renderTags, or
-    // the span's terminator is a sequence by the time the enclosing style is resolved and
-    // the rest of the line prints plain. That is the defect this whole ticket is, and it
-    // is invisible to any test that composes the three passes by hand.
+    // The chain is the assertion: markCode has to run before fillTone and renderTags, or the span's terminator is a
+    // sequence by the time the enclosing style is resolved and the rest of the line prints plain. That is the defect
+    // this whole ticket is, and it is invisible to any test that composes the three passes by hand.
     const seq = (name: string): string => renderTags(tagMark(name));
     const DIM = "dim";
     view(`${tagMark(DIM)}- Read \`trace.ts\` again${tagMark("/")}`);
@@ -91,10 +87,9 @@ describe("raw over hollow", () => {
     expect(() => render("prose", undefined, { injected: "x" })).toThrow(NAME);
   });
 
-  // The SECOND reading of the rule, and the one no test of the OUTPUT can deliver: data
-  // arrived and the template reads none of it. A template drawing literal furniture puts
-  // ink on screen whatever it was handed, so the ink is the wrong thing to measure, and
-  // what answers is the reads the accessor RECORDED while the render ran.
+  // The SECOND reading of the rule, and the one no test of the OUTPUT can deliver: data arrived and the template reads
+  // none of it. A template drawing literal furniture puts ink on screen whatever it was handed, so the ink is the wrong
+  // thing to measure, and what answers is the reads the accessor RECORDED while the render ran.
   describe("data arrived that the template reads none of", () => {
     // Literal furniture around one slot: exactly the shape that defeated the ink test.
     const FURNITURE = "[[ ";
@@ -111,9 +106,9 @@ describe("raw over hollow", () => {
     });
 
     it("counts the field a DOTTED path walks into, not the path", () => {
-      // The regression this guard is most prone to, and the only direction that costs
-      // anything: a template naming `${row.inner.deep}` reads the key `row`, and reading
-      // the whole path here would blank a render nothing was wrong with.
+      // The regression this guard is most prone to, and the only direction that costs anything: a template naming
+      // `${row.inner.deep}` reads the key `row`, and reading the whole path here would blank a render nothing was wrong
+      // with.
       view("deep: ${row.inner.deep}");
       expect(plain(render({ row: { inner: { deep: "found" } } }))).toContain("deep: found");
     });
@@ -136,13 +131,9 @@ describe("raw over hollow", () => {
       expect(plain(render({ unrelated: "value" }))).toContain("a static line");
     });
 
-    // What MEASURING the reads buys over gathering the names, beyond closing the hole.
-    //
-    // A gathered set is the union of every name the source mentions, so it holds names
-    // no render can ever spend, and a block carrying one of those passed the guard and
-    // drew a skeleton. Recorded reads hold what this render truly asked for, which makes
-    // the guard exact in the permissive direction too: each case below rendered EMPTY
-    // before, which is the very thing "raw over hollow" exists to prevent.
+    // What MEASURING buys over gathering, beyond closing the hole. A gathered set holds every name the source mentions,
+    // including ones no render can spend, so a block carrying one passed the guard and drew a skeleton. Each case below
+    // rendered EMPTY before.
     it("refuses data whose only match lives inside a loop that never ran", () => {
       view("@fields rows a b\n@each rows\n${a}/${b}\n@end");
       expect(() => render({ a: "x" })).toThrow(NAME);
@@ -151,8 +142,8 @@ describe("raw over hollow", () => {
     });
 
     it("refuses data named after a TAG, which is a palette word and no field", () => {
-      // `@tone gold` mentions `gold`, so a gathered set held it and a block writing a
-      // `gold` field rendered a blank line. Nothing ever looks it up.
+      // `@tone gold` mentions `gold`, so a gathered set held it and a block writing a `gold` field rendered a blank
+      // line. Nothing ever looks it up.
       view(`${LANG.TONE} gold\n\${said}`);
       expect(() => render({ gold: "x" })).toThrow(NAME);
     });
@@ -162,17 +153,12 @@ describe("raw over hollow", () => {
       expect(() => render({ tayo: "x" })).toThrow(NAME);
     });
 
-    // EVERY way a template can name a top-level field, walked in one table.
+    // EVERY way a template can name a top-level field, in one table.
     //
-    // The guard now decides on what the render ASKED the scope for, recorded by the
-    // accessor itself, so a naming form it has never heard of counts the day it resolves
-    // a field: there is no list of forms to fall behind. What is left for a table to
-    // catch is the one way back into the old defect, a directive reading the scope
-    // WITHOUT going through lookup, which no accessor can count for it.
-    //
-    // The table is not trusted to be complete either: the test under it holds the
-    // language's own vocabulary against it, so a directive added to language.ts arrives
-    // here whether or not anyone thought to write its line.
+    // The guard decides on what the render ASKED the scope for, so a naming form counts the day it resolves a field.
+    // What is left for a table to catch is the one way back into the old defect: a directive reading the scope WITHOUT
+    // going through lookup. The test under this one holds the language's vocabulary against the table, so a directive
+    // added to language.ts arrives here whether or not anyone wrote its line.
     const NAMED_BY: Array<[string, string, object]> = [
       ["${field}", "x ${said}", { said: "v" }],
       ["${field:table}", '@text t a="A"\nx ${said:t}', { said: "a" }],
@@ -180,31 +166,27 @@ describe("raw over hollow", () => {
       ["blanks inside the braces", "x ${ said }", { said: "v" }],
       ["@each", "@each note\n- ${.}\n@end", { note: ["one"] }],
       ["@fields then @each", "@fields rows a b\n@each rows\n${a}/${b}\n@end", { rows: [{ a: "1", b: "2" }] }],
-      // The slot in these two is UNFILLED on purpose: it makes the template one the
-      // guard applies to, and leaves the directive's own field as the only match there
-      // is. Without it the template spends nothing, the guard exempts it, and the case
-      // passes whatever the directive does.
+      // The slot in these two is UNFILLED on purpose: it makes the template one the guard applies to, and leaves the
+      // directive's own field as the only match there is. Without it the template spends nothing, the guard exempts it,
+      // and the case passes whatever the directive does.
       ["@foot", "@box\n${unfilled}\n@foot cause\n@endbox", { cause: "why" }],
       ["@frame", "@box\n${unfilled}\nlit\n@frame state ok=success\n@endbox", { state: "ok" }],
       ["@head", "@box\n@head ${title}\nlit\n@endbox", { title: "T" }],
       ["@right", "@box\n@right ${badge}\nlit\n@endbox", { badge: "B" }],
       ["@rule", "@rule ${label}\nlit", { label: "L" }],
-      // The bullet's own slot cannot be the sole match by construction: it is only ever
-      // substituted once the loop runs, so the LIST is always in the data beside it.
+      // The bullet's own slot cannot be the sole match by construction: it is only ever substituted once the loop runs,
+      // so the LIST is always in the data beside it.
       ["@each carrying a bullet", '@each rows bullet="${k} "\n${.}\n@end', { rows: ["one"] }],
       ["@each nested in a @box", "@box\n@each note\n- ${.}\n@end\n@endbox", { note: ["one"] }],
       ["@aside around a slot", "@aside tayo\n${said}\n@endaside", { said: "v" }],
     ];
 
-    // Rendering IS the assertion, now that the guard measures rather than gathers: had
-    // the field been read by some path the accessor never saw, the recorded set would
-    // not hold it and this render would be refused.
+    // Rendering IS the assertion: had the field been read by a path the accessor never saw, the recorded set would not
+    // hold it and this render would be refused.
     //
-    // Which only holds if the entry is one the guard can REFUSE, and two of them were
-    // not: a template spending no slot is exempt, so `@foot` and `@frame` were driven by
-    // cases that passed whatever those directives did. The two expectations below are
-    // that hole made impossible, and they belong here rather than in a reviewer's head:
-    // the guard has to apply, and the form under test has to be the only way in.
+    // Which only holds if the entry is one the guard can REFUSE, and two were not: a template spending no slot is
+    // exempt, so `@foot` and `@frame` passed whatever those directives did. The two expectations below are that hole
+    // made impossible.
     it.each(NAMED_BY)("renders when the field is named by %s", (_label, body, data) => {
       expect(parseTemplate(body).spendsSlots).toBe(true);
       expect(Object.keys(data)).toHaveLength(1);
@@ -212,12 +194,9 @@ describe("raw over hollow", () => {
       expect(() => render(data)).not.toThrow();
     });
 
-    // The forcing function, and the reason the table above cannot silently fall behind.
-    //
-    // The words are read from the VOCABULARY, not listed here, so a directive added to
-    // language.ts arrives in this test the moment it is declared. Its author then has
-    // exactly two ways forward: drive it in the table above, or write down here that it
-    // names no field of a scope. Both are a decision; neither can be forgotten.
+    // The forcing function. The words are read from the VOCABULARY, not listed here, so a directive added to
+    // language.ts arrives the moment it is declared, and its author has two ways forward: drive it in the table above,
+    // or write down here that it names no field. Both are a decision; neither can be forgotten.
     const DIRECTIVES = Object.values(LANG).filter(
       (v): v is string => typeof v === "string" && v.startsWith("@")
     );
@@ -246,8 +225,8 @@ describe("raw over hollow", () => {
     });
 
     it("holds no exemption for a word the language no longer declares", () => {
-      // The other direction, or the list rots into a list of excuses: a directive that
-      // is renamed or dropped leaves an entry answering for nothing.
+      // The other direction, or the list rots into a list of excuses: a directive that is renamed or dropped leaves an
+      // entry answering for nothing.
       expect(DIRECTIVES.length).toBeGreaterThan(Object.keys(NAMES_NO_FIELD).length);
       expect(Object.keys(NAMES_NO_FIELD).filter((w) => !DIRECTIVES.includes(w))).toEqual([]);
     });
@@ -297,8 +276,8 @@ describe("the tone chain", () => {
 
 describe("the carrier's kind", () => {
   it("picks a TYPED template file when one exists beside the plain form", () => {
-    // A type no other case passes: a typed file written here outlives this test in the
-    // shared dir, and would silently answer for a later one.
+    // A type no other case passes: a typed file written here outlives this test in the shared dir, and would silently
+    // answer for a later one.
     const OWN_TYPE = "boxed";
     view("plain form");
     view("typed form", NAME, OWN_TYPE);

@@ -1,20 +1,14 @@
 // The terminal's real width, which this process cannot see.
 //
-// The box must WRAP its own content, and for that it needs a width it cannot measure:
-// this process' stdout is a pipe, never a TTY, and neither the hook's stdin nor its
-// environment carries the terminal size (probed 2026-07-26: process.stdout.columns
-// undefined, COLUMNS absent, /dev/tty gives ENXIO, no controlling terminal). Without
-// a width, a line longer than the terminal is wrapped BY THE TERMINAL, at whatever
-// column it likes, which puts the right border on the next row and shreds the frame.
+// The box must WRAP its own content, and this process' stdout is a pipe: neither the hook's stdin nor its environment
+// carries the terminal size (probed 2026-07-26: process.stdout.columns undefined, COLUMNS absent, /dev/tty gives
+// ENXIO). Without a width, the TERMINAL wraps at whatever column it likes and the right border lands on the next row.
 //
-// It is reachable one step further out: the `claude` process itself runs on a real
-// tty, so walking the ancestor chain and opening that tty yields the real width (215
-// columns in the author's terminal, where a fixed 100-column ceiling was wrapping
-// lines that had plenty of room).
+// It is reachable one step out: the `claude` process runs on a real tty, so walking the ancestor chain and opening that
+// tty yields the real width.
 //
-// It costs one `ps` spawn, about 25ms, and this hook runs on EVERY streamed delta, so
-// the answer is cached with a short TTL. A resize is rare and costs one badly wrapped
-// block until the next refresh, whereas 25ms per delta would be felt on every message.
+// That costs one `ps` spawn, about 25ms, on EVERY streamed delta, so the answer is cached with a short TTL. A resize
+// costs one badly wrapped block until the next refresh.
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -29,11 +23,10 @@ const WIDTH_TTL_MS = 3000;
 const PROBE_TIMEOUT_MS = 500;
 const MAX_ANCESTORS = 12;
 
-// The bounds a resolved width is held between. A FORCED ceiling is deliberate, so
-// only absurdity is clamped; a PROBED one is capped for readability, since a line of
-// prose stops being scannable past it and the box never grows beyond its content
-// anyway. Probed columns also lose a margin: the host indents what it prints, and a
-// box flush against the last column is one resize away from wrapping.
+// The bounds a resolved width is held between. A FORCED ceiling is deliberate, so only absurdity is clamped; a PROBED
+// one is capped for readability, since a line of prose stops being scannable past it and the box never grows beyond its
+// content anyway. Probed columns also lose a margin: the host indents what it prints, and a box flush against the last
+// column is one resize away from wrapping.
 const MIN_WIDTH = 40;
 const MAX_FORCED = 400;
 const MAX_PROBED = 180;
@@ -105,12 +98,10 @@ function terminalWidth(stateDir: string): number | null {
 
 const forced = (n: number): number => Math.min(MAX_FORCED, Math.max(MIN_WIDTH, n));
 
-// The resolution order, most deliberate first. A NUMBER in options.width is a ceiling
-// written in code, so it wins outright. The env var is the operator's ceiling, what
-// the render oracles use so a verdict never depends on the window they ran in. A
-// FUNCTION in options.width is not a ceiling but a width SOURCE: it stands in for the
-// ps-probe and its result is treated exactly like probed columns, with null falling
-// through to the probe itself.
+// The resolution order, most deliberate first. A NUMBER in options.width is a ceiling written in code, so it wins
+// outright. The env var is the operator's ceiling, what the render oracles use so a verdict never depends on the window
+// they ran in. A FUNCTION in options.width is not a ceiling but a width SOURCE: it stands in for the ps-probe and its
+// result is treated exactly like probed columns, with null falling through to the probe itself.
 export function maxBoxWidth(options?: RenderOptions): number {
   const w = options?.width;
   if (typeof w === "number") return forced(w);

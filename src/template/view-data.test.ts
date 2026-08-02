@@ -1,9 +1,8 @@
 // The flat data format's parser, at its own edge rather than through a render.
 //
-// It is the one module a MESSAGE drives directly: every line it reads was written by a
-// model, so the shapes that must NOT parse matter as much as the ones that must. And it
-// has a second reader that never draws (a host's gate hook judging the same block), so
-// a shape that changes meaning here changes a verdict somewhere else.
+// It is the one module a MESSAGE drives directly: every line it reads was written by a model, so the shapes that must
+// NOT parse matter as much as the ones that must. And it has a second reader that never draws (a host's gate hook
+// judging the same block), so a shape that changes meaning here changes a verdict somewhere else.
 
 import { describe, it, expect } from "vitest";
 import { inertData, parseData } from "./view-data.js";

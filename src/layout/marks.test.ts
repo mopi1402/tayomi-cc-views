@@ -1,5 +1,5 @@
-// box.test.ts only ever feeds the framer a mark in first position, so `startsWith` and
-// `includes` pass it alike. The distinction bites here or nowhere.
+// box.test.ts only ever feeds the framer a mark in first position, so `startsWith` and `includes` pass it alike. The
+// distinction bites here or nowhere.
 
 import { describe, it, expect } from "vitest";
 import { HANG_MARK, RULE_MARK, isRule } from "./marks.js";

@@ -1,11 +1,11 @@
 // Where a carrier must not look, pinned on the shape alone.
 //
-// This module answers ONE question, so everything here is a span: which characters of
-// a text sit inside a fenced block, and which of those blocks is the block carrier's
-// own. What the carriers DO with the answer is their sidecars' business, not this one's.
+// This module answers ONE question, so everything here is a span: which characters of a text sit inside a fenced block,
+// and which of those blocks is the block carrier's own. What the carriers DO with the answer is their sidecars'
+// business, not this one's.
 //
-// The fences are spelled here rather than imported from the production constant: a test
-// sharing the spelling of what it measures cannot catch a drift in it.
+// The fences are spelled here rather than imported from the production constant: a test sharing the spelling of what it
+// measures cannot catch a drift in it.
 
 import { describe, it, expect } from "vitest";
 import { fenceAt, fenceSpans } from "./fences.js";
@@ -50,8 +50,8 @@ describe("a carrier fence", () => {
   });
 
   it("stops being one the moment it is quoted inside a longer fence", () => {
-    // The whole point: documentation about this package shows a working block, and
-    // the OUTERMOST fence is what decides. One span, and it is not the carrier's.
+    // The whole point: documentation about this package shows a working block, and the OUTERMOST fence is what decides.
+    // One span, and it is not the carrier's.
     const text = lines(LONGER, TICKS + CARRIER, "k: v", TICKS, LONGER);
     const spans = fenceSpans(text);
     expect(spans).toHaveLength(1);

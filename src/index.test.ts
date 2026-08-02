@@ -1,8 +1,7 @@
-// The PUBLIC surface against a FAKE host and explicit options: what any adopter
-// gets without TAYOMI anywhere. Everything is imported through the barrel, so an
-// export dropped from index.ts fails here before it fails in a consumer. The
-// TAYOMI wiring (its views, its injection, its strict view) is covered by the
-// integration suite in plugins/core, not here.
+// The PUBLIC surface against a FAKE host and explicit options: what any adopter gets without TAYOMI anywhere.
+// Everything is imported through the barrel, so an export dropped from index.ts fails here before it fails in a
+// consumer. The TAYOMI wiring (its views, its injection, its strict view) is covered by the integration suite in
+// plugins/core, not here.
 
 import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";
@@ -29,20 +28,20 @@ import { BLOCK_HINT, FENCE, SCRATCH_DIR, VIEWS_DIR, VIEW_EXT } from "./data/mark
 import { hasControlMark } from "./data/marks.js";
 
 const stripAnsi = (s: string): string => s.replace(ANSI_RE, "");
-// A fenced block, spelled by the engine's own carrier rather than retyped here: a
-// test that hard-codes the fence stops proving anything the day the carrier moves.
+// A fenced block, spelled by the engine's own carrier rather than retyped here: a test that hard-codes the fence stops
+// proving anything the day the carrier moves.
 const fenced = (name: string, ...body: string[]): string =>
   [BLOCK_HINT + name, ...body, FENCE].join("\n");
-// What a tag PRINTS AS, asked of the engine by name. An escape pasted here would be
-// a second copy of a palette this module cannot see, unreadable and free to drift.
+// What a tag PRINTS AS, asked of the engine by name. An escape pasted here would be a second copy of a palette this
+// module cannot see, unreadable and free to drift.
 const seq = (name: string): string => renderTags(tagMark(name));
-// A sequence the palette does NOT carry, for every registration test. The one escape
-// written out, because its whole purpose is to be a value the engine does not own.
+// A sequence the palette does NOT carry, for every registration test. The one escape written out, because its whole
+// purpose is to be a value the engine does not own.
 const MAGENTA = "\x1b[35m";
 const NOTE = "note";
 const NOTE_FILE = NOTE + VIEW_EXT;
-// The frame's own glyphs, spelled here because box.ts keeps them PRIVATE: they are its
-// alone to choose, and this only needs to tell a framed line from any other.
+// The frame's own glyphs, spelled here because box.ts keeps them PRIVATE: they are its alone to choose, and this only
+// needs to tell a framed line from any other.
 const FRAME_EDGE_RE = /^[╭│╰]/;
 /** What the loader says when it is handed nowhere to look. */
 const EMPTY_PATH_RE = /search path is empty/;
@@ -62,8 +61,8 @@ const NOTE_VIEW = [
   "",
 ].join("\n");
 
-// A view spending the TONE SLOT. The fenced block carries no attributes, so its own
-// `tone` field is the way in: one template, whatever colour the block asks for.
+// A view spending the TONE SLOT. The fenced block carries no attributes, so its own `tone` field is the way in: one
+// template, whatever colour the block asks for.
 const TONED = "toned";
 const TONED_FILE = TONED + VIEW_EXT;
 const TONED_VIEW = [`${TONE} key`, `${EACH} note`, " {{tone}}${.}{{/}}", END, ""].join("\n");
@@ -71,9 +70,8 @@ const TONED_VIEW = [`${TONE} key`, `${EACH} note`, " {{tone}}${.}{{/}}", END, ""
 const WARN = "warn";
 const WARN_SEQ = seq(WARN);
 
-// Created at module scope, not in beforeAll: describe bodies run at collection,
-// so a `const options = { viewsPath: [builtins] }` written there would capture
-// undefined if the dirs were only assigned once the hooks fire.
+// Created at module scope, not in beforeAll: describe bodies run at collection, so a `const options = { viewsPath:
+// [builtins] }` written there would capture undefined if the dirs were only assigned once the hooks fire.
 const builtins = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-builtin-`));
 const consumer = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-consumer-`));
 fs.writeFileSync(path.join(builtins, NOTE_FILE), NOTE_VIEW);
@@ -89,8 +87,8 @@ describe("the zero-config path", () => {
     expect(slice("", "plain prose, no markup at all")).toBeNull();
   });
 
-  // Only a template writes presentation. `b` bolds inside a view, `no_such_tag` is
-  // in no palette; in prose the two are indistinguishable, and that is the guarantee.
+  // Only a template writes presentation. `b` bolds inside a view, `no_such_tag` is in no palette; in prose the two are
+  // indistinguishable, and that is the guarantee.
   it("leaves markup written in PROSE inert, a known name exactly like an unknown one", () => {
     const known = "a {{b}}bold{{/}} word";
     const unknown = "literal {{no_such_tag}} stays";
@@ -156,15 +154,14 @@ describe("rendering through explicit options", () => {
 
   // One item of the note view, the way a MESSAGE supplies it.
   const noteBlock = (item: string): string => fenced(NOTE, "note:", `- ${item}`);
-  // A span the model wrote itself, around a tag the palette DOES know, so the engine
-  // has every reason to resolve it and must not.
+  // A span the model wrote itself, around a tag the palette DOES know, so the engine has every reason to resolve it and
+  // must not.
   const span = (tag: string, text: string): string => tagMark(tag) + text + tagMark("/");
   const FAIL_SPAN = span("fail", "not red");
   const WITNESS = "x";
-  // The frame width of the note view around one value. Frame lines agreeing with
-  // EACH OTHER proves nothing (markup consumed as zero-width shrinks the whole box
-  // and it stays square), so every caller compares against a witness of the same
-  // printed length that carries no markup.
+  // The frame width of the note view around one value. Frame lines agreeing with EACH OTHER proves nothing (markup
+  // consumed as zero-width shrinks the whole box and it stays square), so every caller compares against a witness of
+  // the same printed length that carries no markup.
   const box = (value: string): number => {
     const out = transform(noteBlock(value), undefined, true, undefined, options);
     const widths = new Set(frameLines(out).map((l) => [...l].length));
@@ -186,10 +183,9 @@ describe("rendering through explicit options", () => {
   });
 
   it("measures a value that merely LOOKS like a control mark as the text it is", () => {
-    // A reserved mark must be a real control, never a spelling: RULE_MARK was the
-    // six ASCII characters below until 2026-08-01, and printedWidth stripped that
-    // text wherever it appeared, so a value carrying it measured six columns short
-    // and pulled the frame open. Data may type any text; only a control is reserved.
+    // A reserved mark must be a real control, never a spelling: RULE_MARK was the six ASCII characters below until
+    // 2026-08-01, and printedWidth stripped that text wherever it appeared, so a value carrying it measured six columns
+    // short and pulled the frame open. Data may type any text; only a control is reserved.
     const looksLikeAMark = String.raw`\u0000`;
     expect(box(looksLikeAMark)).toBe(asWide(looksLikeAMark));
   });
@@ -202,8 +198,8 @@ describe("rendering through explicit options", () => {
   });
 
   it("refuses an empty search path with a named error", () => {
-    // The wording is asserted deliberately, not shared with load.ts: an operator reads
-    // this line to know WHAT went wrong, so rewording it silently is the regression.
+    // The wording is asserted deliberately, not shared with load.ts: an operator reads this line to know WHAT went
+    // wrong, so rewording it silently is the regression.
     expect(() => loadTemplate(NOTE, [])).toThrow(EMPTY_PATH_RE);
   });
 
@@ -232,8 +228,8 @@ describe("rendering through explicit options", () => {
 });
 
 describe("the width option", () => {
-  // A token wider than the column hard-splits at exactly the column, so the frame
-  // prints at exactly the ceiling: an equality a word-boundary wrap cannot promise.
+  // A token wider than the column hard-splits at exactly the column, so the frame prints at exactly the ceiling: an
+  // equality a word-boundary wrap cannot promise.
   const LONG_TOKEN = "x".repeat(80);
   const DATA = `note:\n- ${LONG_TOKEN}\n`;
 
@@ -256,8 +252,8 @@ describe("the width option", () => {
 });
 
 describe("the default views path", () => {
-  // The order IS the override contract: an explicit dir beats the project's
-  // views/, which beats whatever ships with the plugin. Same-name wins earlier.
+  // The order IS the override contract: an explicit dir beats the project's views/, which beats whatever ships with the
+  // plugin. Same-name wins earlier.
   it("orders env dirs, then the project's views/, then the plugin resolution", () => {
     const a = path.join(os.tmpdir(), `${SCRATCH_DIR}-env-a`);
     const b = path.join(os.tmpdir(), `${SCRATCH_DIR}-env-b`);
@@ -279,8 +275,8 @@ describe("the default views path", () => {
     expect(defaultViewsPath()[0]).toBe(path.join(process.cwd(), VIEWS_DIR));
   });
 
-  // The bundled dir closes the path even when a plugin root would otherwise be
-  // the final word: `welcome` is the health check, it must resolve EVERYWHERE.
+  // The bundled dir closes the path even when a plugin root would otherwise be the final word: `welcome` is the health
+  // check, it must resolve EVERYWHERE.
   it("closes with the package's bundled views, even under a plugin root", () => {
     const prev = process.env.CLAUDE_PLUGIN_ROOT;
     const root = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-plugin-`));
@@ -325,14 +321,14 @@ describe("the default views path", () => {
 });
 
 describe("the palette registry", () => {
-  // Through a TEMPLATE, the only place a tag resolves: the toned view's slot spends
-  // the registered name, which is what a host actually gets.
+  // Through a TEMPLATE, the only place a tag resolves: the toned view's slot spends the registered name, which is what
+  // a host actually gets.
   const options = { viewsPath: [builtins], width: 100 };
   const toned = (tone: string): string =>
     transform(`\`\`\`view:toned\ntone: ${tone}\nnote:\n- x\n\`\`\``, undefined, true, undefined, options);
 
-  // A name the engine does NOT carry, and one it does: registering the first adds,
-  // registering the second shadows, and the report must tell them apart.
+  // A name the engine does NOT carry, and one it does: registering the first adds, registering the second shadows, and
+  // the report must tell them apart.
   const ADDED = "engine_test_tone";
   const SHADOWED = "dim";
   const UNNAMEABLE = "not ok"; // the {{tag}} shape takes \w+ only

@@ -1,12 +1,8 @@
 // The @aside region, driven through the RENDER ENTRY at fixed widths.
 //
-// Width is a NUMBER in the options (first in the resolution order, platform/
-// tty-width.ts), so no env var, no ps-probe and no terminal can reach a single
-// assertion below: the two widths this file names are the two the region has to
-// behave differently at, and they are named here rather than found at runtime.
-//
-// The fixtures live in a temp dir handed in as the search path, so nothing here
-// depends on the package's own views/ or on a project's.
+// Width is a NUMBER in the options, first in the resolution order, so no env var, no ps-probe and no terminal can reach
+// an assertion below. The fixtures live in a temp dir handed in as the search path, so nothing here depends on a real
+// views/ either.
 
 import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";
@@ -17,14 +13,12 @@ import { ASIDE_GUTTER, ASIDE_MIN_MAIN } from "./aside.js";
 import { BOX_CHROME } from "./box.js";
 import { printedWidth } from "./measure.js";
 
-// Raw ANSI art, the thing the region exists to carry: a colour sequence, then cells
-// whose TRANSPARENT pixels are spaces. Those spaces are exactly what the wrapper
-// breaks on, and the language has no bypass mark, so a row reaching the screen whole
-// is a real claim about the composition rather than about a flag.
+// Raw ANSI art: a colour sequence, then cells whose TRANSPARENT pixels are spaces. Those spaces are what the wrapper
+// breaks on and the language has no bypass mark, so a row reaching the screen whole is a claim about the composition
+// rather than about a flag.
 //
-// The escape is built from a char code rather than typed, exactly as marks.ts builds
-// its own: a control character living in a source file has already been mangled by an
-// editing pass once, and the whole point of these fixtures is that their bytes are real.
+// The escape is built from a char code rather than typed: a control character in a source file has been mangled by an
+// editing pass once, and these fixtures live on their bytes.
 const ESC = String.fromCharCode(27);
 const ART_WIDTH = 10;
 const artRow = (glyph: string): string =>
@@ -34,17 +28,16 @@ const SHORT_ART = ["▀", "▄"].map(artRow);
 const UPPER = "▀";
 const LOWER = "▄";
 
-// Both widths are BOX CEILINGS. At 80 the main column gets 80 - 4 - 10 - 5 = 61
-// printed columns and the region composes; at 58 it would get 39, one under the
-// floor, and the column goes. The arithmetic is spelled from the constants so a
-// change to either one fails here instead of drifting silently.
+// Both widths are BOX CEILINGS. At 80 the main column gets 80 - 4 - 10 - 5 = 61 printed columns and the region
+// composes; at 58 it would get 39, one under the floor, and the column goes. The arithmetic is spelled from the
+// constants so a change to either one fails here instead of drifting silently.
 const FITS = 80;
 const NARROW = 58;
 const contentWidth = (limit: number): number => limit - BOX_CHROME;
 const mainWidth = (limit: number): number => contentWidth(limit) - ART_WIDTH - ASIDE_GUTTER;
 
-// Long enough to need more than the main column, short enough to fit the box: the
-// one shape that tells "full width" and "inside the region" apart on sight.
+// Long enough to need more than the main column, short enough to fit the box: the one shape that tells "full width" and
+// "inside the region" apart on sight.
 const ABOVE = "ABOVE a line long enough to need more than the main column can give it";
 const BELOW = "BELOW the region, the flow returns to the whole width of the box content";
 
@@ -99,9 +92,8 @@ const render = (name: string, width: number): string =>
   renderView(name, {}, [dir], undefined, { width });
 
 const rows = (out: string): string[] => out.replace(ANSI_RE, "").split("\n");
-// A framed line carries two borders; a line the region composed carries the
-// separator between them, so counting bars is what tells the two apart. The glyph is
-// spelled here because box.ts keeps its own private.
+// A framed line carries two borders; a line the region composed carries the separator between them, so counting bars is
+// what tells the two apart. The glyph is spelled here because box.ts keeps its own private.
 const BAR_RE = /│/g;
 const FRAME_BARS = 2;
 const REGION_BARS = FRAME_BARS + 1;
@@ -114,8 +106,8 @@ describe("a region at a width that fits both columns", () => {
   const out = render("region", FITS);
 
   it("keeps the lines outside the region at the full content width, on one row", () => {
-    // Wider than the main column, narrower than the content: one row each proves
-    // the flow above and below the region never entered it.
+    // Wider than the main column, narrower than the content: one row each proves the flow above and below the region
+    // never entered it.
     expect(printedWidth(ABOVE)).toBeGreaterThan(mainWidth(FITS));
     expect(printedWidth(ABOVE)).toBeLessThanOrEqual(contentWidth(FITS));
     expect(rowWith(out, "ABOVE")).toHaveLength(1);
@@ -138,8 +130,8 @@ describe("a region at a width that fits both columns", () => {
   });
 
   it("keeps a blank main-flow line, because the composed line is no longer empty", () => {
-    // The breathing line between the two sections: the box collapses blank runs,
-    // and this one survives only because it carries the art and the separator.
+    // The breathing line between the two sections: the box collapses blank runs, and this one survives only because it
+    // carries the art and the separator.
     const region = regionRows(out);
     const one = region.findIndex((l) => l.includes("ONE"));
     const two = region.findIndex((l) => l.includes("TWO"));
@@ -195,8 +187,7 @@ describe("the shorter column, padded against the region", () => {
   });
 
   it("pads the ASIDE column when the flow is the taller one", () => {
-    // Two art rows, five flow lines: same three rows to spend, same distribution,
-    // this time on the picture.
+    // Two art rows, five flow lines: same three rows to spend, same distribution, this time on the picture.
     const out = render("wide-flow", FITS);
     const region = regionRows(out);
     expect(region).toHaveLength(5);

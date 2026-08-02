@@ -1,14 +1,12 @@
-// The cell width of every leading column of a list, measured over the items ACTUALLY
-// rendered.
+// The cell width of every leading column of a list, measured over the items ACTUALLY rendered.
 //
-// Two rules compose here and their interaction is the whole module: a mapped column is
-// at least its longest key plus the chip's padding, and an off-map value may raise it
-// past that bound. Get the second wrong and a list holding one unmapped value shifts
-// every column to its right.
+// Two rules compose here and their interaction is the whole module: a mapped column is at least its longest key plus
+// the chip's padding, and an off-map value may raise it past that bound. Get the second wrong and a list holding one
+// unmapped value shifts every column to its right.
 //
-// A TEXT column is measured on a third rule, and it has to be a third: what occupies the
-// cell is the WORD that comes out, never the key that chose it, so a column of `warning`
-// keys holding `⚠ WARNING` words is nine columns wide and not seven.
+// A TEXT column is measured on a third rule, and it has to be a third: what occupies the cell is the WORD that comes
+// out, never the key that chose it, so a column of `warning` keys holding `⚠ WARNING` words is nine columns wide and
+// not seven.
 
 import { describe, it, expect } from "vitest";
 import { DEFAULT_KEY } from "../data/language.js";
@@ -62,8 +60,8 @@ describe("a mapped column", () => {
 
 describe("a text column", () => {
   it("is as wide as the WORD it renders, never as the key that chose it", () => {
-    // The key is two columns narrower than its word here, which is the whole point: a
-    // cell measured on `ok` would cut `⚠ WARNING` on an ellipsis it never earned.
+    // The key is two columns narrower than its word here, which is the whole point: a cell measured on `ok` would cut
+    // `⚠ WARNING` on an ellipsis it never earned.
     expect(columnWidths([item("ok")], FIELDS, WORDED, MAPS)).toEqual({
       state: printedWidth(WARNING),
     });

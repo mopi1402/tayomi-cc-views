@@ -1,9 +1,8 @@
 // The .view language's directives, driven at their own edge.
 //
-// Half of these cases are NEAR-MISSES, and that is deliberate: every matcher here was
-// written in two steps rather than as one regex precisely so a malformed line falls
-// through to the BODY, where an author sees it printed and fixes it. A matcher that
-// half-accepted would swallow the line, and everything under it, in silence.
+// Half of these cases are NEAR-MISSES, and that is deliberate: every matcher here was written in two steps rather than
+// as one regex precisely so a malformed line falls through to the BODY, where an author sees it printed and fixes it. A
+// matcher that half-accepted would swallow the line, and everything under it, in silence.
 
 import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";
@@ -38,9 +37,8 @@ const NO_LISTS = {};
 const TOP_LEFT = "╭";
 
 /**
- * One view-language expression. Written through a helper because `${...}` is JS's own
- * interpolation: spelled inline in a template literal, JS eats it before the engine
- * ever sees it.
+ * One view-language expression. Written through a helper because `${...}` is JS's own interpolation: spelled inline in
+ * a template literal, JS eats it before the engine ever sees it.
  */
 const ref = (name: string): string => "${" + name + "}";
 
@@ -106,11 +104,10 @@ describe("@each", () => {
     expect(render([`${EACH} note`, ITEM, "tail"], SCOPE)).toEqual(["one", "tail", "two", "tail"]);
   });
 
-  // Where the two halves of a text table MEET, and the only place they can be caught
-  // disagreeing: columns.ts measures the cell over the WORDS and substitute.ts spends
-  // it, and this layer is what hands the same registry to both. Measured on one side
-  // and spent on the other is how a column silently decouples, so the alignment is
-  // asserted on the rendered rows rather than on either half's arithmetic.
+  // Where the two halves of a text table MEET, and the only place they can be caught disagreeing: columns.ts measures
+  // the cell over the WORDS and substitute.ts spends it, and this layer is what hands the same registry to both.
+  // Measured on one side and spent on the other is how a column silently decouples, so the alignment is asserted on the
+  // rendered rows rather than on either half's arithmetic.
   it("aligns a text table's column on the WORDS it renders, not on their keys", () => {
     const tables: Tables = {
       kinds: { kind: "text", entries: { warning: "WARNING!", "*": "NOTE" } },
@@ -119,8 +116,8 @@ describe("@each", () => {
     const out = render([`${EACH} rows`, `${ref("k:kinds")}|${ref("t")}`, END], { rows }, tables, {
       rows: ["k", "t"],
     });
-    // A declared word, an off-map key echoed uppercase, and the reserved entry for the
-    // row that carried nothing: three different widths, one column.
+    // A declared word, an off-map key echoed uppercase, and the reserved entry for the row that carried nothing: three
+    // different widths, one column.
     expect(out).toEqual(["WARNING!|a", "DEPLOY  |b", "NOTE    |c"]);
   });
 });

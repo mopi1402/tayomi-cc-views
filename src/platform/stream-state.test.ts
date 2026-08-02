@@ -1,12 +1,10 @@
 // The oracles for the delta log, and for the failure that made it necessary.
 //
-// The bug they pin down was not hypothetical: on 2026-07-28 a turn whose text was
-// perfect rendered as an EMPTY box, because the flush carrying the block's body
-// and the flush carrying its closing fence ran at the same time over one shared
-// state file and the body lost the write. So the tests here assert the property
-// that replaces that file: what a flush renders depends on its INDEX and never on
-// which process happened to run first. The full regression at the render seam
-// lives with the host that hit it (plugins/core, display-integration).
+// The bug they pin down was not hypothetical: on 2026-07-28 a turn whose text was perfect rendered as an EMPTY box,
+// because the flush carrying the block's body and the flush carrying its closing fence ran at the same time over one
+// shared state file and the body lost the write. So the tests here assert the property that replaces that file: what a
+// flush renders depends on its INDEX and never on which process happened to run first. The full regression at the
+// render seam lives with the host that hit it (plugins/core, display-integration).
 
 import { describe, it, expect, afterEach } from "vitest";
 import os from "node:os";
@@ -54,8 +52,8 @@ describe("the delta log", () => {
     const id = newId();
     recordDelta(id, 0, "a");
     recordDelta(id, 2, "c");
-    // A partial prefix would let a caller compute an offset into text the screen does
-    // not hold, which is the mis-slice this module exists to make impossible.
+    // A partial prefix would let a caller compute an offset into text the screen does not hold, which is the mis-slice
+    // this module exists to make impossible.
     expect(readEarlier(id, 3)).toEqual({ text: "", complete: false });
   });
 
@@ -90,8 +88,8 @@ describe("the delta log", () => {
   });
 
   it("keeps two state dirs fully apart", () => {
-    // Two hosts on one machine must not read each other's flushes: the dir is the
-    // isolation boundary RenderOptions.stateDir promises.
+    // Two hosts on one machine must not read each other's flushes: the dir is the isolation boundary
+    // RenderOptions.stateDir promises.
     const id = newId();
     const otherDir = path.join(os.tmpdir(), `cc-views-test-${process.pid}`);
     recordDelta(id, 0, "here");

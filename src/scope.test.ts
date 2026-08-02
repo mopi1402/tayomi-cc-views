@@ -1,8 +1,7 @@
 // How a name written in a template reaches a value.
 //
-// The pseudo-fields are the part with no second chance: a scope is an OPEN record, so
-// a lookup that misses returns undefined rather than throwing, and a renamed
-// bookkeeping field would blank a column with no error anywhere.
+// The pseudo-fields are the part with no second chance: a scope is an OPEN record, so a lookup that misses returns
+// undefined rather than throwing, and a renamed bookkeeping field would blank a column with no error anywhere.
 
 import { describe, it, expect } from "vitest";
 import { BULLET_REF, DEFAULT_KEY, INDEX_REF, ITEM_REF, LABEL_REF } from "./data/language.js";
@@ -50,13 +49,12 @@ describe("lookup", () => {
   });
 });
 
-// The one thing "raw over hollow" now rests on, and the reason it has no list of naming
-// forms to keep in step: a field cannot be resolved without being counted, because the
-// counting happens in the ACCESSOR and not in any of its callers.
+// The one thing "raw over hollow" now rests on, and the reason it has no list of naming forms to keep in step: a field
+// cannot be resolved without being counted, because the counting happens in the ACCESSOR and not in any of its callers.
 //
-// It is the door, so what it records is worth pinning to the byte. A dotted path counted
-// whole would name a key no scope can hold and blank a render nothing was wrong with,
-// which was the defect this design removes rather than patches.
+// It is the door, so what it records is worth pinning to the byte. A dotted path counted whole would name a key no
+// scope can hold and blank a render nothing was wrong with, which was the defect this design removes rather than
+// patches.
 describe("what a lookup records", () => {
   const seen = (keys: string[], scope: Scope = {}): string[] => {
     const read = new Set<string>();
@@ -69,9 +67,8 @@ describe("what a lookup records", () => {
   });
 
   it("counts a field that was never written, since the ASKING is what it answers", () => {
-    // The question is what the template wanted, not what it got: a view naming a field
-    // the block left out has still read it, and refusing that render would show raw
-    // markdown for a missing optional.
+    // The question is what the template wanted, not what it got: a view naming a field the block left out has still
+    // read it, and refusing that render would show raw markdown for a missing optional.
     expect(seen(["absent"])).toEqual(["absent"]);
   });
 
@@ -84,8 +81,8 @@ describe("what a lookup records", () => {
   });
 
   it("records nothing at all when the caller asked for no account", () => {
-    // The set is opt-in: every other caller of lookup (the column measurer) must cost
-    // nothing and must not pollute a render's answer.
+    // The set is opt-in: every other caller of lookup (the column measurer) must cost nothing and must not pollute a
+    // render's answer.
     const scope: Scope = { said: "v" };
     expect(lookup(scope, "said")).toBe("v");
     expect(scope.__read).toBeUndefined();
@@ -112,10 +109,9 @@ describe("stringify", () => {
   });
 });
 
-// A table's own semantics, and they live here because TWO modules read them: the
-// substituter spends the word and the column measurer has to know how wide it will be.
-// The three outcomes are three because ONE slot serves a payload naming a known kind,
-// one naming an unknown one, and one naming none.
+// A table's own semantics, and they live here because TWO modules read them: the substituter spends the word and the
+// column measurer has to know how wide it will be. The three outcomes are three because ONE slot serves a payload
+// naming a known kind, one naming an unknown one, and one naming none.
 describe("tableWord", () => {
   const WARNING = "⚠ WARNING";
   const kinds = {
@@ -145,8 +141,8 @@ describe("tableWord", () => {
 });
 
 describe("SUBST_RE", () => {
-  // Shared with the column measurer, which reads the SAME expressions to learn which
-  // @map a column renders through: two patterns would let the two readers disagree.
+  // Shared with the column measurer, which reads the SAME expressions to learn which @map a column renders through: two
+  // patterns would let the two readers disagree.
   const found = (text: string): string[] => [...text.matchAll(SUBST_RE)].map((m) => m[1]);
 
   it("finds every expression on a line, plain and mapped alike", () => {

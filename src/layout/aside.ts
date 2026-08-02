@@ -1,15 +1,10 @@
-// A second column beside the main flow: the composition half of an @aside region.
+// A second column beside the main flow. The engine knows no block, so two columns can only exist if a SINGLE line
+// carries both: the aside's row on the left, the gutter and its separator, the main flow's row pre-wrapped to whatever
+// is left.
 //
-// The engine emits one line at a time and knows no block, so two columns can only
-// exist if a SINGLE line already carries both. This module builds that line: the
-// aside's row on the left at one constant width, the gutter and its separator, the
-// main flow's row on the right, pre-wrapped to whatever the gutter leaves.
-//
-// Pre-wrapping is the trap, not a convenience. An aside row is raw ANSI art whose
-// transparent pixels are SPACES, exactly what wrapLine breaks on, and the language
-// carries no bypass mark. The row survives untouched for one reason only: every
-// composed line is built so its printed width already fits the box, so the wrapper
-// hands it back whole instead of finding a break point inside the picture.
+// Pre-wrapping is the trap, not a convenience. An aside row is raw ANSI art whose transparent pixels are SPACES,
+// exactly what wrapLine breaks on, and the language carries no bypass mark. The row survives only because every
+// composed line is built to fit the box already, so the wrapper hands it back whole.
 
 import { RESET_MARK, tagMark } from "../style.js";
 import { padCell, printedWidth } from "./measure.js";
@@ -18,28 +13,16 @@ import { wrapLine } from "./wrap.js";
 /** Where the SHORTER column sits against the taller one, declared on the region. */
 export type AsideAlign = "center" | "top" | "bottom";
 
-// Two spaces, the separator, two spaces: the region always spends the same printed
-// columns, which is what puts the separator on ONE column for the whole region.
 const SEPARATOR = `${tagMark("dim")}│${RESET_MARK}`;
 const GUTTER_PAD = "  ";
 
-/**
- * What the gutter costs, separator included. DERIVED from the two pieces above: the
- * number a composed line is measured against and the string it is built from must be
- * the same fact.
- */
+/** DERIVED: the number a composed line is measured against and the string it is built from are one fact. */
 export const ASIDE_GUTTER = 2 * GUTTER_PAD.length + printedWidth(SEPARATOR);
 
-/**
- * The floor, in printed columns of BOX CONTENT, under which the aside is dropped and
- * the flow takes the whole width. A picture is decoration; prose squeezed into a
- * ribbon beside it is not readable, so the decoration goes.
- */
+/** The floor, in printed columns of BOX CONTENT, under which the aside is dropped and the flow takes the whole width. */
 export const ASIDE_MIN_MAIN = 40;
 
-// The rows a column is short of the region's height, distributed. An ODD padding row
-// goes BELOW: a block sitting one row high reads as centred, the same block sitting
-// one row low reads as fallen.
+// An ODD padding row goes BELOW: a block one row high reads as centred, the same block one row low reads as fallen.
 function padColumn(col: string[], height: number, align: AsideAlign, filler: string): string[] {
   const missing = height - col.length;
   if (missing <= 0) return col;
@@ -52,13 +35,12 @@ function padColumn(col: string[], height: number, align: AsideAlign, filler: str
 }
 
 /**
- * The region, line by line. `content` is the width the frame wraps a body line to
- * (the box's limit less its chrome), NOT the terminal's width.
+ * The region, line by line. `content` is the width the frame wraps a body line to (the box's limit less its chrome),
+ * NOT the terminal's width.
  *
- * Degrades to the main flow at full width, and never half way: no aside row, an aside
- * wider than the space, or a main column under the floor all take the same exit. That
- * is what lets an unresolvable name reach here as an empty column instead of taking
- * the surrounding box down.
+ * Degrades to the main flow at full width and never half way: no aside row, an aside wider than the space, or a main
+ * column under the floor all take the same exit. That is what lets an unresolvable name reach here as an empty column
+ * instead of taking the box down.
  */
 export function composeAside(
   asideRows: string[],
@@ -71,18 +53,15 @@ export function composeAside(
   if (asideRows.length === 0 || mainWidth < ASIDE_MIN_MAIN) {
     return mainLines.flatMap((l) => wrapLine(l, content));
   }
-  // Wrapped BEFORE the columns are zipped: a main line that takes three rows takes
-  // three rows of the region, each beside its own aside row.
+  // Wrapped BEFORE the columns are zipped: a main line taking three rows takes three rows of the region.
   const flow = mainLines.flatMap((l) => wrapLine(l, mainWidth));
-  // Padded to the measured width rather than emitted as-is, so a row of art that ends
-  // early (a transparent right edge the encoder trimmed) still puts the separator on
+  // Padded, so a row of art that ends early (a transparent right edge the encoder trimmed) still puts the separator on
   // the same column as every other row.
   const art = asideRows.map((r) => padCell(r, asideWidth));
   const height = Math.max(art.length, flow.length);
   const left = padColumn(art, height, align, " ".repeat(asideWidth));
   const right = padColumn(flow, height, align, "");
-  // A blank main line survives here, and must: the composed line carries the art and
-  // the separator, so it is no longer empty and the box's blank collapsing has nothing
-  // to take. Those are the region's breathing lines.
+  // A blank main line survives, and must: the composed line carries the art and the separator, so the box's blank
+  // collapsing has nothing to take.
   return left.map((row, i) => `${row}${GUTTER_PAD}${SEPARATOR}${GUTTER_PAD}${right[i]}`);
 }

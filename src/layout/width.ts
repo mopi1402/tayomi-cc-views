@@ -1,31 +1,19 @@
-// Terminal COLUMN width, which is not string length. Every frame, column and
-// wrap in a rendered view is aligned on this number, and `.length` counts UTF-16
-// code units, a quantity that diverges from what the terminal prints in three
-// independent ways:
-//   - an ideograph (你) is ONE code unit and prints TWO columns, so a line is
-//     measured short, padded against the wrong total, and its border is pushed
-//     past the frame;
-//   - an emoji with default emoji presentation (✅, one code unit) prints two
-//     columns for the same reason;
-//   - a ZWJ sequence (👨‍💻, five code units; 🏳️‍🌈, six) prints two columns, so
-//     here the measure OVER-counts and the border is pulled inside the frame.
-// Measured on a real rendered block at a 95-column frame: +16 columns on a
-// line of 16 ideographs, +1 on a line carrying one ✅, -10 on a line of three
-// ZWJ emoji. A surrogate pair with no joiner (🟥) happens to come out right,
-// two code units for two columns, which is why the defect looked intermittent.
+// Terminal COLUMN width, which is not string length. `.length` counts UTF-16 code units, and that diverges from what
+// the terminal prints in three independent ways: an ideograph (你) or a default-presentation emoji (✅) is one code unit
+// and prints TWO columns, so the line measures short and its border is pushed past the frame; a ZWJ sequence (👨‍💻,
+// five code units) prints two, so the measure OVER-counts and the border is pulled inside.
 //
-// So the unit of measure is the GRAPHEME CLUSTER: one cluster is one thing the
-// terminal draws, whatever its code-unit count. That is also the unit a wrap must
-// never cut through, hence clusterMap below, used by the wrapper to atomize a
-// line without splitting a surrogate pair or a joined sequence in half.
+// Measured on a real block at a 95-column frame: +16 columns on a line of 16 ideographs, +1 on a line carrying one ✅,
+// -10 on a line of three ZWJ emoji. A surrogate pair with no joiner (🟥) happens to come out right, which is why the
+// defect looked intermittent.
+//
+// So the unit is the GRAPHEME CLUSTER: one cluster is one thing the terminal draws. It is also the unit a wrap must
+// never cut through, hence clusterMap below.
 const SEGMENTER = new Intl.Segmenter("en", { granularity: "grapheme" });
 
-// East Asian Wide and Fullwidth, the non-emoji half of the problem. Tabulated
-// because JS has no \p{East_Asian_Width} property escape, unlike the emoji half:
-// \p{Emoji_Presentation} is exactly the Unicode property for "renders as an emoji,
-// and therefore two columns, without needing a variation selector", so the emoji
-// ranges are NOT enumerated here. Enumerating them would be a denylist of forms,
-// always presumed holed (ADR-0033); the property is the definition itself.
+// East Asian Wide and Fullwidth, the non-emoji half. Tabulated because JS has no \p{East_Asian_Width} escape, unlike
+// \p{Emoji_Presentation}, which is exactly the property for "renders as an emoji, and therefore two columns".
+// Enumerating the emoji ranges too would be a denylist of forms, always presumed holed (ADR-0033).
 const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
   [0x1100, 0x115f], // Hangul Jamo initial consonants
   [0x2329, 0x232a], // angle brackets
@@ -48,17 +36,14 @@ const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
 
 const EMOJI_PRESENTATION = /^\p{Emoji_Presentation}$/u;
 
-// A base character that prints nothing of its own: a combining mark (Mn), an
-// enclosing mark (Me), or a format character such as a joiner or a variation
-// selector (Cf). Counting these as one column each is what over-measures a
-// composed cluster.
+// A base character that prints nothing of its own: a combining mark (Mn), an enclosing mark (Me), or a format character
+// such as a joiner or a variation selector (Cf). Counting these as one column each is what over-measures a composed
+// cluster.
 const ZERO_WIDTH = /^[\p{Mn}\p{Me}\p{Cf}]$/u;
 
-// The emoji variation selector. Anywhere in a cluster it is an explicit request
-// for emoji presentation, which prints two columns even when the base character
-// is narrow on its own (⚠ is one column, ⚠️ is two). Built from its char code, the
-// same reason as HANG_MARK in marks.ts: an invisible character typed into this
-// source does not survive an editing pass.
+// The emoji variation selector. Anywhere in a cluster it is an explicit request for emoji presentation, two columns
+// even when the base is narrow on its own (⚠ is one, ⚠️ is two). Built from its char code: an invisible character typed
+// into this source does not survive an editing pass.
 const VS16 = String.fromCharCode(0xfe0f);
 
 export function clusterWidth(cluster: string): number {
@@ -80,9 +65,8 @@ export function displayWidth(s: string): number {
   return w;
 }
 
-// Cluster boundaries of a string, as offset -> cluster. One segmentation pass, so
-// a caller walking a line by index stays linear: Segmenter.containing() would
-// re-scan from the start on every character.
+// Cluster boundaries as offset -> cluster. One segmentation pass, so a caller walking a line by index stays linear:
+// Segmenter.containing() would re-scan from the start each time.
 export function clusterMap(s: string): Map<number, string> {
   const m = new Map<number, string>();
   for (const { segment, index } of SEGMENTER.segment(s)) m.set(index, segment);

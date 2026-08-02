@@ -1,10 +1,9 @@
 // Wrapping a RENDERED line, which is not wrapping a string.
 //
-// The line already carries markup that costs no column, so every case here is one the
-// naive split gets wrong: a tag cut in two, a code span left open, a bullet reprinted
-// on every continuation, a wide glyph halved. The continuation's prefix is the other
-// half of the module: a wrapped remainder has to read as the same section, which means
-// keeping the gutter bar and blanking everything before it.
+// The line already carries markup that costs no column, so every case here is one the naive split gets wrong: a tag cut
+// in two, a code span left open, a bullet reprinted on every continuation, a wide glyph halved. The continuation's
+// prefix is the other half of the module: a wrapped remainder has to read as the same section, which means keeping the
+// gutter bar and blanking everything before it.
 
 import { describe, it, expect } from "vitest";
 import { RESET_MARK, RESUME_MARK, SPAN_MARK, chip, tagMark } from "../style.js";
@@ -83,8 +82,8 @@ describe("the fill", () => {
   });
 
   it("charges nothing for a resume on a row that is already FULL", () => {
-    // The case the comparison above cannot see: it sheds the mark from both sides, so a
-    // mark costing a column would only show where the row has no slack left to hide it.
+    // The case the comparison above cannot see: it sheds the mark from both sides, so a mark costing a column would
+    // only show where the row has no slack left to hide it.
     const full = "a".repeat(LIMIT);
     expect(wrapLine(`${full}${RESUME_MARK} b`, LIMIT)).toEqual([`${full}${RESUME_MARK}`, " b"]);
   });
@@ -127,14 +126,12 @@ describe("the continuation's prefix", () => {
   });
 
   it("keeps BOTH ends of a span in the prefix, the boundary as much as the terminator", () => {
-    // A real chip sitting in the label, asked of the module that builds one. Drop the
-    // terminator and the fill runs on, painting every continuation row out to the border.
-    // Drop the boundary and the terminator that survives it unwinds the ROW's own tags
-    // instead of the chip's. Neither weighs a column, which is why these are cases and
-    // not notes: nothing the measurer sees would ever report the loss.
-    // The chip sits AFTER a word, so neither mark is alone at the edge of a part. A
-    // keep-list that splits on one and tests for the other would pass on an isolated
-    // mark and blank this one, which is where a real label puts it.
+    // A real chip sitting in the label, asked of the module that builds one. Drop the terminator and the fill runs on,
+    // painting every continuation row out to the border. Drop the boundary and the terminator that survives it unwinds
+    // the ROW's own tags instead of the chip's. Neither weighs a column, which is why these are cases and not notes:
+    // nothing the measurer sees would ever report the loss. The chip sits AFTER a word, so neither mark is alone at the
+    // edge of a part. A keep-list that splits on one and tests for the other would pass on an isolated mark and blank
+    // this one, which is where a real label puts it.
     const dressed = `run ${chip("b", "OK")} ${BAR} alpha beta gamma delta`;
     const rows = wrapLine(dressed, LIMIT);
     expect(rows.length).toBeGreaterThan(1);

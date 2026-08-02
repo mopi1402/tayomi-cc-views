@@ -1,11 +1,9 @@
-// The language's vocabulary, and the properties that make it SAFE rather than merely
-// spelled.
+// The language's vocabulary, and the properties that make it SAFE rather than merely spelled.
 //
-// Restating a constant would be a tautology, so nothing here does: what is checked is
-// what the table promises to every module that composes from it. Two directives sharing
-// a spelling, or one that is a PREFIX of another, would make a matcher accept the wrong
-// line; a pseudo-field spelled as a word could be shadowed by a block's own field. None
-// of the three fails loudly, which is why they are stated here.
+// Restating a constant would be a tautology, so nothing here does: what is checked is what the table promises to every
+// module that composes from it. Two directives sharing a spelling, or one that is a PREFIX of another, would make a
+// matcher accept the wrong line; a pseudo-field spelled as a word could be shadowed by a block's own field. None of the
+// three fails loudly, which is why they are stated here.
 
 import { describe, it, expect } from "vitest";
 import {
@@ -72,8 +70,8 @@ describe("the directives", () => {
   });
 
   it("keep @end a strict PREFIX of nothing else it must not swallow", () => {
-    // @end matches ALONE on its line, so it cannot take @endbox; the property that
-    // makes that true is that the terminators are longer, never equal.
+    // @end matches ALONE on its line, so it cannot take @endbox; the property that makes that true is that the
+    // terminators are longer, never equal.
     for (const term of TERMINATORS) {
       expect(term.startsWith(END)).toBe(true);
       expect(term.length).toBeGreaterThan(END.length);
@@ -111,9 +109,9 @@ describe("the @each declarations", () => {
   });
 });
 
-// @text's pairs are QUOTE-AWARE, and that is real work rather than a reuse: @map splits
-// its tail on whitespace because a tag name has none, and a text value has spaces by
-// definition. Every case here is one the whitespace splitter would get wrong SILENTLY.
+// @text's pairs are QUOTE-AWARE, and that is real work rather than a reuse: @map splits its tail on whitespace because
+// a tag name has none, and a text value has spaces by definition. Every case here is one the whitespace splitter would
+// get wrong SILENTLY.
 describe("an @text pair", () => {
   const re = (): RegExp => new RegExp(TEXT_PAIR, "g");
   const pairs = (tail: string): Array<[string, string]> =>
@@ -144,14 +142,14 @@ describe("an @text pair", () => {
   });
 
   it("stops its KEY at the separator, so the pattern cannot run past a pair", () => {
-    // The key atom excludes what follows it, which is what makes the match a single
-    // anchored quantifier rather than one that backtracks over a near-miss.
+    // The key atom excludes what follows it, which is what makes the match a single anchored quantifier rather than one
+    // that backtracks over a near-miss.
     expect(pairs('a=b="c"')).toEqual([["b", "c"]]);
   });
 });
 
-// The kind marker a decorated quote may open with. Narrow on purpose: the moment a space
-// is legal, the marker has become the label slot the @text table exists to remove.
+// The kind marker a decorated quote may open with. Narrow on purpose: the moment a space is legal, the marker has
+// become the label slot the @text table exists to remove.
 describe("the kind marker", () => {
   const re = (): RegExp => new RegExp(`^${MARKER_SOURCE}$`);
   const token = (line: string): string | undefined => line.match(re())?.[1] ?? undefined;

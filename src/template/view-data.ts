@@ -5,31 +5,19 @@
 //   "- item"      -> appends an item to the current list
 //   anything else -> ignored (keeps the parser total)
 //
-// NOT a recursive format. The blocks carry human prose (commit messages, file paths,
-// `code` spans) that YAML chokes on: a ": " inside a value reads as a nested mapping,
-// a leading backtick is reserved. Here a value is OPAQUE to end of line, so colons,
-// backticks and brackets are just text, and the parser never throws, so a render never
-// blanks on content.
+// NOT a recursive format, because the blocks carry prose YAML chokes on: a ": " inside a value would read as a nested
+// mapping, a leading backtick is reserved. Here a value is OPAQUE to end of line, and the parser never throws.
 //
-// It lives in its OWN module because the format has TWO readers that must never
-// disagree: the render engine, and a host's judge of the same block (a gate hook)
-// which never draws it. The judge cannot reuse the hook edge's parse, since an edge
-// ends in a main()-guard that is TRUE inside a bundle, and two main() in one process
-// steal each other's stdin (commit 249da20, in the host this engine came from). The
-// first answer was to re-implement twelve lines of scalar parsing inside the gate.
-// That duplicate DIVERGED: a cause written as a list rendered correctly on screen
-// while the gate read an empty field and sent the turn back for a missing cause.
+// Its OWN module because the format has TWO readers that must never disagree: this engine, and a host's gate judging
+// the same block without drawing it. That gate cannot reuse the hook edge's parse (an edge ends in a main()-guard, and
+// two main() in one process steal each other's stdin), so it re-implemented the parse once and the duplicate DIVERGED.
 //
-// For a list declared with `@fields`, each item splits into the declared fields: every
-// leading field takes one whitespace-delimited token, the LAST takes the rest. Leading
-// fields are ids and enums, the last is prose, so the split cannot fail.
+// For a list declared with `@fields`, each item splits into the declared fields: every leading field takes one
+// whitespace-delimited token, the LAST takes the rest.
 
 import { inert } from "../style.js";
 
 export type ObjectLists = Record<string, string[]>;
-
-// The four line shapes the format knows, named because the format IS these four lines:
-// a reader learns it here rather than by decoding a literal at its use site.
 
 /** `key: value`, the value OPAQUE to end of line. An empty one OPENS a list instead. */
 const KV_RE = /^([A-Za-z_][\w-]*):[ \t]?(.*)$/;
@@ -40,8 +28,8 @@ const LEADING_FIELD_RE = /^(\S+)[ \t]+([\s\S]*)$/;
 /** Trailing blanks, dropped so an invisible tail never lands inside a value. */
 const TRAILING_WS_RE = /\s+$/;
 
-// Neutralise the markup a MESSAGE wrote. Deliberately NOT part of parseData: the judge
-// above compares the same values and must see them as the block typed them.
+// Neutralise the markup a MESSAGE wrote. Deliberately NOT part of parseData: the judge above compares the same values
+// and must see them as the block typed them.
 export function inertData(data: Record<string, unknown>): Record<string, unknown> {
   const walk = (v: unknown): unknown => {
     if (typeof v === "string") return inert(v);

@@ -1,9 +1,8 @@
 // Wrapping a rendered line to a column limit.
 //
-// It happens on ATOMS rather than characters, because a line carries markup that
-// costs no column: a {{tag}} is opaque and zero-width, a backtick delimits a code
-// span and is consumed downstream. Splitting a line as a plain string would count
-// that markup as text and, worse, could cut a tag or a span in half.
+// It happens on ATOMS rather than characters, because a line carries markup that costs no column: a {{tag}} is opaque
+// and zero-width, a backtick delimits a code span and is consumed downstream. Splitting a line as a plain string would
+// count that markup as text and, worse, could cut a tag or a span in half.
 
 import {
   CODE_TICK,
@@ -23,9 +22,8 @@ const GUTTER_BAR = "▎";
 const SPACE = " ";
 const ANY = String.raw`[\s\S]*`;
 
-// Under this many columns there is nothing worth wrapping into, and a continuation
-// narrower than this could not hold a word: both leave the line long rather than
-// shred it into single letters.
+// Under this many columns there is nothing worth wrapping into, and a continuation narrower than this could not hold a
+// word: both leave the line long rather than shred it into single letters.
 const MIN_LIMIT = 8;
 const MIN_CONT = 4;
 
@@ -33,10 +31,9 @@ type Atom = { s: string; w: number; space: boolean; tick: boolean };
 
 function atomize(text: string): Atom[] {
   const atoms: Atom[] = [];
-  // One atom per GRAPHEME CLUSTER, not per code unit. Two reasons, and the first is
-  // the one that reaches the screen: an atom of one code unit lets the greedy fill
-  // below cut a surrogate pair or a joined sequence in half, which prints a broken
-  // glyph. The second is arithmetic: a per-unit atom is w: 1 whatever it draws.
+  // One atom per GRAPHEME CLUSTER, not per code unit. Two reasons, and the first is the one that reaches the screen: an
+  // atom of one code unit lets the greedy fill below cut a surrogate pair or a joined sequence in half, which prints a
+  // broken glyph. The second is arithmetic: a per-unit atom is w: 1 whatever it draws.
   const clusters = clusterMap(text);
   let i = 0;
   while (i < text.length) {
@@ -47,8 +44,8 @@ function atomize(text: string): Atom[] {
       i = TAG_AT.lastIndex;
       continue;
     }
-    // A tag is pure ASCII, so the index it leaves behind is a cluster boundary; the
-    // fallback keeps the walk total if it ever were not.
+    // A tag is pure ASCII, so the index it leaves behind is a cluster boundary; the fallback keeps the walk total if it
+    // ever were not.
     const g = clusters.get(i) ?? text[i];
     atoms.push({
       s: g,
@@ -61,17 +58,14 @@ function atomize(text: string): Atom[] {
   return atoms;
 }
 
-// A continuation line keeps the section's gutter bar and blanks its label: the bar is
-// what makes the wrapped remainder read as the same section, and the blank label is
-// what keeps the text in one column.
+// A continuation line keeps the section's gutter bar and blanks its label: the bar is what makes the wrapped remainder
+// read as the same section, and the blank label is what keeps the text in one column.
 // eslint-disable-next-line security/detect-non-literal-regexp
 const PREFIX_RE = new RegExp(`^(${ANY}${GUTTER_BAR}(?:${tagSource("/")})?${SPACE}?)(${ANY})$`);
-// What survives the blanking, and a span's BOTH ends belong there as much as a tag does:
-// a prefix holding a chip keeps the tag that opened it, so dropping the mark that closes
-// it paints every continuation row in the chip's own fill, out to the border, and
-// dropping the boundary that opens it sends that closing mark unwinding into the row's
-// own tags. Zero width apiece, so losing one costs a colour and never an alignment,
-// which is why the loss shows on screen and in nothing the measurer can see.
+// What survives the blanking. A span's BOTH ends belong there as much as a tag does: a prefix holding a chip keeps the
+// tag that opened it, so dropping the closing mark paints every continuation row in the chip's fill out to the border,
+// and dropping the boundary sends that closing mark unwinding into the row's own tags. Zero width apiece, so the loss
+// shows on screen and in nothing the measurer can see.
 // eslint-disable-next-line security/detect-non-literal-regexp
 const KEEP_RE = new RegExp(`(${TAG_SOURCE}|${SPAN_MARK}|${RESUME_MARK}|${GUTTER_BAR})`);
 // eslint-disable-next-line security/detect-non-literal-regexp
@@ -80,8 +74,7 @@ const IS_KEPT = new RegExp(`^(?:${TAG_SOURCE}|${SPAN_MARK}|${RESUME_MARK}|${GUTT
 /** The plain indent a line opens on: the prefix a line with no gutter bar hangs from. */
 const INDENT_RE = /^[ \t]*/;
 
-// Tags, the marks that close them, and the bar survive; every other visible character
-// becomes a space.
+// Tags, the marks that close them, and the bar survive; every other visible character becomes a space.
 function blankPrefix(prefix: string): string {
   return prefix
     .split(KEEP_RE)
@@ -91,9 +84,8 @@ function blankPrefix(prefix: string): string {
 
 export function wrapLine(line: string, limit: number): string[] {
   if (limit < MIN_LIMIT || printedWidth(line) <= limit) return [line];
-  // An explicit hanging boundary wins over the inferred one: a bullet declared on the
-  // @each sits AFTER the gutter bar, so PREFIX_RE alone would leave it inside the
-  // wrapped text and print it again on every continuation row.
+  // An explicit hanging boundary wins over the inferred one: a bullet declared on the @each sits AFTER the gutter bar,
+  // so PREFIX_RE alone would leave it inside the wrapped text and print it again on every continuation row.
   const hang = line.indexOf(HANG_MARK);
   const m = hang === -1 ? line.match(PREFIX_RE) : null;
   const prefix =
@@ -107,9 +99,8 @@ export function wrapLine(line: string, limit: number): string[] {
   const cont = hang !== -1 || m ? blankPrefix(prefix) : prefix;
   const width = limit - printedWidth(prefix);
   if (width < MIN_CONT) return [line];
-  // Greedy fill, breaking at the last space of the line and hard-splitting a token
-  // wider than the whole column (a long path, which must break somewhere rather than
-  // push the border out).
+  // Greedy fill, breaking at the last space of the line and hard-splitting a token wider than the whole column (a long
+  // path, which must break somewhere rather than push the border out).
   const groups: Atom[][] = [];
   let cur: Atom[] = [];
   let w = 0;
@@ -130,8 +121,8 @@ export function wrapLine(line: string, limit: number): string[] {
     w += a.w;
   }
   if (cur.length > 0) groups.push(cur);
-  // A code span cut in two is closed and reopened, otherwise the orphan backtick
-  // reaches the screen and neither half renders as code.
+  // A code span cut in two is closed and reopened, otherwise the orphan backtick reaches the screen and neither half
+  // renders as code.
   const out: string[] = [];
   let open = false;
   groups.forEach((atoms, idx) => {

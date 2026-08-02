@@ -1,42 +1,18 @@
-// The decorator carrier: a line that NAMES the template dressing the plain-markdown
-// payload below it.
+// The decorator carrier: a line that NAMES the template dressing the plain-markdown payload below it.
 //
 //   @{view:table, type:warning}
 //   | Item | Info |
 //   | --- | --- |
 //   | Decorator | one line above the payload |
 //
-// The separator is a comma, whitespace, or both, and the attributes come in any
-// order: `@{view:table tone:dim}` is the same token.
+// Separator is a comma, whitespace or both, and attributes come in any order.
 //
-// TWO payload shapes, and the FIRST line of the zone decides which, nowhere else. A
-// leading pipe is a table, which reaches the template as `rows`. A leading `>` is a
-// blockquote, which reaches it as `content`, and whose optional `[!WARNING]` marker
-// reaches it as the `type` field:
+// TWO payload shapes, decided by the zone's FIRST line and nowhere else. A leading pipe is a table, reaching the
+// template as `rows`. A leading `>` is a blockquote, reaching it as `content`, its optional `[!WARNING]` marker as
+// `type`.
 //
-//   @{view:banner}
-//   > [!WARNING]
-//   > two flaky suites, publication is blocked
-//
-// A quote is chosen over a bare paragraph because of what happens where this hook does
-// NOT run: a marked quote is still a visible, self-describing block in a raw transcript
-// and a native alert box in the renderers that matter, while a bare sentence is
-// indistinguishable from prose and an invented table is a shape the author never wrote.
-//
-// The trade it exists for: the payload IS ordinary markdown, so the fallback costs
-// nothing. Re-rendered from the transcript, the human gets the decorator line above a
-// native table instead of the fenced block's code wall. It engages on INTENT, never on
-// shape: an undecorated table is not this carrier's business, whatever its columns
-// (the lesson of the retired table POC, which matched shape and hijacked ordinary
-// tables; see .tayomi/tickets/decorated-views.md). Bare rather than HTML-commented,
-// because terminals print `<!-- -->` verbatim.
-//
-// Two attributes, one axis each, because one of them could not serve both. `type`
-// names the KIND of content and may pick a typed template FILE; `tone` names the LOOK,
-// a palette tag stuck on this render like a class, selecting no file and carrying no
-// meaning. A look wearing a semantic name (`type:even`) would lie to the model about
-// what the content IS. Both are OPTIONAL, both fail open, and the template stays the
-// sole owner of what it spends them on (template/render.ts).
+// Why a quote rather than a paragraph, why the trade is worth it, and why engagement is on INTENT and never on shape:
+// docs/architecture.md, "The decorator's trade". The two attributes are docs/view-language.md's.
 
 import { MARKER_SOURCE } from "../data/language.js";
 import { DECORATOR_CLOSE, DECORATOR_HINT } from "../data/markup.js";
@@ -49,10 +25,8 @@ import type { Scope } from "../scope.js";
 /** What engages the pipeline, and what the line pattern anchors on. */
 export { DECORATOR_HINT };
 
-// Parsed by string, not by one composed regex: an optional inner group plus a
-// trailing anchor backtracks on a near-miss (the lesson directives.ts already
-// paid for), and the SAST gate rightly refuses the shape. Every pattern left is
-// a single anchored quantifier over one atom, which cannot backtrack.
+// Parsed by string, not by one composed regex: an optional inner group plus a trailing anchor backtracks on a near-miss
+// (the lesson directives.ts already paid for), and the SAST gate rightly refuses the shape.
 const NAME_RE = /^[\w-]+$/;
 const ATTR_RE = /^(type|tone):([\w-]+)$/;
 /** A comma, whitespace, or both: `@{view:table, type:warning}` is `@{view:table type:warning}`. */
@@ -62,13 +36,10 @@ interface Decorator extends Dressing {
   view: string;
 }
 
-// The decorator must be ALONE on its line (surrounding whitespace aside), which is
-// what keeps a decorator QUOTED in prose from engaging anything.
+// ALONE on its line (whitespace aside), which is what keeps a decorator quoted in prose from engaging anything.
 //
-// Requiring the comma exactly voided the WHOLE token on a near-miss: `@{view:table
-// type:warning}` used to print raw, decorator line included, which reads as the engine
-// being broken rather than as a syntax slip. Anything that is not a known attribute
-// still makes the line prose, so the token stays as hard to trigger by accident.
+// Requiring the comma exactly voided the WHOLE token on a near-miss: `@{view:table type:warning}` printed raw,
+// decorator line included, which reads as the engine being broken rather than as a syntax slip.
 function parseDecorator(line: string): Decorator | null {
   const t = line.trim();
   if (!t.startsWith(DECORATOR_HINT) || !t.endsWith(DECORATOR_CLOSE)) return null;
@@ -86,18 +57,9 @@ function parseDecorator(line: string): Decorator | null {
 }
 
 /**
- * Does a decorator have a payload at all? The line below it exists and is not blank.
- *
- * Its EXISTENCE and its EXTENT are two questions, and conflating them was the defect.
- * The extent belongs to the payload's own shape (a table ends on the first line that
- * no longer starts with a pipe, which is markdown's rule and not this carrier's), but
- * asking the pipe scanner where the zone ends made everything it cannot read look like
- * NOTHING: the run came back empty, an empty zone is how a static view is summoned,
- * and a data-driven view was handed `{}` and drew its furniture around no content.
- *
- * A blank line is the one boundary every markdown block agrees on, so it is the one
- * this question is allowed to use. Below it, a payload EXISTS, and a payload no parser
- * here claims fails open with the decorator line and the text left exactly as written.
+ * Does a decorator have a payload at all? Its EXISTENCE and its EXTENT are two questions, and conflating them was the
+ * defect: asking the pipe scanner where the zone ends made everything it cannot read look like NOTHING, and an empty
+ * zone is how a static view is summoned, so a data-driven view was handed `{}` and drew furniture around no content.
  */
 function hasPayload(lines: string[], below: number, stop: number): boolean {
   return below < stop && lines[below].trim() !== "";
@@ -123,9 +85,8 @@ function lineStarts(lines: string[]): number[] {
   return starts;
 }
 
-// A two-column row. Each cell accepts an escaped pipe (`\|`), which markdown renders
-// correctly: the POC's cell pattern rejected it and silently fell back, so the escape
-// is part of the contract here.
+// A two-column row. Each cell accepts an escaped pipe (`\|`), which markdown renders correctly: the POC's cell pattern
+// rejected it and silently fell back.
 const ROW_RE = /^[ \t]*\|((?:\\\||[^|\n])*)\|((?:\\\||[^|\n])*)\|[ \t]*$/;
 const DELIM_RE = /^[ \t]*\|[ \t]*:?-+:?[ \t]*\|[ \t]*:?-+:?[ \t]*\|[ \t]*$/;
 /** That escape, unwritten: inside a cell the pipe is content, not a column boundary. */
@@ -137,9 +98,8 @@ interface DecoratedRow {
   content: string;
 }
 
-// The emphasis lives in the markdown PER SPAN, so it survives every re-render from the
-// transcript and the screen honours it as ANSI. Nothing is added the message did not
-// carry, which is what buried the POC's whole-cell bolding.
+// PER SPAN, so the emphasis survives every re-render from the transcript and nothing is added the message did not
+// carry. Whole-cell bolding is what buried the POC.
 const BOLD_SPAN_RE = /\*\*([^*\n]+)\*\*/g;
 /** The weight the span renders in, framed so the line gets its own style back after it. */
 const BOLD_TAG = "b";
@@ -149,18 +109,10 @@ const BOLD_SPAN = `${spanOpen(BOLD_TAG)}$1${spanClose(BOLD_TAG)}`;
 const TRAILING_BLANKS_RE = /\n+$/;
 
 /**
- * Message text becoming a SCOPE VALUE, which is the one seam this engine holds: text
- * able to open a colour is able to close one the render meant to keep, and to paint a
- * line in a tone contradicting what the line says.
+ * Message text becoming a SCOPE VALUE, one of the two neutralising seams (docs/architecture.md).
  *
- * Neutralised FIRST, styled second: both end up in one string, so the order is the whole
- * guarantee. The emphasis lives in the markdown PER SPAN, so it survives every re-render
- * from the transcript, and nothing is added the message did not carry.
- *
- * SHARED by both payload shapes, because a quote's body is message text in exactly the
- * way a cell is. A second copy is how the two would come to disagree about which of the
- * model's markup survives, on a seam where disagreeing means one of them lets a colour
- * through.
+ * Neutralised FIRST, styled second: both end up in one string, so the ORDER is the whole guarantee. Shared by both
+ * payload shapes, because a second copy is how the two would come to disagree on it.
  */
 function inertText(raw: string): string {
   return inert(raw.trim()).replace(BOLD_SPAN_RE, BOLD_SPAN);
@@ -172,10 +124,9 @@ function cell(raw: string): string {
 }
 
 /**
- * The payload parsed as rows, or null when it is not the shape v1 supports: a
- * two-column pipe table, header row MANDATORY (its cells may be empty), delimiter
- * row, at least one data row. An empty label cell continues the label above, and
- * stays empty here: how a continuation looks is the template's business.
+ * The payload parsed as rows, or null when it is not the shape v1 supports: a two-column pipe table, header row
+ * MANDATORY (its cells may be empty), delimiter row, at least one data row. An empty label cell continues the label
+ * above and stays empty here: how a continuation looks is the template's business.
  */
 function parseRows(lines: string[]): DecoratedRow[] | null {
   if (lines.length < 3) return null;
@@ -195,11 +146,9 @@ interface Payload {
   /** The fields the template renders against. */
   data: Scope;
   /**
-   * The kind the PAYLOAD named, when it named one. Set here means the carrier leaves
-   * `dressing.type` unset, and that is the entire implementation of "the marker beats
-   * the attribute": render.ts overrides the field from the dressing only when the
-   * dressing carries one, so an unset dressing makes the marker win by construction,
-   * costs no edit there, and keeps a marker from ever selecting a typed FILE.
+   * The kind the PAYLOAD named. Set here means the carrier leaves `dressing.type` unset, and that IS the whole
+   * implementation of "the marker beats the attribute": render.ts overrides the field only when the dressing carries
+   * one, so the marker wins by construction and can never select a typed FILE.
    */
   type?: string;
 }
@@ -207,25 +156,19 @@ interface Payload {
 /**
  * The payload parsed as a blockquote, or null when a line of the zone is not one.
  *
- * The `>` prefixes come off and the body joins with ONE space, which is markdown's own
- * soft-wrap semantics, so the render and the hookless fallback read the same sentence.
+ * The `>` prefixes come off and the body joins with ONE space, markdown's own soft-wrap semantics, so the render and
+ * the hookless fallback read the same sentence.
  *
- * The optional marker is `[!TOKEN]` alone on the FIRST body line, and it reaches the
- * template LOWERCASED in the `type` field. That lowercasing is what makes the whole
- * design need nothing from the palette: toneClass already reads that field and the
- * palette's classes are lowercase, so `[!WARNING]` paints yellow with nothing touched.
- * The uppercase the author wrote comes back at the other end, from the template's table.
- *
- * A first line that is not exactly a marker STAYS the first line of the content and
- * prints inside the band, which is this engine's standing discipline: a malformed line
- * falls through to the body where the author sees it, rather than vanishing.
+ * The optional marker is `[!TOKEN]` alone on the FIRST body line, reaching the template LOWERCASED in `type`: the
+ * palette's classes are lowercase, so `[!WARNING]` paints yellow with nothing else touched. A first line that is not
+ * exactly a marker STAYS the first line of the content, where the author sees it.
  */
 function parseQuote(zone: string[]): Payload | null {
   if (zone.length === 0) return null;
   const body: string[] = [];
   for (const line of zone) {
-    // Prose that joined the zone (see the run rule below): no parser claims the
-    // mixture, so the whole thing fails open with the quote left as written.
+    // Prose that joined the zone (see the run rule below): no parser claims the mixture, so the whole thing fails open
+    // with the quote left as written.
     if (!QUOTE_LINE_RE.test(line)) return null;
     body.push(line.replace(QUOTE_PREFIX_RE, ""));
   }
@@ -241,16 +184,11 @@ function parseQuote(zone: string[]): Payload | null {
 }
 
 /**
- * The payload shapes, one entry each: the line that OPENS the shape, the run that
- * BELONGS to it, and the parser that claims it. One table and one dispatch site, so a
- * third shape later is a row here rather than a second scan through the message.
+ * The payload shapes, one entry each, so a third one is a row here rather than a second scan through the message.
  *
- * The two runs differ, and deliberately. A TABLE ends on the first line that no longer
- * starts with a pipe, which is markdown's own rule and the one this carrier already
- * shipped. A QUOTE ends on the first BLANK line, so prose written directly under it
- * JOINS the zone: no parser claims the mixture and the whole thing fails open, which is
- * what makes "a quote must be followed by a blank line or end the message" a rule the
- * author sees enforced rather than one they have to remember.
+ * The two runs differ deliberately. A TABLE ends on the first line that no longer starts with a pipe, markdown's own
+ * rule. A QUOTE ends on the first BLANK line, so prose written directly under it JOINS the zone and the whole thing
+ * fails open, which is what makes "a quote must be followed by a blank line" a rule the author sees enforced.
  */
 interface Shape {
   opens(line: string): boolean;
@@ -287,11 +225,9 @@ function runEnd(shape: Shape | undefined, lines: string[], from: number, stop: n
 }
 
 /**
- * Render every decorated zone of a message, each through its named template (and
- * type), the decorator line consumed. Fail-open per zone: an unknown template, a
- * payload that is not the supported shape, or any render error leaves the zone
- * EXACTLY as written, decorator line included, so the screen shows what the
- * transcript holds.
+ * Render every decorated zone of a message, each through its named template (and type), the decorator line consumed.
+ * Fail-open per zone: an unknown template, an unsupported payload shape, or any render error leaves the zone EXACTLY as
+ * written, so the screen shows what the transcript holds.
  */
 export function renderDecorated(
   text: string,
@@ -305,18 +241,15 @@ export function renderDecorated(
   const out: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const deco = parseDecorator(lines[i]);
-    // A decorator inside a code fence is being SHOWN, not written, which is what
-    // documentation about this package is made of. Nothing here has an escape of its
-    // own, so the fence is it.
+    // A decorator inside a code fence is being SHOWN, not written, which is what documentation about this package is
+    // made of. Nothing here has an escape of its own.
     if (deco === null || fenceAt(fences, starts[i]) !== undefined) {
       out.push(lines[i]);
       continue;
     }
-    // A decorator with NO payload engages with no data at all: a static view
-    // (welcome, the health check) is summoned by its line alone. A payload that
-    // EXISTS but is not a shape a parser here claims fails open: half a table is a
-    // mistake to show, never an empty scope to render. hasPayload is what tells the
-    // two apart, and it does not consult the table parser to do it.
+    // NO payload engages with no data at all: a static view (welcome, the health check) is summoned by its line alone.
+    // A payload that EXISTS but fits no parser fails open: half a table is a mistake to show, never an empty scope to
+    // render.
     const has = hasPayload(lines, i + 1, lines.length);
     const shape = has ? shapeOf(lines[i + 1]) : undefined;
     const end = runEnd(shape, lines, i + 1, lines.length);
@@ -327,28 +260,18 @@ export function renderDecorated(
     }
     try {
       const data = payload === null ? {} : payload.data;
-      // The payload's own kind takes the dressing's place rather than joining it: see
-      // Payload.type for why that unset field IS the precedence rule.
+      // The payload's own kind takes the dressing's place rather than joining it: see Payload.type for why that unset
+      // field IS the precedence rule.
       const dressing = payload?.type === undefined ? deco : { ...deco, type: undefined };
       const rendered = renderView(deco.view, data, dirs, undefined, options, dressing);
-      // Raw over hollow, the LAST of the three readings, and the narrowest. render.ts
-      // owns the two that matter: no data arrived, and data arrived the template reads
-      // none of. What is left for the output to answer is the case where both of those
-      // pass and the screen still gets nothing: the fields the template reads all
-      // arrived BLANK. A blank line where content stood is the same lie as an empty
-      // skeleton, so it fails open too.
-      //
-      // This used to carry the second reading as well, by asking whether the render put
-      // ink on screen. It could not: a template drawing literal furniture (banner.view
-      // fills a band and draws two caps against it) always puts ink on screen, so a
-      // table handed to the banner was swallowed behind a pill around nothing.
+      // Raw over hollow, the narrowest of the three readings: render.ts owns the other two, and what is left here is
+      // both of them passing while the fields all arrived BLANK (.tayomi/specs/fix/carrier-guards.md).
       if (rendered.trim() === "") {
         out.push(lines[i]);
         continue;
       }
-      // The render replaces the whole zone; its own trailing blank line (a
-      // template file ends on a newline) is dropped so the zone keeps exactly
-      // the line structure the raw table had around it.
+      // The render's own trailing blank (a template file ends on a newline) is dropped, so the zone keeps exactly the
+      // line structure the raw table had around it.
       out.push(...rendered.replace(TRAILING_BLANKS_RE, "").split("\n"));
       i = end - 1;
     } catch {
@@ -359,25 +282,13 @@ export function renderDecorated(
 }
 
 /**
- * Withhold a decorated zone that is still STREAMING: several raw lines collapse
- * into fewer rendered ones, and a delta already shown cannot be taken back. The
- * decorator line is the anchor (the POC had to GUESS from a trailing run of pipe
- * lines): from the last decorator whose zone has not ended yet, everything is
- * held back, and the final delta reveals the zone rendered, or raw on failure.
+ * Withhold a decorated zone that is still STREAMING: several raw lines collapse into fewer rendered ones, and a delta
+ * already shown cannot be taken back. The decorator line is the anchor, and the zone has ended when a line after the
+ * SHAPE'S OWN RUN exists. Reading that run through the same table the render does is what keeps the two from
+ * disagreeing about where a zone stops.
  *
- * The zone has ended when a line after the SHAPE'S OWN RUN exists, and each shape
- * answers for its own: a table ends on the first line that no longer starts with a pipe
- * (markdown's own block rule), a quote on the first blank line. One line's first
- * character is enough to know either. Reading the run through the same table the render
- * does is what keeps the two from disagreeing about where a zone stops, which is a
- * disagreement that costs the screen: hold too little and a half-parsed band reaches it
- * before the flush that completes it, and a delta already shown cannot be retracted.
- *
- * Accepted residual, the same class as the mid-marker note in pipeline.ts: the
- * anchoring needs the COMPLETE decorator line, so a token cut mid-stream
- * ("@{view:ta") is prose to this cut and can reach the screen raw before it
- * completes, and a delta already shown cannot be retracted. Only the token's
- * own first characters can leak; the zone below the anchor never does.
+ * Accepted residual: anchoring needs the COMPLETE decorator line, so a token cut mid-stream ("@{view:ta") is prose here
+ * and can reach the screen raw. Only the token's first characters can leak; the zone below never does.
  */
 export function cutStreamingDecorated(text: string): string {
   if (!text.includes(DECORATOR_HINT)) return text;
@@ -388,9 +299,8 @@ export function cutStreamingDecorated(text: string): string {
   if (end > 0 && lines[end - 1] === "") end--; // a line terminator, not a line
   let last = -1;
   for (let i = 0; i < end; i++) {
-    // A fenced decorator anchors nothing, for the same reason it renders nothing:
-    // otherwise a quoted example at the tail of a message withholds everything below
-    // it until the flush that closes the fence.
+    // A fenced decorator anchors nothing, for the same reason it renders nothing: otherwise a quoted example at the
+    // tail of a message withholds everything below it.
     if (parseDecorator(lines[i]) !== null && fenceAt(fences, starts[i]) === undefined) last = i;
   }
   if (last === -1) return text;
