@@ -65,4 +65,21 @@ Stop a carrier firing where it should not and rendering where it should fall ope
 - id: pack-renders
   verify: pnpm verify:pack
   pass-if: exit == 0
+# The SECOND reading of the hollow rule, added 2026-08-02 (see the clarification below): data arrived and the template read none of it, the static exemption, the dotted path and the directive that must still count.
+- id: render-hollow-tests
+  verify: pnpm vitest run src/template/render.test.ts
+  pass-if: exit == 0
+# Its evidence: the accessor is the only thing that records a read, and it must record exactly what a render asked for and nothing when no caller wants the account.
+- id: scope-tests
+  verify: pnpm vitest run src/scope.test.ts
+  pass-if: exit == 0
 ```
+
+## clarifications
+
+- Amendment signed by the human on 2026-08-02, after the fix had already landed on direct request and without a contract of its own. It is folded HERE rather than given a retroactive ticket, because it is not new work: it is this contract's constraint 24 finally reaching the rule constraint 27 named and then declined. The choice is that a ticket written after the fact judges nothing, where an amendment to the contract the work belongs to gives akashi and the reviewer the target they were missing.
+- RAW OVER HOLLOW, second reading. Constraint 24 asks whether DATA arrived; that leaves standing the case where it arrived and the template read NONE of it. `views/banner.view` fills a band and draws two caps against it, so handed a table's `rows` it printed a pill around nothing, and the carrier's ink test saw ink and shipped it, swallowing the table whole. Observed on a live screen, which is what makes it this contract's own target rather than an improvement on it.
+- Constraint 27 named the subsuming rule as "whether any SLOT resolved" and declined it on the ground that reaching it means threading resolution back out of the substitution layer. That premise was the thing that turned out to be wrong: the answer is not threaded OUT, it is recorded WHERE it is already known. `scope.ts`'s lookup writes every top-level key it resolves into `__read`, an optional set the render opens before the body and reads back after it (`template/render.ts`), with the output built and about to be thrown away. Nothing is threaded and no layer learns anything new.
+- Recorded rather than GATHERED, and that is the whole of why this reading is safe to ship. Reading the template's source instead gathers an approximation, every form it fails to recognise blanks a render nothing was wrong with, and no test can list the forms nobody has thought of yet: a dotted path was exactly that. A field a template resolves is a field the set holds, so a directive or a substitution shape added later counts the day it resolves one, with nothing to keep in step.
+- Constraint 27 stands unchanged and now covers THREE readings, not two. The ink test in `decorator.ts` is still there and is still the narrowest of them. A static template asks for nothing and is exempt from this reading, which is what keeps `@{view:welcome}` a health check summoned by its line alone.
+- The set is deleted in a `finally`, because `full` may BE the caller's own object and a template failing mid-render is exactly when a caller retries. Left standing, a second render of the same data would count the bookkeeping among the fields that arrived.
