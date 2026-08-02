@@ -1,3 +1,2 @@
 - Exporter des builders de couleur (`ansi256(n)`, `rgb(r,g,b)`) pour `extendTags` : `indexed` existe déjà en privé dans style.ts, et ce sont les deux seules écritures dont chipOf dérive le chip et le cap
 - Mettre à jour le test obsolète de tayomi `plugins/core/src/display-integration/pipeline.test.ts` ("no leak") : il exige qu'un `{{pass}}` écrit dans la prose du modèle soit rendu, ce que cc-views a retiré ("only a template writes presentation"). Panne préexistante, isolée le 2026-08-02.
-- Décider si le correctif raw-over-hollow du 2026-08-02 doit recevoir un contrat FIX rétroactif : il a été fait sur demande directe, sans contrat, donc ni akashi ni le reviewer n'ont de cible contre laquelle le juger.
