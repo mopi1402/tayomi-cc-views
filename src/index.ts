@@ -35,7 +35,16 @@ export { stringify, type Scope, type Table, type Tables } from "./scope.js";
 
 // The {{tag}} markup, for a host that colours its own lines with the same vocabulary,
 // and the one seam by which a host adds tags of its own (process-global, additive).
-export { renderTags, renderCode, isTag, extendTags, tagMark, ANSI_RE } from "./style.js";
+export {
+  renderTags,
+  renderCode,
+  isTag,
+  extendTags,
+  ansi256,
+  rgb,
+  tagMark,
+  ANSI_RE,
+} from "./style.js";
 export type { TagReport } from "./style.js";
 
 // Printed width, for a host that aligns text beside a rendered view.

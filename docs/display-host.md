@@ -50,6 +50,8 @@ What did NOT apply comes back in a `TagReport` instead of an exception:
 
 Re-registering an identical pair is a no-op.
 
+The value is raw ANSI, and `ansi256(n)` and `rgb(r, g, b)` are exported to write the two spellings the engine can measure a chip and a cap from: `extendTags({ brand: ansi256(75) })`. They are total the same way this call is, a parameter outside `0..255` clamping and a fraction rounding, so nothing a host passes emits a sequence a terminal reads as something else.
+
 **Where a registered tag resolves: in a view.** The engine runs no tag pass over the message, so your name is spent by a template file, and by your own `strict.failedLine` (the one host-authored string the engine inserts). A `{{brand}}` typed in the model's prose stays on screen as those nine characters.
 
 One name is spent in a third place, and only that one: `code`. It is what an inline backtick span opens on, in a view and in `renderCode` alike, so registering it recolours every code span the engine draws. Until 0.1.1 that registration was read everywhere except there. See "Only a template writes presentation" in `architecture.md` for why.
@@ -70,6 +72,7 @@ One consequence to plan for: the engine's own vocabulary GROWS over versions (th
 | `stringify`, `Scope`, `Table`, `Tables` | The scope a template resolves against, for hosts that inject, and the lookup tables it declares (`@map`, `@text`) under the one registry they share. |
 | `renderTags`, `renderCode`, `isTag`, `ANSI_RE` | The markup vocabulary, for a host colouring its own lines the same way. `renderCode` hands back a self-contained span: it opens on the `code` tag (yours, if you registered one) and closes on a reset, reading nothing else on the line as markup. |
 | `extendTags`, `TagReport` | The palette seam above: total, last registration wins, the report says what shadowed or skipped. |
+| `ansi256`, `rgb` | The two colour spellings a chip and a cap DERIVE from, as functions, so registering a colour is not transcribing an escape sequence. Total like the registration they feed: out of range clamps, a fraction rounds. |
 | `displayWidth` | Printed width in terminal columns, for aligning beside a view. |
 | `runMessageDisplayHook`, `handleMessageDisplay` | The two edge storeys above. |
 | `HostSource`, `MessageContext` | The factory shape above. |

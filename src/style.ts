@@ -26,8 +26,63 @@ const RESET_NAME = "/";
 /** The palette name the engine's own inline-code span opens on. */
 const CODE = "code";
 
-/** A colour named by its 256-palette INDEX, the one spelling whose pixels are fixed. */
-const indexed = (n: number): string => `${ESC}[38;5;${n}m`;
+// The module's ANSI grammar, written here because BOTH ends of it read the same numbers:
+// the builders below WRITE a colour with them, and capOf and chipOf further down have to
+// recognise what was written. A builder spelling its own `38;2` would be free to disagree
+// with the reader that must parse it back.
+//
+// The three spellings a background takes, and the arithmetic that turns each into the
+// foreground painting the SAME colour: the base sixteen sit exactly ten above their
+// foreground, and the extended forms differ only by their leading selector.
+const BG_FIRST = 40;
+const BG_LAST = 47;
+const BG_BRIGHT_FIRST = 100;
+const BG_BRIGHT_LAST = 107;
+const BG_TO_FG = 10;
+const EXT_BG = 48;
+const EXT_FG = 38;
+// How many parameters an extended colour spends, keyed by its selector and counting the
+// selector itself: an index (`5;N`) or a truecolor triplet (`2;R;G;B`). A foreground is
+// skipped over by the SAME table, or a `38;5;44` accent would be read as a cyan chip.
+const INDEX_SEL = "5";
+const RGB_SEL = "2";
+const EXT_SPAN: Record<string, number> = { [INDEX_SEL]: 3, [RGB_SEL]: 5 };
+const SGR = /^\x1b\[([0-9;]*)m$/;
+const PARAM = ";";
+
+/**
+ * A parameter forced into the byte a terminal can read: rounded, then clamped to the
+ * range. An infinity is ON the number line and clamps like any other value out of it; a
+ * NaN is the one input the arithmetic cannot carry, and it would spell the word into the
+ * sequence, so it takes the floor.
+ *
+ * TOTAL, under extendTags' own law: a builder is called in the same breath as the
+ * registration, at a host's startup, and a styling call must never cost the screen. What
+ * the clamp buys is that nothing a caller can pass emits a malformed sequence.
+ */
+const BYTE_LAST = 255;
+const byte = (n: number): number =>
+  Number.isNaN(n) ? 0 : Math.min(BYTE_LAST, Math.max(0, Math.round(n)));
+
+/**
+ * A colour named by its 256-palette INDEX, one of the two spellings whose pixels are
+ * fixed, and so one of the two a chip and a cap can be DERIVED from.
+ *
+ * Exported for a host registering its own colour through extendTags, and used by the
+ * palette below, which is the point of exporting this one rather than declaring a second:
+ * every named index in the engine is written with it, so a copy would have twelve
+ * opportunities to drift unnoticed.
+ *
+ * The whole byte is accepted, `0..15` included, though those name a THEME slot rather
+ * than pixels and derive no chip. That is the trade the engine's own `blue` already makes,
+ * and refusing it would be the engine calling a legal colour illegal.
+ */
+export const ansi256 = (n: number): string =>
+  `${ESC}[${EXT_FG}${PARAM}${INDEX_SEL}${PARAM}${byte(n)}m`;
+
+/** A colour named by its PIXELS, the other spelling a chip and a cap derive from. */
+export const rgb = (r: number, g: number, b: number): string =>
+  `${ESC}[${EXT_FG}${PARAM}${RGB_SEL}${PARAM}${byte(r)}${PARAM}${byte(g)}${PARAM}${byte(b)}m`;
 
 // The base palette, every raw sequence written ONCE. The semantic tags below ALIAS
 // these entries rather than repeat their sequences.
@@ -49,18 +104,18 @@ const BASE: Record<string, string> = {
   // its chip and its cap both derive from the index, ink included, so a colour cannot
   // ship half-declared. What that costs is the flip side of what it buys, and it is the
   // same trade `code` already makes: an index is the same pixels under every theme.
-  orange: indexed(208),
-  gold: indexed(220),
-  purple: indexed(141),
-  violet: indexed(135),
-  pink: indexed(211),
-  teal: indexed(37),
-  aqua: indexed(44),
-  lime: indexed(154),
-  brown: indexed(130),
-  navy: indexed(25),
-  salmon: indexed(209),
-  mint: indexed(121),
+  orange: ansi256(208),
+  gold: ansi256(220),
+  purple: ansi256(141),
+  violet: ansi256(135),
+  pink: ansi256(211),
+  teal: ansi256(37),
+  aqua: ansi256(44),
+  lime: ansi256(154),
+  brown: ansi256(130),
+  navy: ansi256(25),
+  salmon: ansi256(209),
+  mint: ansi256(121),
   chip: `${ESC}[1;38;5;16;48;5;231m`,
 };
 
@@ -296,25 +351,6 @@ export const CODE_RE = new RegExp(String.raw`${CODE_TICK}([^${CODE_TICK}\n]+)${C
 // Consulted BEFORE the built-ins: a host's registration SHADOWS an engine name, under
 // the same law as the views (the earlier dir shadows the bundled view).
 const EXTENDED: Record<string, string> = {};
-
-// The three spellings a background takes, and the arithmetic that turns each into the
-// foreground painting the SAME colour: the base sixteen sit exactly ten above their
-// foreground, and the extended forms differ only by their leading selector.
-const BG_FIRST = 40;
-const BG_LAST = 47;
-const BG_BRIGHT_FIRST = 100;
-const BG_BRIGHT_LAST = 107;
-const BG_TO_FG = 10;
-const EXT_BG = 48;
-const EXT_FG = 38;
-// How many parameters an extended colour spends, keyed by its selector and counting the
-// selector itself: an index (`5;N`) or a truecolor triplet (`2;R;G;B`). A foreground is
-// skipped over by the SAME table, or a `38;5;44` accent would be read as a cyan chip.
-const INDEX_SEL = "5";
-const RGB_SEL = "2";
-const EXT_SPAN: Record<string, number> = { [INDEX_SEL]: 3, [RGB_SEL]: 5 };
-const SGR = /^\x1b\[([0-9;]*)m$/;
-const PARAM = ";";
 
 /**
  * The foreground painting a chip's BACKGROUND colour, or undefined for a sequence that

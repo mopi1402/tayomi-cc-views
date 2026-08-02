@@ -14,6 +14,7 @@ import {
   RESUME_MARK,
   TAG_RE,
   TAG_SOURCE,
+  ansi256,
   chip,
   dropInert,
   extendTags,
@@ -23,6 +24,7 @@ import {
   markCode,
   renderCode,
   renderTags,
+  rgb,
   spanOpen,
   tagMark,
   tagSource,
@@ -498,6 +500,94 @@ describe("a chip, the fill a colour derives", () => {
     // `low` is the bold attribute's opposite number rather than a colour, and its chip
     // is a decision. A derivation that could reach it would silently replace that.
     expect(renderTags(tagMark("low" + BG))).toBe(`${ESC}[30;48;5;250m`);
+  });
+});
+
+describe("the two colour builders a host registers with", () => {
+  /**
+   * The two SGR introducers the builders exist to spell, and the only two the engine can
+   * MEASURE a chip and a cap from. Written out once here because this is the sidecar where
+   * the shape is the contract; everywhere else they are composed, never retyped.
+   */
+  const INDEXED = "38;5";
+  const TRUECOLOR = "38;2";
+  /** The index `gold` is declared with, which is the palette's own call to ansi256. */
+  const GOLD_INDEX = 220;
+  /** A LIGHT index, whose chip is inked black; the dark side is the triplet case below. */
+  const LIGHT = 220;
+  const DARK_INK = "1;30";
+  const LIGHT_INK = "1;97";
+
+  it("spells an index, and spells it the way the PALETTE spells its own", () => {
+    // Derived rather than compared to a copy: `gold` IS ansi256(220), so a builder that
+    // stopped agreeing with the palette would have to fail here.
+    expect(ansi256(GOLD_INDEX)).toBe(renderTags(tagMark("gold")));
+    expect(ansi256(GOLD_INDEX)).toBe(`${ESC}[${INDEXED};${GOLD_INDEX}m`);
+  });
+
+  it("spells a truecolor triplet, channels in order", () => {
+    expect(rgb(1, 2, 3)).toBe(`${ESC}[${TRUECOLOR};1;2;3m`);
+  });
+
+  it("hands a host all THREE names from one built index, ink measured", () => {
+    // The round trip is the claim, not the bytes: a sequence chipOf cannot parse back
+    // would satisfy a byte assertion and still leave the host without a chip.
+    const name = "builder_index_probe";
+    extendTags({ [name]: ansi256(LIGHT) });
+    expect(renderTags(tagMark(name))).toBe(ansi256(LIGHT));
+    expect(renderTags(tagMark(name + BG))).toBe(`${ESC}[${DARK_INK};48;5;${LIGHT}m`);
+    expect(renderTags(tagMark(name + CAP))).toBe(ansi256(LIGHT));
+  });
+
+  it("hands the same three from a built triplet, inked the other way on a dark one", () => {
+    const name = "builder_rgb_probe";
+    extendTags({ [name]: rgb(20, 20, 30) });
+    expect(renderTags(tagMark(name + BG))).toBe(`${ESC}[${LIGHT_INK};48;2;20;20;30m`);
+    expect(renderTags(tagMark(name + CAP))).toBe(rgb(20, 20, 30));
+  });
+
+  /** The first index of the theme-owned range, which names a slot and not pixels. */
+  const SLOT_INDEX = 0;
+
+  it("still answers for the base sixteen, which derive nothing and are legal anyway", () => {
+    // A slot rather than pixels, so no chip: the trade the engine's own `blue` makes. The
+    // builder does not refuse it, or the engine would be calling a legal colour illegal.
+    const name = "builder_slot_probe";
+    extendTags({ [name]: ansi256(SLOT_INDEX) });
+    expect(renderTags(tagMark(name))).toBe(`${ESC}[${INDEXED};${SLOT_INDEX}m`);
+    expect(isTag(name + BG)).toBe(false);
+  });
+
+  // The clamps, one case per way out of the byte. A builder that only ever sees good
+  // input cannot tell a clamp from an absent one, and what an unclamped value emits is a
+  // sequence a terminal reads as something else entirely.
+  const BYTE_LAST = 255;
+  const OVER = 999;
+  const UNDER = -1;
+  const FRACTION = 74.6;
+  const ROUNDED = 75;
+
+  it("clamps an index ABOVE the byte rather than emitting a parameter nobody can read", () => {
+    expect(ansi256(OVER)).toBe(`${ESC}[${INDEXED};${BYTE_LAST}m`);
+    // An infinity is on the number line and clamps like any other value past the end.
+    expect(ansi256(Number.POSITIVE_INFINITY)).toBe(`${ESC}[${INDEXED};${BYTE_LAST}m`);
+  });
+
+  it("clamps BELOW, where a minus sign would end the sequence's number early", () => {
+    expect(ansi256(UNDER)).toBe(`${ESC}[${INDEXED};0m`);
+    expect(rgb(UNDER, UNDER, UNDER)).toBe(`${ESC}[${TRUECOLOR};0;0;0m`);
+  });
+
+  it("rounds a fraction, a decimal point being no more legal than a minus", () => {
+    expect(ansi256(FRACTION)).toBe(`${ESC}[${INDEXED};${ROUNDED}m`);
+    expect(rgb(FRACTION, 0, 0)).toBe(`${ESC}[${TRUECOLOR};${ROUNDED};0;0m`);
+  });
+
+  it("takes a NaN as zero rather than writing the word into the sequence", () => {
+    // TOTAL, under the same law as extendTags: this runs at a host's startup, and a throw
+    // there once cost a whole display. The clamp is what makes the call safe to be total.
+    expect(ansi256(Number.NaN)).toBe(`${ESC}[${INDEXED};0m`);
+    expect(rgb(0, Number.NaN, 0)).toBe(`${ESC}[${TRUECOLOR};0;0;0m`);
   });
 });
 
