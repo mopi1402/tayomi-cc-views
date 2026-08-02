@@ -1,0 +1,13 @@
+# Un seul fichier, et la bordure suit le genre comme le texte.
+@tone key
+@map kinds warning=warning_bg error=error_bg success=success_bg
+@fields rows label content
+@box
+@head {{tone}}${title}{{/}}
+@right ${type:kinds}
+@frame type warning=warning error=error success=success
+@each rows
+ {{tone}}${label}{{/}}  ${content}
+@end
+@foot message
+@endbox

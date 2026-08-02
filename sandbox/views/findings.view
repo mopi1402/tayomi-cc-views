@@ -1,0 +1,13 @@
+# findings.view: a review, audit or debt report. The palette's high/med/low
+# chips are the whole point: severity reads at a glance, the file sits in the
+# code colour, and the prose tail wraps under its own text.
+@map severity high=high_bg med=med_bg low=low_bg
+@fields items severity file detail
+@box
+@head {{box_title}}${title}{{/}}
+@right ${count} findings
+@each items label="FOUND" bullet="${#}. " cap="1/3"
+${#label}  ${#bullet}${severity:severity} `${file}`  ${detail}
+@end
+@foot verdict
+@endbox

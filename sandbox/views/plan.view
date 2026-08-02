@@ -1,0 +1,13 @@
+# plan.view: the agent's plan, re-emitted as steps complete. Each re-emission
+# is a NEW message (a display is never retouched), and that is fine: every one
+# carries news, the colour just makes the front line obvious.
+@map states done=pass_bg doing=warn_bg next=low_bg
+@fields steps state step
+@box
+@head {{box_title}}${title}{{/}}
+@right step ${at}
+@each steps bullet="${#}. "
+ ${state:states} ${step}
+@end
+@foot now
+@endbox

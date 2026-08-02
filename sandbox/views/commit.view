@@ -1,0 +1,17 @@
+# commit.view: the consent screen before a commit. The message is quoted big,
+# each file wears its A/M/D fate as a chip, and the footer states what happens
+# next, so a "go" answers THIS box and nothing else.
+@map fates A=pass M=warn D=fail R=low
+@fields files fate path
+@box
+@head {{box_title}}ready to commit{{/}}
+@right ${branch}
+ {{b}}${message}{{/}}
+@rule
+@each files label="FILES" cap="1/6"
+${#label}  ${fate:fates} `${path}`
+@end
+@rule
+ {{dim}}+${added} -${removed}{{/}}
+@foot ask
+@endbox

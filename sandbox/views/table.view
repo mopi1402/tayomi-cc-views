@@ -1,0 +1,14 @@
+# The eye test for the TONE SLOT: this file is the ONLY copy, and every decorator
+# below dresses it differently.
+#
+#   @{view:table}                 the @tone default, key
+#   @{view:table, type:warning}   yellow, and the message still says what it is
+#   @{view:table, type:error}     red
+#   @{view:table tone:gold}       gold, no comma, no semantics
+#
+# The bar and the label spend the same class, so a tone changes the whole accent.
+@tone key
+@fields rows label content
+@each rows cap="1/3"
+ {{tone}}▎{{/}} {{tone}}${label}{{/}}  ${content}
+@end

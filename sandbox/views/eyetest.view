@@ -1,0 +1,28 @@
+# The eye test that cannot lie about WHO drew it.
+#
+# Summoned by a LONE decorator line, no data to improvise:
+#
+#   @{view:eyetest, tone:gold}
+#
+# Only this folder carries this view, and the box names itself, so the screen tells
+# you which engine answered:
+#
+#   a coloured box saying sandbox/node_modules  -> the TARBALL drew it, verdict valid
+#   a raw decorator line                        -> no hook ran, or an engine without
+#                                                  this view won the message
+#   a literal "@tone" line, or a visible tag    -> an engine too old for the tone
+#                                                  slot drew it
+#
+# The last case is the one that used to fool a reader: a user-scoped plugin's hook
+# fires here too, and it draws with ITS OWN engine and views.
+@tone key
+@box
+@head {{tone}}EYE TEST{{/}}
+@right sandbox/views/eyetest.view
+Drawn by the tarball installed in `sandbox/node_modules`, from this folder's
+own view. No plugin ships this file, so nothing else can have rendered it.
+@rule
+ {{tone}}TONE{{/}}  {{tone}}▎{{/}} this line spends the tone slot, so the colour
+ {{tone}}    {{/}}  {{tone}}▎{{/}} you see is the class the decorator named
+ {{tone}}    {{/}}  {{tone}}▎{{/}} (`tone:gold` renders gold, no attribute renders key)
+@endbox
