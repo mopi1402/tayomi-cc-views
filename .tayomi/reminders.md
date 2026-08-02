@@ -1,1 +1,0 @@
-- Commiter dans `tayomi` le test `pipeline.test.ts` remis à jour le 2026-08-02 : la modification est faite et verte, mais elle attend dans un arbre où sept autres fichiers sont déjà modifiés sur `master`.
