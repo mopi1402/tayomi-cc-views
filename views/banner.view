@@ -11,9 +11,15 @@
 # make ONE band read as a pill, and stacking them scallops both flanks.
 # The caps are U+E0B6/U+E0B4 (Powerline). A font without them shows two
 # hollow boxes around the band; swap them for ▐ and ▌ if yours does not.
-# The default is `info`: an undecorated @{view:banner} is a cyan NOTE band,
-# caps matching the fill. Only classes with a _bg chip fill a band (warning,
-# error, success, info, warn, fail, pass, high, med, low); `tone:gold` has
-# none, so it drops to gold TEXT between gold caps, no background.
+# The default is `info`: an undecorated @{view:banner} is a cyan NOTE band.
+# The caps spend {{tone_cap}}, which the engine DERIVES from the chip filling
+# the band, so they match it exactly whatever the class and whatever the
+# theme. Spending {{tone}} there is off by one shade and was the bug: bold
+# promotes a base-sixteen foreground to the bright slot, nothing promotes a
+# background. Every COLOUR fills a band: the severities (warning, error,
+# success, info, warn, fail, pass, high, med, low) and the plain names alike
+# (red, green, yellow, cyan, orange, gold, key, dim). What has no chip is
+# furniture (`code`, `box_rule`) and a host's own foreground tag: name one and
+# the band vanishes, leaving two solid caps around bare text. Do not.
 @tone info
-{{tone}}{{/}}{{tone_bg}} ${label}  ${content} {{/}}{{tone}}{{/}}
+{{tone_cap}}{{/}}{{tone_bg}} ${label}  ${content} {{/}}{{tone_cap}}{{/}}

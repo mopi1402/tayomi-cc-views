@@ -178,28 +178,55 @@ the template chose to spend. It cannot invent a style the template did not ask f
 The built-in vocabulary (`style.ts`):
 
 - Weight: `b`, `dim`.
-- Colours: `red`, `green`, `yellow`, `cyan`, `orange`, `gold`.
+- Colours, base range (follows the user's theme): `red`, `green`, `yellow`, `blue`,
+  `magenta`, `cyan`.
+- Colours, named indices (the same pixels under every theme): `orange`, `gold`,
+  `purple`, `violet`, `pink`, `teal`, `aqua`, `lime`, `brown`, `navy`, `salmon`, `mint`.
 - Semantic foreground: `pass`, `warn`, `fail`, `high`, `med`, `low`, `key`.
 - Carrier names, aliases of the above: `warning` (= `warn`), `error` (= `fail`),
   `success` (= `pass`), `info` (= `key`). They exist so a kind a carrier names
   dresses a view with no template of its own.
-- Filled chips: `chip`, `title`, `pass_bg`, `warn_bg`, `fail_bg`, `high_bg`,
-  `med_bg`, `low_bg`, `warning_bg`, `error_bg`, `success_bg`, `info_bg`.
+- Filled chips: `chip`, `title`, and a `<name>_bg` for EVERY colour, derived from the
+  colour itself where its pixels are known and declared by hand for the base range. A
+  colour always fills, because a template may spend a chip as a surface and draw
+  against it. The only names with no chip are the WEIGHTS (`b`, and `dim`, which is
+  given the low chip by hand), since there is no colour in them to fill with.
+- Caps: any `<name>_cap`, the foreground painting the fill of the `<name>_bg` beside
+  it, for drawing a shape AGAINST a chip (see below). Derived, never declared, so it
+  exists for a host's own chip too.
 - Furniture: `box_rule`, `box_title`; `code` is the inline-code colour.
-- The tone slot: `tone`, `tone_bg` (below).
+- The tone slot: `tone`, `tone_bg`, `tone_cap` (below).
 
 A host adds its own tags process-wide with `extendTags` (see the integration
 reference); a host's registration SHADOWS a built-in name, the last word going to
 the screen's owner, under the same law that lets a views dir shadow a bundled
-view. Inline backtick code spans (`` `like this` ``) render on every view in
+view. **Register the colour alone** and its chip and its cap both follow:
+
+```ts
+extendTags({ brand: "\x1b[38;5;75m" });
+// {{brand}}      the foreground, as declared
+// {{brand_bg}}   a chip filling with that blue, inked white because it is dark
+// {{brand_cap}}  the blue again, for a glyph drawn against the chip
+```
+
+One value in, three names out, none able to drift, and `tone:brand` dresses any view
+that spends the slot. Shadowing a built-in colour carries its chip along: register your
+own `info` and a band under `tone:info` fills with YOUR blue, not the engine's cyan.
+
+The ink is measured, not guessed (WCAG relative luminance, black or white, whichever
+contrasts more), which is possible only for a colour naming its PIXELS: a 256 index or
+truecolor. A base-sixteen slot names a slot, and what a terminal paints there comes from
+the user's theme, so its chip is declared by hand instead. Declare a `_bg` of your own
+whenever you want a specific ink, or a fill that is not the colour itself; an explicit
+registration always wins over the derivation. Inline backtick code spans (`` `like this` ``) render on every view in
 Claude Code's native inline-code colour; the backticks cost no width.
 
 ### The tone slot
 
-`{{tone}}` and `{{tone_bg}}` are the one pair of tags whose colour the RENDER decides
-instead of the template. A view writes them where its accent goes; a carrier names the
-class that fills them, like sticking a class on it. Same template, any colour, no
-second file:
+`{{tone}}`, `{{tone_bg}}` and `{{tone_cap}}` are the tags whose colour the RENDER
+decides instead of the template. A view writes them where its accent goes; a carrier
+names the class that fills them, like sticking a class on it. Same template, any
+colour, no second file:
 
 ```
 @tone key
@@ -220,6 +247,28 @@ name above). Resolution, most explicit first:
 Every candidate is checked against the palette and an unknown name falls THROUGH to
 the next one, so a typo costs a colour, never the render. `{{tone_bg}}` spends the
 class's `_bg` chip, or its foreground when the palette has no chip for it.
+
+#### Drawing against a chip: `{{tone_cap}}`
+
+`{{tone_cap}}` is the foreground painting the fill of `{{tone_bg}}`, for the characters
+a template draws AGAINST the chip rather than inside it: the rounded caps that turn a
+band into a pill, an arrow between two zones, any glyph that must read as an extension
+of the coloured surface next to it.
+
+Spending `{{tone}}` there is the trap, and it looks right until it does not. A class's
+foreground and its chip name the same palette entry, but the foreground carries bold,
+and a terminal promotes a bold base-sixteen foreground to the BRIGHT slot while nothing
+promotes a background. `cyan` (`1;36`) against an `info_bg` fill (`46`) is one shade
+off, in every theme that separates the two. `{{tone_cap}}` is derived from the chip
+itself, so the two cannot drift and a theme cannot separate them.
+
+A class with no chip has no cap either, and the slot falls back to that class's
+foreground, so caps and text still land on one colour. Every COLOUR carries a chip
+precisely so a band never reaches that path: a cap is half a pill, and with no fill to
+extend it, two solid glyphs sit around bare text and read as broken. Name furniture
+(`tone:code`) as a band's tone and you get exactly that. The same rule holds outside the
+slot: any `<name>_cap` resolves as long as `<name>_bg` does, a host's own registered
+chip included.
 
 ## The carriers
 

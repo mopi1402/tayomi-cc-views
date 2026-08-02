@@ -29,6 +29,8 @@ const GREEN = `${ESC}[1;32m`;
 const GOLD = `${ESC}[38;5;220m`;
 const YELLOW_CHIP = `${ESC}[1;30;43m`;
 const CYAN_CHIP = `${ESC}[1;30;46m`;
+/** A WEIGHT, the one kind of tag with no colour for a chip to derive from. */
+const WEIGHT = `${ESC}[1m`;
 
 // The token as a MODEL writes it, spelled independently of the production
 // constant on purpose: inputs built here, assertions on DECORATOR_HINT, so a
@@ -287,8 +289,9 @@ describe("the tone", () => {
   it("spends the chip side, and falls back to the foreground for a class without one", () => {
     expect(render(dressed(CHIPPED, "tone:warn"))).toContain(YELLOW_CHIP);
     expect(render(dressed(CHIPPED, "tone:info"))).toContain(CYAN_CHIP);
-    // `gold` is a plain colour and carries no chip of its own.
-    expect(render(dressed(CHIPPED, "tone:gold"))).toContain(GOLD);
+    // A chip derives from every COLOUR, so the fallback is reached by a weight alone:
+    // `b` carries no colour, and there is nothing about it to measure an ink against.
+    expect(render(dressed(CHIPPED, "tone:b"))).toContain(WEIGHT);
   });
 
   it("engages with no comma at all, the separator a model actually writes", () => {
