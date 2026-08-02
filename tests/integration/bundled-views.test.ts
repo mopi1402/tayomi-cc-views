@@ -13,11 +13,12 @@
 // terminal reaches the render.
 
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { transform } from "../../src/pipeline.js";
 import { ANSI_RE } from "../../src/style.js";
-import { BLOCK_HINT, FENCE } from "../../src/data/markup.js";
+import { BLOCK_HINT, FENCE, VIEW_EXT } from "../../src/data/markup.js";
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BUNDLED = path.join(REPO, "views");
@@ -28,17 +29,39 @@ const lines = (...rows: string[]): string => [...rows, ""].join("\n");
 /** The sequences a render emitted, in order, each stripped of its ESC[ and its m. */
 const seqs = (out: string): string[] =>
   (out.match(ANSI_RE) ?? []).map((s) => s.slice("\x1b[".length, -"m".length));
+const plainly = (out: string): string => out.replace(ANSI_RE, "").trim();
 
-const LABEL = "TEST";
 const CONTENT = "contenu de la bande";
-const band = (tone?: string): string =>
+/**
+ * The FENCED way in: the kind is a FIELD, because a fence carries no attributes. This is
+ * the one-off form, for a kind the packaged table has no entry for.
+ */
+const band = (tone?: string, type?: string): string =>
   lines(
     BLOCK_HINT + "banner",
     ...(tone == null ? [] : [`tone: ${tone}`]),
-    `label: ${LABEL}`,
+    ...(type == null ? [] : [`type: ${type}`]),
     `content: ${CONTENT}`,
     FENCE
   );
+
+/**
+ * The DECORATED way in, spelled the way a model writes it and not through any production
+ * constant: a test sharing the spelling of the token it drives cannot catch a drift in
+ * it. The trailing blank line is the rule a quote lives under, and it is written here on
+ * purpose rather than hidden in the helper's tail.
+ */
+const quoted = (marker: string | null, ...attrs: string[]): string =>
+  lines(
+    `@{view:banner${attrs.map((a) => `, ${a}`).join("")}}`,
+    ...(marker === null ? [] : [`> [!${marker}]`]),
+    `> ${CONTENT}`,
+    ""
+  );
+
+/** The words the packaged table declares for the kinds asserted below. */
+const WARNING_WORD = "⚠ WARNING";
+const NOTE_WORD = "ⓘ NOTE";
 
 describe("the banner the package ships", () => {
   /**
@@ -81,8 +104,10 @@ describe("the banner the package ships", () => {
     }
   });
 
-  it("dresses an undecorated band as info, the documented default", () => {
-    expect(seqs(render(band()))).toEqual(seqs(render(band("info"))));
+  it("dresses an undecorated band as chip, the documented default", () => {
+    // The neutral is the WHITE chip, not cyan: an unmarked band says nothing about
+    // severity, and painting it a severity's colour would say something it does not mean.
+    expect(seqs(render(band()))).toEqual(seqs(render(band("chip"))));
   });
 
   it("degenerates on a WEIGHT, the last name with no colour to fill from, and says so", () => {
@@ -98,21 +123,84 @@ describe("the banner the package ships", () => {
   });
 
   it("falls THROUGH a class the palette does not know, rather than losing the band", () => {
-    const plain = render(band("not_a_palette_name")).replace(ANSI_RE, "");
-    expect(plain).toContain(LABEL);
+    const plain = plainly(render(band("not_a_palette_name")));
+    expect(plain).toContain(NOTE_WORD);
     expect(plain).toContain(CONTENT);
   });
 
-  it("prints the two fields and no unsubstituted placeholder", () => {
-    const plain = render(band("warning")).replace(ANSI_RE, "");
-    expect(plain).toContain(LABEL);
+  it("prints its word and its content, and no unsubstituted placeholder", () => {
+    const plain = plainly(render(band("warning", "warning")));
+    expect(plain).toContain(WARNING_WORD);
     expect(plain).toContain(CONTENT);
     expect(plain).not.toContain("${");
     expect(plain).not.toContain("{{");
   });
 
   it("stays ONE line, which is what makes the caps read as a pill", () => {
-    expect(render(band("error")).replace(ANSI_RE, "").trim().split("\n")).toHaveLength(1);
+    expect(plainly(render(band("error"))).split("\n")).toHaveLength(1);
+  });
+});
+
+// ONE file for every kind, which is the whole ticket: the marked quote is the cheap way
+// in and the fenced block the one-off, and neither may load a template of its own.
+describe("the banner reached through a marked quote", () => {
+  it("takes its word from the packaged table and its colour from the kind", () => {
+    const out = render(quoted("WARNING"));
+    expect(plainly(out)).toContain(WARNING_WORD);
+    expect(plainly(out)).toContain(CONTENT);
+    expect(seqs(out)).toEqual(seqs(render(band("warning"))));
+  });
+
+  it("takes the reserved entry and the neutral chip with NO marker at all", () => {
+    const out = render(quoted(null));
+    expect(plainly(out)).toContain(NOTE_WORD);
+    expect(seqs(out)).toEqual(seqs(render(band("chip"))));
+  });
+
+  it("ECHOES a kind the table never heard of, and falls to the template's own tone", () => {
+    const out = render(quoted("VERSION2"));
+    // Declared entries are verbatim; this one is not declared, so the marker's own token
+    // comes back uppercased rather than the band losing its word.
+    expect(plainly(out)).toContain("VERSION2");
+    expect(seqs(out)).toEqual(seqs(render(band("chip"))));
+  });
+
+  it("lets the MARKER beat a type: attribute, the payload outranking the token", () => {
+    const out = render(quoted("WARNING", "type:error"));
+    expect(plainly(out)).toContain(WARNING_WORD);
+    expect(seqs(out)).toEqual(seqs(render(band("warning"))));
+  });
+
+  it("still lets tone: dress it, since a look is the more explicit word", () => {
+    expect(seqs(render(quoted("VERSION2", "tone:success")))).toEqual(seqs(render(band("success"))));
+  });
+
+  it("draws the SAME band as the fenced form carrying the same two fields", () => {
+    // The two ways in differ in what the AUTHOR types and in nothing else. A drift here
+    // is the packaged template growing a branch on how its data arrived.
+    expect(plainly(render(quoted("WARNING")))).toBe(plainly(render(band(undefined, "warning"))));
+  });
+
+  it("refuses a TABLE payload outright, rather than swallowing it behind a band", () => {
+    // The banner reads `content`, a table hands it `rows`, and it draws a filled band
+    // with two caps whatever it was given. That furniture is what made the ink test read
+    // a pill around nothing as a successful render: the table vanished from the screen
+    // and a bare `ⓘ NOTE` stood in its place. A view refuses a payload shape by not
+    // reading it, and nothing was added to banner.view to enforce that.
+    const msg = lines("@{view:banner}", "| a | b |", "| --- | --- |", "| k | v |", "");
+    expect(render(msg)).toBe(msg);
+  });
+
+  it("refuses a fenced block whose fields it reads none of, the same way", () => {
+    const msg = lines(BLOCK_HINT + "banner", "label: a word it no longer reads", FENCE);
+    expect(render(msg)).toBe(msg);
+  });
+
+  it("ships no typed file for any kind, which is the file count this ticket bought", () => {
+    const typed = fs
+      .readdirSync(BUNDLED)
+      .filter((f) => f.startsWith("banner.") && f !== `banner${VIEW_EXT}`);
+    expect(typed).toEqual([]);
   });
 });
 

@@ -16,6 +16,12 @@ const NAME = "probe";
 const TYPE = "warning";
 /** The health check the package ships, which must resolve wherever the engine runs. */
 const BUNDLED = "welcome";
+/** Read from the manifest rather than retyped, since drift is the thing being gated. */
+const OWN_NAME = (
+  JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
+    name: string;
+  }
+).name;
 
 const dirs: string[] = [];
 const mkdir = (): string => {
@@ -111,6 +117,19 @@ describe("the default search path", () => {
 
   it("resolves the bundled dir to somewhere that actually holds the health check", () => {
     expect(fs.existsSync(path.join(bundledViewsDir(), BUNDLED + VIEW_EXT))).toBe(true);
+  });
+
+  // The defect this pins: the dir is found by walking UPWARDS, and a host that bundles
+  // the engine has its own views/ one hop above the bundle. Claiming it made the engine
+  // serve the host's templates as its own, silently, which is what a `cp` into the
+  // host's tree was papering over. Whatever comes back, the manifest beside it must
+  // name US. This also gates the package name the resolution is spelled with: a name
+  // that no longer matches the manifest makes every candidate fail the check, and the
+  // dir handed back then holds no manifest at all.
+  it("answers with a dir belonging to THIS package, never one it merely found above", () => {
+    const parent = path.dirname(bundledViewsDir());
+    const manifest: unknown = JSON.parse(fs.readFileSync(path.join(parent, "package.json"), "utf8"));
+    expect((manifest as { name?: unknown }).name).toBe(OWN_NAME);
   });
 
   it("names a plugin's own views dir when the host sets its root", () => {
