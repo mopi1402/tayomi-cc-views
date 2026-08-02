@@ -15,6 +15,7 @@ import {
   BULLET_REF,
   CAP,
   DECLS,
+  DEFAULT_KEY,
   EACH,
   END,
   ENDASIDE,
@@ -28,16 +29,20 @@ import {
   LABEL,
   LABEL_REF,
   MAP,
+  MARKER_SOURCE,
   PAIR_SEP,
+  QUOTED,
   RIGHT,
   RULE,
+  TEXT,
+  TEXT_PAIR,
   TOKEN_SEP,
   TONE,
   declSource,
 } from "./language.js";
 
 const AT = "@";
-const DIRECTIVES = [MAP, FIELDS, TONE, BOX, HEAD, RIGHT, FOOT, FRAME, RULE, EACH, ASIDE, END];
+const DIRECTIVES = [MAP, TEXT, FIELDS, TONE, BOX, HEAD, RIGHT, FOOT, FRAME, RULE, EACH, ASIDE, END];
 const TERMINATORS = [ENDBOX, ENDASIDE];
 const REFS = [ITEM_REF, INDEX_REF, LABEL_REF, BULLET_REF];
 
@@ -103,6 +108,68 @@ describe("the @each declarations", () => {
 
   it("spend the same key/value separator the pairs of an @map do", () => {
     expect(declSource(LABEL)).toContain(LABEL + PAIR_SEP);
+  });
+});
+
+// @text's pairs are QUOTE-AWARE, and that is real work rather than a reuse: @map splits
+// its tail on whitespace because a tag name has none, and a text value has spaces by
+// definition. Every case here is one the whitespace splitter would get wrong SILENTLY.
+describe("an @text pair", () => {
+  const re = (): RegExp => new RegExp(TEXT_PAIR, "g");
+  const pairs = (tail: string): Array<[string, string]> =>
+    [...tail.matchAll(re())].map((m) => [m[1], m[2]]);
+
+  it("keeps a value's spaces and its glyph whole, which is why it is quoted", () => {
+    expect(pairs('warning="⚠ WARNING"')).toEqual([["warning", "⚠ WARNING"]]);
+  });
+
+  it("reads several pairs off one tail, and stops each at its own closing quote", () => {
+    expect(pairs('a="one two" b="three"')).toEqual([
+      ["a", "one two"],
+      ["b", "three"],
+    ]);
+  });
+
+  it("carries the reserved key like any other, so a default needs no second shape", () => {
+    expect(pairs(`${DEFAULT_KEY}="ⓘ NOTE"`)).toEqual([[DEFAULT_KEY, "ⓘ NOTE"]]);
+  });
+
+  it("does not match an UNQUOTED value, which is the @map shape and not this one", () => {
+    expect(pairs("a=bare")).toEqual([]);
+  });
+
+  it("spends the same separator and the same quoted shape the rest of the language does", () => {
+    expect(TEXT_PAIR).toContain(PAIR_SEP);
+    expect(TEXT_PAIR).toContain(QUOTED);
+  });
+
+  it("stops its KEY at the separator, so the pattern cannot run past a pair", () => {
+    // The key atom excludes what follows it, which is what makes the match a single
+    // anchored quantifier rather than one that backtracks over a near-miss.
+    expect(pairs('a=b="c"')).toEqual([["b", "c"]]);
+  });
+});
+
+// The kind marker a decorated quote may open with. Narrow on purpose: the moment a space
+// is legal, the marker has become the label slot the @text table exists to remove.
+describe("the kind marker", () => {
+  const re = (): RegExp => new RegExp(`^${MARKER_SOURCE}$`);
+  const token = (line: string): string | undefined => line.match(re())?.[1] ?? undefined;
+
+  it("reads one uppercase run, digits, dashes and underscores included", () => {
+    expect(token("[!WARNING]")).toBe("WARNING");
+    expect(token("[!NODE_20]")).toBe("NODE_20");
+    expect(token("[!RE-RUN]")).toBe("RE-RUN");
+  });
+
+  it("takes NO glyph, no space, no lowercase and no second word", () => {
+    for (const near of ["[!📦 VERSION]", "[! WARNING]", "[!warning]", "[!TWO WORDS]", "[!]"]) {
+      expect(token(near)).toBeUndefined();
+    }
+  });
+
+  it("must open on a letter, so a leading digit is not a kind", () => {
+    expect(token("[!2FAST]")).toBeUndefined();
   });
 });
 

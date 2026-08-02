@@ -38,6 +38,18 @@ try {
   if (!listing.includes("package/views/tayo.view")) {
     fail("views/tayo.view, the art the welcome's @aside names, is not in the tarball");
   }
+  if (!listing.includes("package/views/banner.view")) {
+    fail("views/banner.view is not in the tarball");
+  }
+  // ONE file for every kind, which is what the marker and the @text table bought. A
+  // banner.<kind>.view left behind is the design quietly coming undone, and the listing
+  // is the only place that can see it: the engine would resolve such a file happily.
+  const typedBanner = listing
+    .split("\n")
+    .filter((f) => f.startsWith("package/views/banner.") && f !== "package/views/banner.view");
+  if (typedBanner.length > 0) {
+    fail(`a typed banner shipped: ${typedBanner.join(", ")}`);
+  }
   for (const dir of ["package/docs/", "package/examples/", "package/src/"]) {
     if (listing.includes(dir)) fail(`${dir} leaked into the tarball`);
   }
@@ -71,13 +83,13 @@ try {
   // would have hidden the drop; adding a wide one proves the art actually composes.
   const WIDE = 110;
   const NARROW = 74;
-  const render = (columns) => {
+  const render = (columns, text = block, id = String(columns)) => {
     const payload = JSON.stringify({
-      message_id: `verify-pack-${columns}`,
+      message_id: `verify-pack-${id}`,
       index: 0,
       final: true,
       cwd: proj,
-      delta: block,
+      delta: text,
     });
     const env = { ...process.env, CC_VIEWS_WIDTH: String(columns) };
     delete env.CLAUDE_PLUGIN_ROOT; // the adopter case: no plugin root anywhere
@@ -123,8 +135,55 @@ try {
   }
   if (ART_CELL.test(narrowPlain)) fail(`the art was not dropped at ${NARROW} columns`);
 
+  // 7. The banner, both ways in, from the INSTALLED tarball. The claim being gated is
+  // that a consumer who has created NOTHING can write a marked quote and get a dressed
+  // band: the word comes out of the packaged @text table, so a table that failed to ship
+  // (or a template that stopped reading it) shows up here and nowhere else.
+  // The body carries a CODE SPAN on purpose: banner.view draws its band as a filled
+  // chip, so a span inside it is a span the engine inserted inside a style the template
+  // opened, and its terminator has to hand the band back. Rendered from the installed
+  // tarball, this is the one place that gate is spoken end to end.
+  /** The two C0 codes a rendered screen is allowed to carry: the row break and ANSI's own. */
+  const ON_SCREEN_C0 = new Set(["\n", "\x1b"]);
+  const SPAN = "pnpm verify";
+  const BODY = `two flaky suites, \`${SPAN}\` is blocked`;
+  const SHOWN_BODY = BODY.split("`").join("");
+  const WARNING_WORD = "⚠ WARNING";
+  const bandOf = (text, id) => {
+    const drawn = render(NARROW, text, id);
+    // A reserved control code on screen is a mark the render failed to resolve. It
+    // prints nothing, so nothing else here can see it. Stated as the whole C0 range
+    // minus what legitimately reaches a terminal, rather than the codes this package
+    // reserves today: the list is not a public export, so this script cannot import it,
+    // and a range needs no edit the day the engine claims one more.
+    for (const ch of drawn) {
+      if (ch < " " && !ON_SCREEN_C0.has(ch)) fail(`a control mark reached the screen (${id})`);
+    }
+    const shown = drawn.replace(ANSI_RE, "");
+    if (shown.includes("@{view:")) fail(`the decorator line reached the screen (${id})`);
+    if (shown.includes(">")) fail(`the quote's markup reached the screen (${id})`);
+    if (!shown.includes(WARNING_WORD)) fail(`the packaged kinds table did not answer (${id})`);
+    if (!shown.includes(SHOWN_BODY)) fail(`the band lost its content (${id})`);
+    if (shown.includes("`")) fail(`the code span's delimiters reached the screen (${id})`);
+    // The band is a chip, so what follows the span must be its fill again and not a bare
+    // reset: cleared there, the rest of the sentence prints outside the band.
+    if (!drawn.includes(`${SPAN}\x1b[0m\x1b[1;30;43m`)) {
+      fail(`the band did not resume after its code span (${id})`);
+    }
+    return shown.trim();
+  };
+  const quoted = bandOf(`@{view:banner}\n> [!WARNING]\n> ${BODY}\n\n`, "quote");
+  const fenced = bandOf(
+    ["```view:banner", "type: warning", `content: ${BODY}`, "```", ""].join("\n"),
+    "fence"
+  );
+  // The two ways in differ in what the AUTHOR types and in nothing else.
+  if (quoted !== fenced) fail("the quote and the fenced block drew two different bands");
+  if (quoted.split("\n").length !== 1) fail("the band did not stay one line");
+
   console.log(wide);
   console.log(narrow);
+  console.log(render(NARROW, `@{view:banner}\n> [!WARNING]\n> ${BODY}\n\n`, "show"));
   console.log(`verify-pack: PASS (${tgzName}, installed and rendered at ${WIDE} and ${NARROW})`);
 } finally {
   fs.rmSync(work, { recursive: true, force: true });

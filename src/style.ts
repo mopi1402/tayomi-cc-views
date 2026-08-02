@@ -6,12 +6,25 @@
 // private, so a tag name is only ever resolved through isTag and renderTags.
 
 import { CODE_TICK, TAG_CLOSE, TAG_OPEN } from "./data/markup.js";
-import { INERT_MARK } from "./data/marks.js";
+import { INERT_MARK, RESUME_MARK, SPAN_MARK, dropControl } from "./data/marks.js";
 
-export { CODE_TICK };
+// Re-exported the way CODE_TICK already is: a span's two marks are written by this
+// module and by the decorator's bold span, and walked by the cutter and the wrapper, so
+// all four take the style vocabulary from one import rather than reaching into the data
+// layer apiece.
+export { CODE_TICK, RESUME_MARK, SPAN_MARK };
 
 const ESC = "\x1b";
 export const R = `${ESC}[0m`;
+
+/**
+ * The one tag name that is not a word, and the only one that CLOSES instead of opening.
+ * Spelled once: the palette entry, the pattern that finds it, the mark a caller writes
+ * and the rule that decides what a resume re-opens all compose from here.
+ */
+const RESET_NAME = "/";
+/** The palette name the engine's own inline-code span opens on. */
+const CODE = "code";
 
 /** A colour named by its 256-palette INDEX, the one spelling whose pixels are fixed. */
 const indexed = (n: number): string => `${ESC}[38;5;${n}m`;
@@ -19,7 +32,7 @@ const indexed = (n: number): string => `${ESC}[38;5;${n}m`;
 // The base palette, every raw sequence written ONCE. The semantic tags below ALIAS
 // these entries rather than repeat their sequences.
 const BASE: Record<string, string> = {
-  "/": R,
+  [RESET_NAME]: R,
   b: `${ESC}[1m`,
   dim: `${ESC}[2m`,
   red: `${ESC}[1;31m`,
@@ -107,7 +120,7 @@ const TAGS: Record<string, string> = {
   // the fixed "Claude periwinkle" accent rgb(177,185,249). Pinning the exact RGB is
   // what makes a code span in a view match CC's own in every terminal, since
   // truecolor is theme-independent. Tracks CC's dark theme.
-  code: `${ESC}[38;2;177;185;249m`,
+  [CODE]: `${ESC}[38;2;177;185;249m`,
   title: BASE.chip,
   // The outline is drawn in `dim`, the same grey as the gutter bar, so the frame and
   // the bars inside it read as one family. The rule under the header recedes one step
@@ -166,8 +179,8 @@ const brace = (s: string): string => s.replace(BRACE_CHAR, ESCAPED);
 // FINDS a tag on a line, and the check that decides whether a host may REGISTER one. A
 // second spelling would let the registry accept a name the matcher can never find.
 const NAME_SOURCE = String.raw`\w+`;
-/** The closing tag's name is the solidus, and it is the only one that is not a word. */
-const CLOSE_SOURCE = String.raw`\/`;
+/** The closing tag's name, escaped: a solidus is punctuation to a pattern. */
+const CLOSE_SOURCE = `\\${RESET_NAME}`;
 const ANY_NAME = `${CLOSE_SOURCE}|${NAME_SOURCE}`;
 
 /**
@@ -194,7 +207,7 @@ export const TAG_RE = tagRe("g");
 export function tagMark(name: string): string {
   return TAG_OPEN + name + TAG_CLOSE;
 }
-export const RESET_MARK = tagMark("/");
+export const RESET_MARK = tagMark(RESET_NAME);
 
 /**
  * The blank a filled chip puts on each side of its label, so the colour never
@@ -204,17 +217,58 @@ export const RESET_MARK = tagMark("/");
 const CHIP_PAD = " ";
 export const CHIP_CHROME = 2 * CHIP_PAD.length;
 
-/** A filled chip around a label the caller has already padded to its column. */
+/**
+ * A filled chip around a label the caller has already padded to its column.
+ *
+ * It closes on the RESUME mark: a chip is a span the engine inserted into a line whose
+ * style it did not choose, so clearing at its right edge takes the rest of the line down
+ * with it. The template author cannot compensate, having no idea where a `@map` will put
+ * one.
+ *
+ * Its two ends come from spanOpen and spanClose, which is where that rule lives.
+ */
 export function chip(tag: string, label: string): string {
-  return `${tagMark(tag)}${CHIP_PAD}${label}${CHIP_PAD}${RESET_MARK}`;
+  return `${spanOpen(tag)}${CHIP_PAD}${label}${CHIP_PAD}${spanClose(tag)}`;
+}
+
+/**
+ * How a span the ENGINE inserted BEGINS. The mark is what a resume unwinds back TO, so
+ * it is not decoration on the opening tag: it is the only thing separating the span's
+ * own frame from whatever the line had already opened around it.
+ *
+ * It is written even where spanClose answers with a reset, and that costs nothing: a
+ * reset clears the whole stack, boundary included, so no frame is left standing.
+ */
+export function spanOpen(tag: string): string {
+  return SPAN_MARK + tagMark(tag);
+}
+
+/**
+ * How a span the ENGINE inserted TERMINATES, and the one place that decides it. Every
+ * site writing one asks here, or the rule becomes three copies free to disagree, on a
+ * question whose wrong answer is a colour and never an error.
+ *
+ * A resume closes exactly the tag its own span opened, so it is only right where that
+ * opener is a name the palette answers for. A `@map` is free to hand a chip a word
+ * nobody knows: the opener is then TEXT, it opened nothing, and a resume would close the
+ * style the span is sitting IN. That span clears instead, which is what it did before
+ * any of this existed.
+ */
+export function spanClose(tag: string): string {
+  return isTag(tag) ? RESUME_MARK : RESET_MARK;
 }
 
 // Every brace in message data is followed by the inert mark, so the tag shape can no
 // longer match while the value still measures as the text it prints. Every brace and
 // not the pair, so an overlap (`{{{warn}}`) has no unmarked shape left in it.
+//
+// The reserved codes come OFF first, and both halves are the same rule: a message may
+// not reach the control channel. A brace is broken because it must still print; a code
+// prints nothing, so it is dropped.
 export function inert(s: string): string {
   const b = TAG_OPEN[0];
-  return s.includes(b) ? s.split(b).join(b + INERT_MARK) : s;
+  const text = dropControl(s);
+  return text.includes(b) ? text.split(b).join(b + INERT_MARK) : text;
 }
 
 export function dropInert(s: string): string {
@@ -456,8 +510,100 @@ export function isTag(name: string): boolean {
   return resolveTag(name) !== undefined;
 }
 
+/**
+ * What a walk has stepped over and not yet closed, innermost LAST: tag names, and the
+ * span boundaries between them. ONE notion, read by the two walkers that need it and
+ * copied by neither: renderTags, which replays it where an engine-inserted span ends,
+ * and fitCell, which asks what its cut left open. The cutter kept a boolean of its own,
+ * which could say WHETHER a style was open and never WHICH, and a resume needs the second.
+ *
+ * A boundary rides the same stack rather than a second one, because the two interleave:
+ * what a resume must unwind is a RANGE of this stack, not a count of either kind.
+ *
+ * A stack in the RESOLVER, never in the language. `{{/}}` closes every one of them, so
+ * an author writing `{{a}}{{b}}x{{/}}` gains no nesting and renders the bytes it always
+ * did. Depth passes one only where the ENGINE opened a span inside an author's tag,
+ * which is the whole subject of the two span marks.
+ */
+export function trackTag(open: string[], name: string): void {
+  if (name === RESET_NAME) open.length = 0;
+  else open.push(name);
+}
+
+/**
+ * What a resume ends: the FRAME its span opened, never one entry. Everything pushed
+ * since the boundary comes off, the span's own tag and whatever its BODY opened on top
+ * of it, so what is left is exactly what stood OUTSIDE the span.
+ *
+ * With no boundary on the stack the frame is the whole stack, which is a resume reaching
+ * a line no span of the engine's had opened.
+ */
+export function popSpan(open: string[]): void {
+  while (open.length > 0) {
+    if (open.pop() === SPAN_MARK) return;
+  }
+}
+
+/**
+ * What a resume becomes: its frame closed, and everything still open under it re-opened.
+ * The reset is not a formality: `dim` is an ATTRIBUTE, so re-emitting it over the
+ * foreground a code span set would leave the code colour standing underneath.
+ *
+ * A boundary left under the frame belongs to a span still open (they nest: a chip's
+ * label can carry a code span), and it replays as nothing, since no palette entry is
+ * reachable under a name the tag shape cannot spell.
+ *
+ * Nothing open resolves to a PLAIN RESET, which is what makes a span outside any styled
+ * region render exactly as it did before these marks existed, and that is the case the
+ * whole existing corpus is made of.
+ */
+function resumeTags(open: string[]): string {
+  popSpan(open);
+  return open.reduce((seq, name) => seq + (resolveTag(name) ?? ""), R);
+}
+
+/**
+ * A CUT sealed so the row gets its style back, derived from the pop rule above rather
+ * than counting the stack: one resume ends a frame, so the number to write is the number
+ * of frames the cut left half-open and never the number of entries.
+ *
+ * The cut opens a frame of its OWN, and that is the whole point. The bare tags a value
+ * wrote belong to no span, so the resume closing them would find no boundary and unwind
+ * the ROW's tags along with the cell's, which is the colour the template opened around
+ * the cell. A value that opened nothing is handed back untouched, marks and all absent.
+ */
+export function closeCut(cut: string, open: readonly string[]): string {
+  if (open.length === 0) return cut;
+  const rest = [SPAN_MARK, ...open];
+  let frames = 0;
+  while (rest.length > 0) {
+    popSpan(rest);
+    frames += 1;
+  }
+  return SPAN_MARK + cut + RESUME_MARK.repeat(frames);
+}
+
+// One matcher over all three shapes, composed from the tag pattern: separate passes
+// would disagree about which of a tag and a span mark came first on the line.
+// eslint-disable-next-line security/detect-non-literal-regexp
+const MARKUP_RE = new RegExp(`${TAG_PATTERN}|${RESUME_MARK}|${SPAN_MARK}`, "g");
+
 export function renderTags(s: string): string {
-  return s.replace(TAG_RE, (m: string, name: string) => resolveTag(name) ?? m);
+  const open: string[] = [];
+  return s.replace(MARKUP_RE, (m: string, name?: string) => {
+    // A boundary prints nothing and is CONSUMED here, the last pass before the screen.
+    if (m === SPAN_MARK) {
+      trackTag(open, m);
+      return "";
+    }
+    // The alternation's discriminator: only the tag branch captures a name.
+    if (name === undefined) return resumeTags(open);
+    const seq = resolveTag(name);
+    // An unknown name reaches the screen as text, so it opens nothing either.
+    if (seq === undefined) return m;
+    trackTag(open, name);
+    return seq;
+  });
 }
 
 /**
@@ -499,6 +645,25 @@ export function fillTone(s: string, cls: string | undefined): string {
     .join(tagMark(cls));
 }
 
+/**
+ * Code spans as MARKS, which is what the render chain spends. It runs BEFORE fillTone
+ * and renderTags (template/render.ts), so the style a span interrupts is still an
+ * unresolved mark here and, where it is the tone slot, not yet even a colour: the
+ * terminator cannot be a sequence and has to be resolved at the end, with the rest.
+ */
+export function markCode(s: string): string {
+  return s.replace(CODE_RE, (_m: string, x: string) => `${spanOpen(CODE)}${x}${spanClose(CODE)}`);
+}
+
+/**
+ * Code spans as SEQUENCES, for a host colouring a line of its own. SELF-CONTAINED, and
+ * deliberately not `renderTags(markCode(s))`: a host's line carries no marks for a
+ * resume to land on, and resolving one would make this a second place where a `{{tag}}`
+ * in someone else's text turns into a colour. It opens on the palette's `code`, so a
+ * host that registered its own now gets it here too, and closes on a plain reset, which
+ * is what a resume outside any styled region resolves to anyway.
+ */
 export function renderCode(s: string): string {
-  return s.replace(CODE_RE, (_m: string, x: string) => `${TAGS.code}${x}${R}`);
+  const open = resolveTag(CODE) ?? "";
+  return s.replace(CODE_RE, (_m: string, x: string) => `${open}${x}${R}`);
 }

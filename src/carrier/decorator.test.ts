@@ -14,7 +14,7 @@ import { cutStreamingDecorated, DECORATOR_HINT } from "./decorator.js";
 import { VIEW_EXT } from "../template/load.js";
 import { ANSI_RE, tagMark } from "../style.js";
 import { hasControlMark } from "../data/marks.js";
-import { EACH, END, FIELDS, TONE } from "../data/language.js";
+import { EACH, END, FIELDS, TEXT, TONE } from "../data/language.js";
 import { SCRATCH_DIR } from "../data/markup.js";
 
 const ESC = "\x1b";
@@ -95,6 +95,24 @@ write(second, viewFile(STATIC), "the box is the template\n");
 write(second, viewFile(TONED), rowsView("{{tone}}${label}{{/}}" + SEP + "${content}"));
 write(second, viewFile(DEFAULTED), `${TONE} gold\n` + rowsView("{{tone}}${label}{{/}}" + SEP + "${content}"));
 write(second, viewFile(CHIPPED), rowsView("{{tone_bg}}${label}{{/}}" + SEP + "${content}"));
+// A view reading the BLOCKQUOTE payload: the kind through a text table, the body as one
+// field. Its @tone default is what an unmarked quote falls to, so every colour assertion
+// below reads against a class no marker and no attribute named.
+const BANDED = "banded";
+const WARNING_WORD = "⚠ WARNING";
+const NOTE_WORD = "ⓘ NOTE";
+write(
+  second,
+  viewFile(BANDED),
+  lines(
+    `${TONE} gold`,
+    `${TEXT} kinds warning="${WARNING_WORD}" *="${NOTE_WORD}"`,
+    "{{tone}}[${type:kinds}] ${content}{{/}}"
+  )
+);
+// A typed FILE for the same view, on the earlier dir so it would win if it were ever
+// reached: a marker names a kind, never a file, and this fixture is how that is observed.
+write(first, viewFile(BANDED, "warning"), "TYPED FILE\n");
 write(second, viewFile(ITEM, ALERT), rowsView("!! ${label} ${content}"));
 write(first, viewFile(ITEM, LOUD), rowsView("A[${label}|${content}]"));
 write(second, viewFile(ITEM, LOUD), rowsView("B[${label}|${content}]"));
@@ -229,9 +247,40 @@ describe("a decorated payload", () => {
     expect(line!.indexOf(SEP)).toBe(CAP);
     expect(line).toContain("tail");
     // The cut lands inside the bold span: its style must be CLOSED before the
-    // template's own separator, never left bleeding into the content column.
+    // template's own separator, never left bleeding into the content column. And the
+    // LABEL's own colour has to come back with it, or the ellipsis and everything after
+    // it print plain where the template asked for cyan.
     const cell = out.split("\n").find((l) => l.includes("…"));
     expect(cell!.indexOf(RESET)).toBeLessThan(cell!.indexOf(SEP));
+    expect(cell).toContain(`${RESET}${CYAN}…`);
+  });
+
+  it("hands a styled CELL its own colour back after a bold span, mid-label", () => {
+    const out = transform(
+      decorated(decorator(ITEM), "| so **very** bold | tail |"),
+      undefined,
+      true,
+      undefined,
+      options
+    );
+    expect(out).toContain(`${BOLD}very${RESET}${CYAN}`);
+  });
+
+  it("resumes the BOLD span after a code span nested in it, and the cell after both", () => {
+    // The message's own backticks become a span of the engine's INSIDE the bold one, so
+    // two frames nest in one cell. The inner resume owes the line its bold back, the
+    // outer owes it the cell's colour, and popping one entry would have handed the first
+    // of those the code colour instead.
+    const out = transform(
+      decorated(decorator(ITEM), "| so **very `fast` here** bold | tail |"),
+      undefined,
+      true,
+      undefined,
+      options
+    );
+    expect(out).toContain(`${RESET}${CYAN}${BOLD} here`);
+    // The label is capped, so what follows is the cut and not the rest of the word.
+    expect(out).toContain(`here${RESET}${CYAN} b`);
   });
 });
 
@@ -329,6 +378,133 @@ describe("the tone", () => {
   });
 });
 
+// The SECOND payload shape. A quote is what a banner is written as, because it is the
+// shape that survives both degradations: still a visible block in a raw transcript, and
+// a native alert box where the marker is understood.
+describe("a decorated blockquote", () => {
+  // The marker as a MODEL writes it, spelled independently of the production constant:
+  // a test sharing the spelling of what it drives cannot catch a drift in it.
+  const marker = (kind: string): string => `[!${kind}]`;
+  /** A quote zone under a decorator, closed by the blank line the rule requires. */
+  const band = (deco: string, ...body: string[]): string =>
+    lines(deco, ...body.map((l) => `> ${l}`), "");
+  const render = (deco: string, ...body: string[]): string =>
+    transform(band(deco, ...body), undefined, true, undefined, options);
+  const plain = (deco: string, ...body: string[]): string =>
+    render(deco, ...body).replace(ANSI_RE, "");
+
+  it("reaches the template as content, the marker as the kind, the line consumed", () => {
+    const out = render(decorator(BANDED), marker("WARNING"), "two flaky suites");
+    expect(out).toContain(YELLOW); // the KIND painted it, and no attribute said so
+    expect(out.replace(ANSI_RE, "")).toContain(`[${WARNING_WORD}] two flaky suites`);
+    expect(out).not.toContain(DECORATOR_HINT);
+    expect(out).not.toContain(">");
+  });
+
+  it("joins the body on ONE space, which is markdown's own soft-wrap", () => {
+    const out = plain(decorator(BANDED), marker("WARNING"), "one", "two", "three");
+    expect(out).toContain("one two three");
+    expect(out.trim().split("\n")).toHaveLength(1);
+  });
+
+  it("takes the reserved entry and the template's own tone with NO marker", () => {
+    const out = render(decorator(BANDED), "just a sentence");
+    expect(out).toContain(GOLD);
+    expect(out).not.toContain(YELLOW);
+    expect(out.replace(ANSI_RE, "")).toContain(`[${NOTE_WORD}] just a sentence`);
+  });
+
+  it("gets its own colour back after a bold span, rather than losing it there", () => {
+    const out = render(decorator(BANDED), "so **very** bold, and the rest");
+    // The band opens GOLD and the emphasis the message authored interrupts it. Closing
+    // that span on a reset left every character after it plain, and no template author
+    // could have compensated: the view has no idea where a `**` will land.
+    expect(out).toContain(`${BOLD}very${RESET}${GOLD}`);
+    expect(hasControlMark(out)).toBe(false);
+  });
+
+  it("echoes a kind the table never heard of, and keeps the template's tone", () => {
+    const out = render(decorator(BANDED), marker("DEPLOY"), "shipped");
+    expect(out.replace(ANSI_RE, "")).toContain("[DEPLOY] shipped");
+    expect(out).toContain(GOLD);
+  });
+
+  it("lets tone: dress an unknown kind, the look being the more explicit word", () => {
+    const out = render(dressed(BANDED, "tone:success"), marker("DEPLOY"), "shipped");
+    expect(out).toContain(GREEN);
+    expect(out.replace(ANSI_RE, "")).toContain("[DEPLOY]");
+  });
+
+  it("lets the MARKER beat a type: attribute, and load no typed file for either", () => {
+    // The precedence is not a branch anywhere: the carrier leaves dressing.type unset
+    // when the payload named a kind, and render.ts overrides the field only FROM a
+    // dressing that carries one. The typed file on the earlier dir proves the second
+    // half: a marker names a kind, never a file.
+    const out = render(decorator(BANDED, "error"), marker("WARNING"), "body");
+    expect(out).toContain(YELLOW);
+    expect(out).not.toContain(RED);
+    expect(out).not.toContain("TYPED FILE");
+  });
+
+  it("still lets a type: attribute through when the quote names no kind at all", () => {
+    // Nothing about the second payload shape retires the attribute: with no marker it
+    // behaves exactly as it does over a table, typed file included.
+    const out = render(decorator(BANDED, "warning"), "body");
+    expect(out).toContain("TYPED FILE");
+  });
+});
+
+// The seam this engine holds: message text becoming a scope value. A quote's body is
+// message text in exactly the way a cell is, and it gets the same treatment because it
+// runs through the same function.
+describe("a blockquote body, neutralised", () => {
+  const render = (...body: string[]): string =>
+    transform(
+      lines(decorator(BANDED), ...body.map((l) => `> ${l}`), ""),
+      undefined,
+      true,
+      undefined,
+      options
+    );
+
+  it("prints a tag the message wrote as TEXT, opening no colour and closing none", () => {
+    const written = `${tagMark("fail")}not${tagMark("/")}`;
+    const out = render(`a band ${written} can claim`);
+    expect(out.replace(ANSI_RE, "")).toContain(written);
+    expect(out).not.toContain(RED); // the tag never opened its colour
+    expect(out).toContain(GOLD); // and the band kept the one it meant to hold
+    expect(hasControlMark(out)).toBe(false);
+  });
+
+  it("honours a bold span the message authored, exactly as a table cell does", () => {
+    const out = render("so **very** bold");
+    expect(out).toContain(`${BOLD}very`);
+    expect(out).not.toContain("*");
+  });
+});
+
+// Every matcher here is built so a malformed line falls through to the BODY, where the
+// author sees it printed. A near-miss that VANISHED would be indistinguishable from a
+// matcher that swallows, which is why each of the four has its own case.
+describe("a marker that is not one", () => {
+  const opening = (near: string): string =>
+    transform(
+      lines(decorator(BANDED), `> ${near}`, "> and the rest", ""),
+      undefined,
+      true,
+      undefined,
+      options
+    ).replace(ANSI_RE, "");
+
+  const NEAR_MISSES = ["[!📦 VERSION]", "[! WARNING]", "[!warning]", "[!TWO WORDS]"];
+
+  it.each(NEAR_MISSES)("prints %s inside the band as content, not as a kind", (near) => {
+    const out = opening(near);
+    expect(out).toContain(near);
+    expect(out).toContain(`[${NOTE_WORD}] ${near} and the rest`);
+  });
+});
+
 describe("what the carrier must NOT touch", () => {
   it("leaves an undecorated table byte-identical, whatever its rows or columns", () => {
     for (const table of [
@@ -359,10 +535,21 @@ describe("fail-open, decorator line included", () => {
   });
 
   it("shows the raw zone when the template exists but reads none of the rows", () => {
-    // The old two-cell table.view shape: it throws nothing and renders only
-    // whitespace, and a blank where content stood must fail open, not ship.
+    // The old two-cell table.view shape: it reads `left` and `right`, a table hands it
+    // `rows`, and nothing it draws can come from the payload. Caught on the NAMES, in
+    // render.ts, because a template with furniture would print regardless.
     write(second, viewFile(STALE), lines(`${FIELDS} left right`, "${left}  ${right}"));
     const msg = decorated(decorator(STALE), KV_ROW);
+    expect(raw(msg)).toBe(msg);
+  });
+
+  it("shows the raw zone when every field it DOES read arrived blank", () => {
+    // The last reading, and the only one the output can answer: the names line up, the
+    // data arrived, and the screen still gets nothing. A blank line where content stood
+    // is the same lie as an empty skeleton.
+    const BLANKS = "blanks";
+    write(second, viewFile(BLANKS), rowsView("${label}${content}"));
+    const msg = decorated(decorator(BLANKS), "| | |");
     expect(raw(msg)).toBe(msg);
   });
 
@@ -374,6 +561,43 @@ describe("fail-open, decorator line included", () => {
     ]) {
       expect(raw(msg)).toBe(msg);
     }
+  });
+
+  it("shows the raw zone when prose sits on the line directly under a quote", () => {
+    // The rule a quote lives under, and it is ENFORCED rather than remembered: a zone is
+    // the run of non-blank lines under the decorator, so the paragraph joins the quote,
+    // no parser claims the mixture, and every line the author wrote stays on screen.
+    const msg = lines(decorator(BANDED), "> [!WARNING]", "> a band", "glued prose");
+    expect(raw(msg)).toBe(msg);
+  });
+
+  it("shows it for a quote glued to a TABLE below it, the other way round too", () => {
+    const msg = lines(decorator(BANDED), "> a band", EMPTY_HEADER, DELIM, KV_ROW);
+    expect(raw(msg)).toBe(msg);
+  });
+});
+
+// Pinned as a test rather than as code, and it passes on day one: that IS the point. The
+// next person reaching for the wrapper here has to delete an assertion that says why.
+describe("a band wider than the render", () => {
+  it("comes out on one line, unwrapped and untruncated, measured by nothing", () => {
+    // A body line outside a box never reaches wrapLine (it is called from box.ts and
+    // aside.ts alone), so the TERMINAL breaks a long band: the chip stays open across
+    // the break, the colour continues, and the closing cap lands on the last row. The
+    // caps landing on different rows is understood by a reader as one band, and buying a
+    // wrapper here would mean giving a bare body line a width it has never had.
+    const long = "mot ".repeat(WIDTH).trim();
+    const out = transform(
+      lines(decorator(BANDED), `> [!WARNING]`, `> ${long}`, ""),
+      undefined,
+      true,
+      undefined,
+      options
+    ).replace(ANSI_RE, "");
+    expect(out.trim().split("\n")).toHaveLength(1);
+    expect(out).toContain(long);
+    expect(out).not.toContain("…");
+    expect(out.trim().length).toBeGreaterThan(WIDTH);
   });
 });
 
@@ -465,5 +689,42 @@ describe("streaming", () => {
   it("holds back a decorator line whose payload has not even started", () => {
     expect(cutStreamingDecorated(lines("prose", decorator(ITEM)))).toBe(lines("prose"));
     expect(cutStreamingDecorated(lines(decorator(ITEM), EMPTY_HEADER))).toBe("");
+  });
+
+  it("holds a QUOTE zone back until its blank line arrives, not until a pipe does", () => {
+    // The cut reads the run through the same table the render does. Reading a quote's
+    // run as a table's would call the zone closed on its very first line, and a band
+    // half-composed would reach the screen before the flush that completes it: a delta
+    // already shown cannot be retracted, so the caps would be drawn twice.
+    expect(cutStreamingDecorated(lines(decorator(BANDED), "> [!WARNING]", "> half a b"))).toBe("");
+    expect(cutStreamingDecorated(lines("prose", decorator(BANDED), "> a band"))).toBe(
+      lines("prose")
+    );
+  });
+
+  it("lets the quote through once the blank line closes the zone", () => {
+    const closed = lines(decorator(BANDED), "> a band", "", "after");
+    expect(cutStreamingDecorated(closed)).toBe(closed);
+  });
+
+  it("streams a band whole, and never twice, on an in-order stream", () => {
+    const chunks = ["intro", decorator(BANDED), "> [!WARNING]", "> two flaky suites", "", "after"].map(
+      (l) => `${l}\n`
+    );
+    let prev = "";
+    let screen = "";
+    chunks.forEach((delta, i) => {
+      const display = slice(prev, delta, undefined, i === chunks.length - 1, undefined, options);
+      prev += delta;
+      screen += display === null ? delta : display;
+    });
+    const plain = screen.replace(ANSI_RE, "");
+    expect(plain).toContain("intro");
+    expect(plain).toContain("after");
+    expect(plain).toContain(`[${WARNING_WORD}] two flaky suites`);
+    expect(screen).not.toContain(DECORATOR_HINT);
+    expect(plain).not.toContain(">");
+    // Once. A zone revealed before its end is known is a zone the next flush draws again.
+    expect(plain.split(WARNING_WORD)).toHaveLength(2);
   });
 });

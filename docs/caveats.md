@@ -20,6 +20,14 @@ A fenced code block no longer collides: the fences are read first and the outerm
 
 > **Boundary:** the token's surface is a tested trade; the indented block is a gap left open on purpose.
 
+### A long band is broken by the terminal, caps and all
+
+A band (`banner.view` and anything else drawing one line outside a box) is emitted UNWRAPPED and unmeasured. A body wider than the terminal is soft-wrapped by the terminal itself: the chip stays open across the break, the colour continues on the next row, and the closing cap lands at the end of the last one rather than at the right edge of the first.
+
+That is the accepted look, not an oversight, and naming it here is what stops it being reported as a bug. Wrapping is a box's business (`wrapLine` is called from `box.ts` and `aside.ts` alone), so buying it here would mean giving a bare body line a width it has never had. Keep a band to a sentence; a paragraph wants a box.
+
+> **Boundary:** deliberate, and pinned by a test that passes on day one, so removing it is an act rather than a drift.
+
 ### Resize the terminal and the print is broken
 
 Width is measured at print time and nothing reflows afterwards. Claude Code's own output behaves the same way.
@@ -52,6 +60,7 @@ Nothing crosses over between them. An engine once resolved every tag it knew ANY
 | A token cut mid-flush (`@{view:ta`) leaks its first characters | Leading characters only, never the zone below an anchored decorator; markup re-emits from the divergence, so nothing is dropped | Deliberate: shown text cannot be retracted |
 | An interrupted message never reveals what was withheld | That message alone, no final flush ever arrives | Claude Code's dispatcher |
 | Headless (`claude -p`) shows plain data | End-to-end checks are manual; everything below `handleMessageDisplay` stays unit-testable | Claude Code: no display to hook |
+| A colour the HOST opened is not resumed after an engine span | A code span, chip or bold span sitting inside a sequence the engine did not write; the reset still happens there | Deliberate: the engine tracks its own marks, never arbitrary sequences on the line |
 
 ## Reference: the `@` collision catalogue
 

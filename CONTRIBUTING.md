@@ -23,6 +23,7 @@ pnpm test             # vitest, the whole suite
 pnpm lint
 pnpm typecheck
 pnpm check:sidecars   # every module answers for itself
+pnpm check:vocabulary # every word of the language comes from src/data/
 pnpm verify           # all of the above, then the pack gate
 ```
 
@@ -56,6 +57,12 @@ The test suite drives the same storeys (`transform`, `slice`, `handleMessageDisp
 A module with no sidecar says why IN WRITING, in the exclusion table of `scripts/check-sidecars.mjs`, which `pnpm check:sidecars` gates. The gate bites both ways, or the table rots into a list of excuses: an entry naming a module that has since gained a test, or that no longer exists, fails too. A reason there is a decision; anything reading "not yet" belongs in the suite instead.
 
 Two other kinds sit outside the rule. A suite answering for a PATH rather than a module lives in `tests/`, exempt by LOCATION so there is no allowlist to keep in step (`tests/integration/examples.test.ts` drives `examples/` through the real engine, so the front door's demo cannot rot). End to end is `scripts/verify-pack.mjs` alone, the only thing here that crosses a process.
+
+## The other gate: a word of the language lives in one place
+
+`pnpm check:vocabulary` refuses an `@word` spelled anywhere in `src/` outside `src/data/`, in a string, a template literal or a regex alike. Declare it in `language.ts` and compose the matcher from it (a scoped package specifier is the one `@` this rule lets through, told apart by its slash). Tests are exempt, deliberately: a fixture sharing its constant with the matcher it drives cannot catch a drift in it, so the words there are typed by hand.
+
+It reads as a style rule and it is a correctness one. "Raw over hollow" refuses a render whose template resolved none of the data it was handed, decided on the reads `lookup` RECORDED, so a directive reading the scope without going through it is counted by nobody and its render is refused. What stops that is the sweep in `render.test.ts` driving every directive of the language, and that sweep reads the vocabulary to know what "every" means. A word typed straight into a matcher is invisible to it, gets no case, and walks the engine back into a defect that cost a rewrite to close.
 
 Two habits go with it. Tests typecheck like the rest of the code, so a fixture that no longer matches the shape it drives proves nothing (`tsconfig.json` includes them; `tsconfig.build.json` declares its own scope so none of them reach `dist`). And write the NEAR-MISS as well as the hit: every matcher here is built so a malformed line falls through to the body, where an author sees it printed, and a test fed only valid input cannot tell that apart from a matcher that swallows.
 

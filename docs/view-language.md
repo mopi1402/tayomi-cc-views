@@ -44,9 +44,25 @@ Repeats its inner lines once per item of `<field>`. Attribute values are QUOTED,
 
 - `label="CHECKS"`: the label renders on the FIRST item (via `${#label}`), spaces of the same width on every later one, so a section names itself once. The label column is as wide as the WIDEST label any `@each` in the template declares.
 - `bullet="- "`: an item marker, substituted per item (so `bullet="R${#} "` numbers rows), exposed as `${#bullet}`, and carrying the hanging-indent boundary so a wrapped item aligns under its own text instead of under its bullet.
-- `cap="1/3"`: clamps the measured width of every LEADING column of the loop at `floor(width * n / d)`. A value past the cap is cut on an ellipsis; the cut is markup-aware (a `{{tag}}` is never cut open, a code span keeps its backticks) and closes whatever style it interrupted. Only capped columns ever truncate: an uncapped column is measured over its values, so nothing exceeds it.
+- `cap="1/3"`: clamps the measured width of every LEADING column of the loop at `floor(width * n / d)`. A value past the cap is cut on an ellipsis; the cut is markup-aware (a `{{tag}}` is never cut open, a code span keeps its backticks) and closes whatever the VALUE left open, handing the line back the style the template had around the cell. Only capped columns ever truncate: an uncapped column is measured over its values, so nothing exceeds it.
 
 Column alignment inside a loop is automatic: each field of an object list becomes a padded column, except the LAST field (the prose tail), emitted verbatim.
+
+### `@map <name> <value>=<tag> ...` and `@text <name> <value>="..." ...`
+
+Two lookup tables, one substitution. Both declare an enum, both are spent by `${field:name}`, and which answer comes out is the TABLE's business rather than the caller's: `@map` turns a value into a STYLE (a chip), `@text` turns it into a WORD.
+
+```
+@map  states  ok=success  fail=error
+@text kinds   warning="⚠ WARNING"  version="◆ VERSION"  *="ⓘ NOTE"
+```
+
+- `@map`'s pairs split on whitespace, because a tag name has none. `@text`'s pairs are QUOTED, because a text value has spaces by definition; an unquoted pair is simply not one and is skipped.
+- A name declared by BOTH directives is a template error, not a merge: one `${field:name}` asks them both, and a merge would leave the winner to the order the lines happen to sit in. The view fails open, and the raw block shows.
+- Three outcomes serve one slot, and they have to be three. An entry the table DECLARES renders verbatim, the author's glyph and casing byte for byte. A value ABSENT or whitespace-only takes the reserved entry `*`. A value present but OFF the table echoes UPPERCASED, which shows the unknown word rather than swallowing it.
+- The echo is uppercase where `@map`'s off-map value is verbatim, and the asymmetry is narrow and deliberate: on the marker path (below) the shape forced uppercase and the carrier lowercased it, so the echo is a restoration. Everywhere else, a mapped slot showing an uppercase word is the same rule `@map` already follows when it uppercases a chip's label.
+- Padding is `@map`'s existing rule and is not re-decided: padded to the cell when the substitution sits in a padded column, bare outside one. A band is not a column, so a banner never pads; a text table spent inside an `@each` still aligns, and it is measured on the WORD that comes out, never on the key that chose it.
+- `@text` carries the WORD and never a colour. A kind's look comes from the tone slot, so it has one place to be declared, not two that can contradict each other.
 
 ### `@box ... @endbox`, with `@head`, `@right`, `@foot`, `@frame`, `@rule`
 
@@ -86,7 +102,7 @@ The health check, at the full content width.
 `${...}` resolves against the block's fields (plus the loop's bookkeeping):
 
 - `${field}`: the value. Dotted paths (`${a.b}`) resolve into nested data.
-- `${field:mapname}`: the value looked up in an `@map` table. On the map, it renders as a chip: the value UPPERCASED inside the mapped tag's colours, padded so chips align down the column. Off the map, plain text, padded to the same cell.
+- `${field:tablename}`: the value looked up in the table of that name, `@map` or `@text` (see the directives above). Through an `@map`, on the map, it renders as a chip: the value UPPERCASED inside the mapped tag's colours, padded so chips align down the column; off the map, plain text, padded to the same cell. Through an `@text`, it renders the declared word verbatim, the reserved `*` entry when nothing arrived, and the token uppercased when the table does not hold it.
 - `${.}`: the current item of the enclosing `@each` (an object item re-serialises as `key: value, ...` prose).
 - `${#}`: the current item's 1-based index.
 - `${#label}`: the loop's label column (see `label=`). Outside a labelled loop it is spaces of the label column's width, so a non-list line can align with one.
@@ -95,6 +111,10 @@ The health check, at the full content width.
 ## Inline styling
 
 `{{tag}}` opens a style, `{{/}}` resets. An UNKNOWN tag name stays on screen verbatim (it is text, not markup), and every width measurement agrees with that.
+
+A span the ENGINE inserts inside your line (an inline code span, a `@map` chip, the bold a decorated cell derives from the message's `**`) RESUMES the style it interrupted instead of clearing it, so `{{dim}}- Read ${trace}{{/}}` stays dim on both sides of a backtick. Your own `{{/}}` still means reset, and it still closes everything: the resume exists precisely for the terminators you cannot see coming, since the line has no way to know where the model will put a backtick.
+
+What resumes is the style that stood OUTSIDE the span, whatever the span's own text did in between. A tag you write between backticks paints the rest of that span and stops there, and spans nest: a chip whose label carries a code span hands the chip back at the tick, and the line back at the chip's edge.
 
 This is the VIEW language, and it is spoken in a `.view` file only. A tag written in a MESSAGE is inert, in its prose and inside a block's data alike: `{{warn}}` typed by the model prints as those eight characters, and it is measured as eight columns because that is what it costs. Only the template you wrote opens a style. That is what keeps presentation on disk, where you can read it and change it, instead of in whatever a model happened to emit.
 
@@ -179,17 +199,38 @@ The block carries no attributes, so a `tone` or `type` FIELD is how it names the
 @{view:<name> type:<kind> tone:<tag>}
 ```
 
-Alone on its line (surrounding whitespace allowed), directly above a two-column pipe table: header row MANDATORY (its cells may be empty, `| | |`), then the delimiter row, then at least one data row. The zone ends by markdown's own block rule, at the first line that no longer starts with a pipe.
+Alone on its line (surrounding whitespace allowed), directly above its payload. TWO payload shapes, and the FIRST line of the zone decides which, nowhere else: a leading pipe is a table, a leading `>` is a blockquote.
+
+**A table**: header row MANDATORY (its cells may be empty, `| | |`), then the delimiter row, then at least one data row. The zone ends by markdown's own block rule, at the first line that no longer starts with a pipe.
+
+**A blockquote**, which is what a one-line band is written as:
+
+```
+@{view:banner}
+> [!WARNING]
+> two flaky suites, publication is blocked
+```
+
+- The body reaches the template as `content`: the `>` prefixes come off and the lines join with ONE space, which is markdown's own soft-wrap, so the render and the hookless fallback read the same sentence.
+- The first body line may be a KIND MARKER, `[!TOKEN]` alone on the line, matching one uppercase run (`[A-Z][A-Z0-9_-]*`). It reaches the template LOWERCASED in the `type` field, which is what makes the whole thing need nothing from the palette: the tone slot already reads that field and its classes are lowercase, so `[!WARNING]` paints yellow. The uppercase comes back at the other end, from the template's `@text` table.
+- No space, no glyph, no lowercase, no second word. `[!📦 VERSION]`, `[! WARNING]`, `[!warning]` and `[!TWO WORDS]` are NOT markers: each stays the first line of the content and prints inside the band, where the author sees it. The narrowness is the point, because once a space is legal the marker has become the label slot the `@text` table exists to remove.
+- The marker BEATS a `type:` attribute, and that is not a branch anywhere: when the payload names a kind the carrier leaves the dressing's kind unset, and the template's field is what reaches the render. It follows that a marker never selects a typed FILE either. With no marker, `type:` behaves exactly as it does over a table.
+- The quote must be followed by a BLANK LINE or end the message. Its zone is the run of contiguous non-blank lines, so prose written on the very next line JOINS the zone, no parser claims the mixture, and the whole thing fails open with every line intact.
+- The band is emitted on ONE line and nothing measures it: see [caveats](caveats.md).
+
+**The fallback gradient.** A marked quote is what survives where this engine does not run, and it degrades in three steps. Re-rendered as plain markdown, exactly five tokens become native alert boxes: `NOTE`, `TIP`, `IMPORTANT`, `WARNING` and `CAUTION` (verified against GitHub's writing-and-formatting docs, 2026-08-02). Any other token falls back to an ordinary quote whose first line reads `[!VERSION]` literally, which is still visible and still self-describing. Read raw in a transcript, it is still a quote. One boundary worth knowing: an alert cannot be NESTED, so a banner's quote has to sit at the top level of the message. One written inside a list item or another quote keeps rendering here and loses its native fallback there.
 
 A decorator has NO payload when the line under it is blank or absent, and only then. That is how a static view is asked for: `@{view:welcome}` alone, ending the message or with a blank line under it, is the whole health check. Prose on the very next line IS a payload, no parser claims it, and the zone fails open.
 
-Whether a payload exists and how far it reaches are two questions, deliberately kept apart. Existence is decided by that blank line, the one boundary every markdown block agrees on. Extent belongs to the payload's own shape: a table ends at the first line that no longer starts with a pipe, which is markdown's rule, so a table followed straight by prose is still a table. Asking the table scanner where the zone ended made everything it could not read look like nothing at all, which is how a quoted example became a view summoned with no data.
+Whether a payload exists and how far it reaches are two questions, deliberately kept apart. Existence is decided by that blank line, the one boundary every markdown block agrees on. Extent belongs to the payload's own SHAPE, and the two shapes answer differently: a table ends at the first line that no longer starts with a pipe, which is markdown's rule, so a table followed straight by prose is still a table; a quote ends at the first blank line, so a quote followed straight by prose is neither, and fails open. Asking the table scanner where the zone ended made everything it could not read look like nothing at all, which is how a quoted example became a view summoned with no data.
 
-A payload that exists but is not a shape a parser here claims fails open, and so does a hollow render, under either of two readings: no data reached a template that spends a substitution, or data reached one that reads none of it.
+A payload that exists but is not a shape a parser here claims fails open, and so does a hollow render, under any of three readings: no data reached a template that spends a substitution; data reached one that read none of the fields it got; or every field it did read arrived blank. The middle one is decided on the fields the render ACTUALLY resolved, never on what it printed, because a template drawing literal furniture puts ink on screen whatever it was handed. That is what makes a view refuse a payload SHAPE by not reading it: `banner.view` reads `content`, a table hands it `rows`, and the raw table shows.
 
-- The payload stays plain markdown, so the FALLBACK is native: wherever the hook does not run, the reader gets an ordinary table under one extra line.
-- The template receives `rows`, a list of `{ label, content }`. An empty label cell continues the label above (one row per item).
-- A cell may carry an escaped pipe (`\|`) and authored `**bold**` spans (rendered as bold, per span; nothing is added the message did not carry).
+"Actually resolved" is meant literally: the reads are recorded by the accessor every field resolution goes through, so the answer covers whatever a template really spent, and a field mentioned on a line the render never reached does not count. A `${field}` inside a loop over an absent list is not read, and neither is the tag an `@tone` names or the view an `@aside` names, neither of which is a field at all.
+
+- The payload stays plain markdown, so the FALLBACK is native: wherever the hook does not run, the reader gets an ordinary table, or an alert quote, under one extra line.
+- A table reaches the template as `rows`, a list of `{ label, content }`. An empty label cell continues the label above (one row per item). A quote reaches it as `content`, plus the `type` field its marker named.
+- Message text becomes a scope value under ONE treatment, whichever shape carried it: neutralised first (a `{{tag}}` the model wrote prints as those characters and opens no colour), then authored `**bold**` spans rendered per span. Nothing is added the message did not carry. A table cell may additionally carry an escaped pipe (`\|`), the one escape a cell needs and a quote does not.
 - `type:` names the KIND of content (`warning`, `error`, `success`; think markdown admonitions). It selects a typed form when one exists (above), reaches the template as the `type` field (so `@frame type warning=fail` colours a border from it), and fills the tone slot when the palette knows the name.
 - `tone:` names the LOOK: a palette tag stuck on this render, no file, no semantics, and it outranks the kind. A look wearing a semantic name (`type:even`) would lie to the model about what the content IS, which is why the two words stay apart.
 - Both attributes are OPTIONAL, come in any order, and are separated by a comma, whitespace, or both. Any OTHER attribute makes the line prose. The token must begin `@{view:` exactly, which keeps PowerShell's `@{Name='x'}` and a quoted mention inside a sentence from engaging.

@@ -29,8 +29,9 @@ export {
 // format (a gate judging the block the engine draws): both must share this parser.
 export { parseData, type ObjectLists } from "./template/view-data.js";
 
-// The scope a template resolves against, for a host that injects fields.
-export { stringify, type Scope, type Maps } from "./scope.js";
+// The scope a template resolves against, for a host that injects fields, and the
+// lookup tables a template declares (@map, @text) under the one name they share.
+export { stringify, type Scope, type Table, type Tables } from "./scope.js";
 
 // The {{tag}} markup, for a host that colours its own lines with the same vocabulary,
 // and the one seam by which a host adds tags of its own (process-global, additive).

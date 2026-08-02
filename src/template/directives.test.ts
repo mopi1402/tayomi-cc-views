@@ -30,10 +30,10 @@ import { VIEW_EXT } from "../data/markup.js";
 import { HANG_MARK, RULE_MARK } from "../layout/marks.js";
 import { renderTags } from "../style.js";
 import { renderBody } from "./directives.js";
-import type { Maps, Scope } from "../scope.js";
+import type { Scope, Tables } from "../scope.js";
 
 const LIMIT = 60;
-const NO_MAPS: Maps = {};
+const NO_TABLES: Tables = {};
 const NO_LISTS = {};
 const TOP_LEFT = "╭";
 
@@ -54,9 +54,9 @@ const view = (name: string, body: string): string => {
 const render = (
   body: string[],
   scope: Scope = {},
-  maps: Maps = NO_MAPS,
+  tables: Tables = NO_TABLES,
   lists: Record<string, string[]> = NO_LISTS
-): string[] => renderBody(body, scope, maps, lists, LIMIT, dir);
+): string[] => renderBody(body, scope, tables, lists, LIMIT, dir);
 
 const text = (body: string[], scope: Scope = {}): string => render(body, scope).join("\n");
 
@@ -105,6 +105,24 @@ describe("@each", () => {
   it("swallows the rest of the template when its @end is missing, visibly not silently", () => {
     expect(render([`${EACH} note`, ITEM, "tail"], SCOPE)).toEqual(["one", "tail", "two", "tail"]);
   });
+
+  // Where the two halves of a text table MEET, and the only place they can be caught
+  // disagreeing: columns.ts measures the cell over the WORDS and substitute.ts spends
+  // it, and this layer is what hands the same registry to both. Measured on one side
+  // and spent on the other is how a column silently decouples, so the alignment is
+  // asserted on the rendered rows rather than on either half's arithmetic.
+  it("aligns a text table's column on the WORDS it renders, not on their keys", () => {
+    const tables: Tables = {
+      kinds: { kind: "text", entries: { warning: "WARNING!", "*": "NOTE" } },
+    };
+    const rows = [{ k: "warning", t: "a" }, { k: "deploy", t: "b" }, { t: "c" }];
+    const out = render([`${EACH} rows`, `${ref("k:kinds")}|${ref("t")}`, END], { rows }, tables, {
+      rows: ["k", "t"],
+    });
+    // A declared word, an off-map key echoed uppercase, and the reserved entry for the
+    // row that carried nothing: three different widths, one column.
+    expect(out).toEqual(["WARNING!|a", "DEPLOY  |b", "NOTE    |c"]);
+  });
 });
 
 describe("an @each declaration", () => {
@@ -140,8 +158,8 @@ describe("an @each declaration", () => {
     const wide = "a-very-long-value-here";
     const scope = { rows: [{ state: "ok", wide, text: "tail" }] };
     const lists = { rows: ["state", "wide", "text"] };
-    const capped = render([`${EACH} rows cap="1/10"`, line, END], scope, NO_MAPS, lists);
-    const uncapped = render([`${EACH} rows`, line, END], scope, NO_MAPS, lists);
+    const capped = render([`${EACH} rows cap="1/10"`, line, END], scope, NO_TABLES, lists);
+    const uncapped = render([`${EACH} rows`, line, END], scope, NO_TABLES, lists);
     expect(uncapped[0]).toContain(wide);
     expect(capped[0].length).toBeLessThan(uncapped[0].length);
   });

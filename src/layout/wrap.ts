@@ -5,7 +5,15 @@
 // span and is consumed downstream. Splitting a line as a plain string would count
 // that markup as text and, worse, could cut a tag or a span in half.
 
-import { CODE_TICK, TAG_AT, TAG_SOURCE, isTag, tagSource } from "../style.js";
+import {
+  CODE_TICK,
+  RESUME_MARK,
+  SPAN_MARK,
+  TAG_AT,
+  TAG_SOURCE,
+  isTag,
+  tagSource,
+} from "../style.js";
 import { HANG_MARK } from "./marks.js";
 import { printedWidth } from "./measure.js";
 import { clusterMap, displayWidth } from "./width.js";
@@ -58,15 +66,22 @@ function atomize(text: string): Atom[] {
 // what keeps the text in one column.
 // eslint-disable-next-line security/detect-non-literal-regexp
 const PREFIX_RE = new RegExp(`^(${ANY}${GUTTER_BAR}(?:${tagSource("/")})?${SPACE}?)(${ANY})$`);
+// What survives the blanking, and a span's BOTH ends belong there as much as a tag does:
+// a prefix holding a chip keeps the tag that opened it, so dropping the mark that closes
+// it paints every continuation row in the chip's own fill, out to the border, and
+// dropping the boundary that opens it sends that closing mark unwinding into the row's
+// own tags. Zero width apiece, so losing one costs a colour and never an alignment,
+// which is why the loss shows on screen and in nothing the measurer can see.
 // eslint-disable-next-line security/detect-non-literal-regexp
-const KEEP_RE = new RegExp(`(${TAG_SOURCE}|${GUTTER_BAR})`);
+const KEEP_RE = new RegExp(`(${TAG_SOURCE}|${SPAN_MARK}|${RESUME_MARK}|${GUTTER_BAR})`);
 // eslint-disable-next-line security/detect-non-literal-regexp
-const IS_KEPT = new RegExp(`^(?:${TAG_SOURCE}|${GUTTER_BAR})$`);
+const IS_KEPT = new RegExp(`^(?:${TAG_SOURCE}|${SPAN_MARK}|${RESUME_MARK}|${GUTTER_BAR})$`);
 
 /** The plain indent a line opens on: the prefix a line with no gutter bar hangs from. */
 const INDENT_RE = /^[ \t]*/;
 
-// Tags and the bar survive; every other visible character becomes a space.
+// Tags, the marks that close them, and the bar survive; every other visible character
+// becomes a space.
 function blankPrefix(prefix: string): string {
   return prefix
     .split(KEEP_RE)

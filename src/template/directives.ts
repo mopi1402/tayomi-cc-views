@@ -1,11 +1,12 @@
 // The .view language, interpretation half: the directives, applied to a scope.
 //
-// Directives: @map <field> <val>=<tag> ...   (enum -> style, resolved at parse time)
+// Directives: @map <name> <val>=<tag> ...    (enum -> style, resolved at parse time)
+//             @text <name> <val>="..." ...   (enum -> word, same)
 //             @each <field> ... @end          (repeat per list item)
 //             @box ... @endbox (+ @head, @right, @foot, @frame)
 //             @rule [prefix]                  (inner division, filled by the box)
 //             @aside <view> [top|bottom] ... @endaside   (a second column, left)
-// Substitutions: ${field}  ${field:mapname}  ${.}  ${#}  ${#label}  ${#bullet}
+// Substitutions: ${field}  ${field:tablename}  ${.}  ${#}  ${#label}  ${#bullet}
 //
 // Every word above is spelled in data/language.ts, and every pattern below composes
 // from it: a rename is one edit there, never a sweep through these matchers.
@@ -35,7 +36,7 @@ import { BOX_CHROME, frameBox } from "../layout/box.js";
 import { columnWidths, type PadCtx } from "../layout/columns.js";
 import { HANG_MARK, RULE_MARK } from "../layout/marks.js";
 import { printedWidth } from "../layout/measure.js";
-import { lookup, stringify, type Maps, type Scope } from "../scope.js";
+import { lookup, stringify, type Tables, type Scope } from "../scope.js";
 import { loadTemplate } from "./load.js";
 import { subst } from "./substitute.js";
 import type { ObjectLists } from "./view-data.js";
@@ -151,7 +152,7 @@ function asideRows(name: string, dirs: string | string[]): string[] {
 export function renderBody(
   body: string[],
   scope: Scope,
-  maps: Maps,
+  tables: Tables,
   objectLists: ObjectLists,
   limit: number,
   viewsPath: string | string[]
@@ -173,8 +174,8 @@ export function renderBody(
         const rm = body[i].match(RIGHT_RE);
         const fm = body[i].match(FOOT_RE);
         const cm = body[i].match(FRAME_RE);
-        if (hm) head = subst(hm[1], scope, maps);
-        else if (rm) right = subst(rm[1], scope, maps);
+        if (hm) head = subst(hm[1], scope, tables);
+        else if (rm) right = subst(rm[1], scope, tables);
         else if (fm) footField = fm[1];
         else if (cm) tone = frameTone(scope, cm[1], cm[2]);
         else inner.push(body[i]);
@@ -183,7 +184,7 @@ export function renderBody(
         ...frameBox(
           head,
           right,
-          renderBody(inner, scope, maps, objectLists, limit, viewsPath),
+          renderBody(inner, scope, tables, objectLists, limit, viewsPath),
           zoneLines(scope, footField),
           tone,
           limit
@@ -211,7 +212,7 @@ export function renderBody(
       out.push(
         ...composeAside(
           asideRows(aside[1], viewsPath),
-          renderBody(inner, scope, maps, objectLists, limit, viewsPath),
+          renderBody(inner, scope, tables, objectLists, limit, viewsPath),
           align,
           limit - BOX_CHROME
         )
@@ -221,7 +222,7 @@ export function renderBody(
     // Matched by string rather than by regex: an optional trailing group around
     // [\s\S]* is flagged as backtracking-prone, and the shape is too simple to need it.
     if (body[i] === RULE || body[i].startsWith(RULE_PREFIX)) {
-      out.push(RULE_MARK + subst(body[i].slice(RULE_PREFIX.length), scope, maps));
+      out.push(RULE_MARK + subst(body[i].slice(RULE_PREFIX.length), scope, tables));
       continue;
     }
     // A label is DECLARED rather than inferred (say, by blanking whatever precedes the
@@ -252,7 +253,7 @@ export function renderBody(
       // below, so nothing outside a list is padded.
       const fields = objectLists[eachField];
       const pad: PadCtx = {
-        widths: columnWidths(items, fields, inner, maps),
+        widths: columnWidths(items, fields, inner, tables),
         tail: fields && fields.length > 0 ? fields[fields.length - 1] : undefined,
       };
       if (capDecl) {
@@ -286,12 +287,12 @@ export function renderBody(
         // item; the boundary is appended here, once, rather than being spelled out in
         // every template that wants a marker.
         if (bullet != null) {
-          itemScope.__bullet = subst(bullet, itemScope, maps) + HANG_MARK;
+          itemScope.__bullet = subst(bullet, itemScope, tables) + HANG_MARK;
         }
-        for (const l of inner) out.push(subst(l, itemScope, maps, pad));
+        for (const l of inner) out.push(subst(l, itemScope, tables, pad));
       });
     } else {
-      out.push(subst(body[i], scope, maps));
+      out.push(subst(body[i], scope, tables));
     }
   }
   return out;

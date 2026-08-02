@@ -11,6 +11,7 @@ import {
   CHIP_CHROME,
   CODE_RE,
   RESET_MARK,
+  RESUME_MARK,
   TAG_RE,
   TAG_SOURCE,
   chip,
@@ -19,8 +20,10 @@ import {
   fillTone,
   inert,
   isTag,
+  markCode,
   renderCode,
   renderTags,
+  spanOpen,
   tagMark,
   tagSource,
   toneClass,
@@ -119,15 +122,160 @@ describe("neutralising a message's markup", () => {
     expect(inert("plain text")).toBe("plain text");
     expect(dropInert(inert("{{warn}}x"))).toBe("{{warn}}x");
   });
+
+  it("takes the engine's own control codes OFF, the other half of the same rule", () => {
+    // A brace is BROKEN because it must still print; a code prints nothing, so it goes.
+    // Left in, a byte the model spelled would end a span and close a colour the template
+    // opened, which is the one thing neutralising exists to make impossible.
+    expect(inert(`a${RESUME_MARK}b`)).toBe("ab");
+  });
 });
 
 describe("a chip", () => {
   it("puts a blank on each side of its label, so the colour never touches the text", () => {
-    expect(chip(KNOWN, "OK")).toBe(`${tagMark(KNOWN)} OK ${RESET_MARK}`);
+    expect(chip(KNOWN, "OK")).toBe(`${spanOpen(KNOWN)} OK ${RESUME_MARK}`);
   });
 
   it("spends exactly what the measurer reserves for it", () => {
     expect(printedWidth(chip(KNOWN, "OK"))).toBe("OK".length + CHIP_CHROME);
+  });
+});
+
+// A span the engine puts INSIDE a line whose style it did not choose: a code span, a
+// chip, the bold the decorator derives. Clearing at its right edge takes the rest of
+// the line down with it, and no template author can compensate for that: the line has
+// no idea where the model will put a backtick or a `**`.
+describe("a span the ENGINE inserted", () => {
+  /** The sequence a tag renders as, asked of the module that owns it. */
+  const seq = (name: string): string => renderTags(tagMark(name));
+  /** The same, for the closing tag, whose name style.ts keeps private. */
+  const RESET = renderTags(RESET_MARK);
+  const DIM = "dim";
+  const CODE = "code";
+
+  it("hands the line back the style its CODE SPAN interrupted", () => {
+    const line = `${tagMark(DIM)}- Read \`trace.ts\` again${RESET_MARK}`;
+    expect(renderTags(markCode(line))).toBe(
+      `${seq(DIM)}- Read ${seq(CODE)}trace.ts${RESET}${seq(DIM)} again${RESET}`
+    );
+  });
+
+  it("hands the line back the style a CHIP interrupted, and never the chip itself", () => {
+    const line = `${tagMark(DIM)}state ${chip(KNOWN, "OK")} done${RESET_MARK}`;
+    expect(renderTags(line)).toBe(
+      `${seq(DIM)}state ${seq(KNOWN)} OK ${RESET}${seq(DIM)} done${RESET}`
+    );
+  });
+
+  it("resolves to a PLAIN RESET with nothing open, which is the whole existing corpus", () => {
+    const line = "run `it` now";
+    expect(renderTags(markCode(line))).toBe(`run ${seq(CODE)}it${RESET} now`);
+    // And the public renderCode, which a host spends on a line of its own, agrees with
+    // it to the byte while handing back sequences rather than markup.
+    expect(renderCode(line)).toBe(renderTags(markCode(line)));
+    expect(renderCode(line)).not.toContain(tagMark(CODE));
+    // SELF-CONTAINED, and that is why it is not derived from the pair above: nothing
+    // else on the host's line is read as markup on the way past.
+    expect(renderCode(`${tagMark(KNOWN)} \`it\``)).toContain(tagMark(KNOWN));
+  });
+
+  it("re-opens the innermost of two tags opened in a row, and what stands under it", () => {
+    const line = `${tagMark(DIM)}${tagMark(FURNITURE)}x \`c\` y${RESET_MARK}`;
+    expect(renderTags(markCode(line))).toBe(
+      `${seq(DIM)}${seq(FURNITURE)}x ${seq(CODE)}c` +
+        `${RESET}${seq(DIM)}${seq(FURNITURE)} y${RESET}`
+    );
+  });
+
+  it("re-opens what the tone slot was FILLED with, never the literal word", () => {
+    const line = fillTone(markCode(`${tagMark(TONE_SLOT)}\`c\` y${RESET_MARK}`), KNOWN);
+    expect(renderTags(line)).toBe(
+      `${seq(KNOWN)}${seq(CODE)}c${RESET}${seq(KNOWN)} y${RESET}`
+    );
+  });
+
+  it("re-opens NOTHING an author's own reset closed, however many stood before it", () => {
+    // TWO of them, or a reset that merely closed the innermost would read the same and
+    // the language would have gained the nesting the ticket refuses it.
+    const line = `${tagMark(DIM)}${tagMark(FURNITURE)}x${RESET_MARK}\`c\` y`;
+    expect(renderTags(markCode(line))).toBe(
+      `${seq(DIM)}${seq(FURNITURE)}x${RESET}${seq(CODE)}c${RESET} y`
+    );
+  });
+
+  it("hands the style back after EVERY span on the line, not only the first", () => {
+    const line = `${tagMark(DIM)}a \`one\` b \`two\` c${RESET_MARK}`;
+    expect(renderTags(markCode(line))).toBe(
+      `${seq(DIM)}a ${seq(CODE)}one${RESET}${seq(DIM)} b ` +
+        `${seq(CODE)}two${RESET}${seq(DIM)} c${RESET}`
+    );
+  });
+
+  it("closes the whole FRAME its span opened, a tag the BODY wrote included", () => {
+    // The defect the opening mark exists for. A resume that popped one entry handed the
+    // line back the body's last tag instead of the style the span interrupted, and the
+    // body of a code span is anything up to the closing tick, a template's tags included.
+    const line = `${tagMark(DIM)}see \`a ${tagMark(FURNITURE)}b\` end${RESET_MARK}`;
+    expect(renderTags(markCode(line))).toBe(
+      `${seq(DIM)}see ${seq(CODE)}a ${seq(FURNITURE)}b${RESET}${seq(DIM)} end${RESET}`
+    );
+  });
+
+  it("closes a frame whatever its body opened, two tags as readily as one", () => {
+    // TWO, or a resume that popped a fixed number would read the same as one that pops
+    // to the boundary, and the rule would only look right at depth one.
+    const body = `a ${tagMark(FURNITURE)}b ${tagMark(KNOWN)}c`;
+    const line = `${tagMark(DIM)}see \`${body}\` end${RESET_MARK}`;
+    expect(renderTags(markCode(line))).toBe(
+      `${seq(DIM)}see ${seq(CODE)}a ${seq(FURNITURE)}b ${seq(KNOWN)}c` +
+        `${RESET}${seq(DIM)} end${RESET}`
+    );
+  });
+
+  it("leaves the line PLAIN after a span whose body wrote a tag, nothing being open", () => {
+    // The byte-identity case, and the one the frame is what finally buys: the body's tag
+    // was the last thing pushed, so a line with no style at all printed on in it.
+    const line = `see \`a ${tagMark(FURNITURE)}b\` end`;
+    expect(renderTags(markCode(line))).toBe(`see ${seq(CODE)}a ${seq(FURNITURE)}b${RESET} end`);
+  });
+
+  it("ends the INNER frame alone where two spans NEST, and the outer at its own mark", () => {
+    // A chip's label is data, and data carries backticks, so the engine's own spans nest.
+    // The inner resume must hand back the chip, and the outer the style around it.
+    const line = `${tagMark(DIM)}${chip(KNOWN, "run \`it\` now")} tail${RESET_MARK}`;
+    expect(renderTags(markCode(line))).toBe(
+      `${seq(DIM)}${seq(KNOWN)} run ${seq(CODE)}it${RESET}${seq(DIM)}${seq(KNOWN)} now ` +
+        `${RESET}${seq(DIM)} tail${RESET}`
+    );
+  });
+
+  it("stacks no UNKNOWN name, so a span closing OVER one still resumes the tag under it", () => {
+    // A code span's body is anything up to the closing tick, a template's own tags
+    // included. Counted, one of them would be popped in the opener's place and the code
+    // colour would run on to the end of the line.
+    const line = `${tagMark(DIM)}\`a ${tagMark(UNKNOWN)} b\` tail`;
+    expect(renderTags(markCode(line))).toBe(
+      `${seq(DIM)}${seq(CODE)}a ${tagMark(UNKNOWN)} b${RESET}${seq(DIM)} tail`
+    );
+  });
+
+  it("re-opens no UNKNOWN name, which reaches the screen as text and opened nothing", () => {
+    const line = `${tagMark(UNKNOWN)}\`c\` y`;
+    expect(renderTags(markCode(line))).toBe(`${tagMark(UNKNOWN)}${seq(CODE)}c${RESET} y`);
+  });
+
+  it("clears instead, where the span's OWN name is one the palette cannot answer for", () => {
+    // A `@map` names the tag its chip opens on, so this one span's opener is the
+    // template author's word and not the engine's. Unknown, it prints as text and opens
+    // nothing, and a resume would then close the style the chip is SITTING IN.
+    expect(chip(UNKNOWN, "OK")).toBe(`${spanOpen(UNKNOWN)} OK ${RESET_MARK}`);
+    const line = `${tagMark(DIM)}a ${chip(UNKNOWN, "OK")} b`;
+    expect(renderTags(line)).toBe(`${seq(DIM)}a ${tagMark(UNKNOWN)} OK ${RESET} b`);
+  });
+
+  it("re-opens no colour the HOST opened, which is a sequence and no tag of ours", () => {
+    const line = `${MAGENTA}host \`c\` tail`;
+    expect(renderTags(markCode(line))).toBe(`${MAGENTA}host ${seq(CODE)}c${RESET} tail`);
   });
 });
 
@@ -380,6 +528,16 @@ describe("extendTags", () => {
     const bad = "has space";
     expect(extendTags({ [bad]: MAGENTA }).skipped).toEqual([bad]);
     expect(isTag(bad)).toBe(false);
+  });
+
+  it("takes over the INLINE CODE colour too, engine spans and a host's own line alike", () => {
+    // The one place the engine's palette used to be read past the registry, so a host
+    // shadowing `code` was ignored where every other name it registers is honoured. This
+    // shadow outlives the test, like the one above: nothing below reads the built-in.
+    const CODE = "code";
+    expect(extendTags({ [CODE]: MAGENTA }).shadowed).toEqual([CODE]);
+    expect(renderCode("a `b`")).toBe(`a ${MAGENTA}b${renderTags(RESET_MARK)}`);
+    expect(renderTags(markCode("a `b`"))).toBe(renderCode("a `b`"));
   });
 });
 
