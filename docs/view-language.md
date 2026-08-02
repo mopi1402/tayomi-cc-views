@@ -135,11 +135,15 @@ The built-in vocabulary (`style.ts`):
 A host adds its own tags process-wide with `extendTags` (see the integration reference); a host's registration SHADOWS a built-in name, the last word going to the screen's owner, under the same law that lets a views dir shadow a bundled view. **Register the colour alone** and its chip and its cap both follow:
 
 ```ts
-extendTags({ brand: "\x1b[38;5;75m" });
+import { ansi256, extendTags, rgb } from "@tayomi/cc-views";
+
+extendTags({ brand: ansi256(75) });     // or rgb(95, 175, 255), the same blue
 // {{brand}}      the foreground, as declared
 // {{brand_bg}}   a chip filling with that blue, inked black because it is light
 // {{brand_cap}}  the blue again, for a glyph drawn against the chip
 ```
+
+`ansi256` and `rgb` are the two spellings the engine can MEASURE, which is why they are the two it exports: they name pixels, so a chip and a cap follow. Both are total like `extendTags` itself, a value outside `0..255` clamping and a fraction rounding, so a startup registration cannot cost the screen. Raw ANSI still works and is what you write for anything else, a background of your own included.
 
 One value in, three names out, none able to drift, and `tone:brand` dresses any view that spends the slot. Shadowing a built-in colour carries its chip along: register your own `info` and a band under `tone:info` fills with YOUR blue, not the engine's cyan.
 
