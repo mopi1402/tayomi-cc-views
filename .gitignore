@@ -18,3 +18,8 @@ sandbox/views/*
 # Globbed, not anchored: shiki resolves `.tayomi/` from the directory it is
 # handed, so any folder a gate ever ran in acquires one holding nothing else.
 **/.tayomi/state/
+# The inbox is session state too, and the same rule reaches it: a contract is a
+# decision the repo answers for, where this is a scratch list that empties as the
+# session goes. Tracked, every line taken out of it became a commit of its own,
+# and the file's whole history is a record of what was pending on a Sunday.
+**/.tayomi/reminders.md
