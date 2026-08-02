@@ -1,0 +1,21 @@
+# compare.view: an arbitration, carried by the DECORATOR so the fallback is a
+# native markdown table. The decorator hands the template ONE field, `rows`,
+# so everything here lives in the rows: criteria as labels, and the verdict as
+# a last row whose label the map below turns into a green chip.
+#   @{view:compare}
+#   | Criterion | Finding |
+#   | --- | --- |
+#   | speed   | option A wins, 3x |
+#   | risk    | option B, A touches the parser |
+#   | verdict | option A, the risk is bounded |
+# The label column spends the tone slot, so `tone:` on the decorator restyles
+# the whole board with no second file.
+@tone key
+@map labels verdict=success_bg
+@fields rows label content
+@box
+@head {{box_title}}compare{{/}}
+@each rows cap="1/4" bullet=""
+ {{tone}}${label:labels}{{/}}  ${#bullet}${content}
+@end
+@endbox

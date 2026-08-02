@@ -1,0 +1,17 @@
+# checks.view: the end-of-run report (tests, lint, build, any gate).
+# One chip per check, the border and badge follow the overall verdict, and the
+# optional `note:` field carries what the human should read first.
+@map verdicts ok=pass warn=warn fail=fail skip=low
+@map states ok=success_bg warn=warning_bg fail=error_bg
+@fields checks verdict name detail
+@box
+@head {{box_title}}${title}{{/}}
+@right ${status:states}
+@frame status warn=warn fail=fail
+@each checks label="CHECKS" cap="1/3"
+${#label}  ${verdict:verdicts} ${name}  ${detail}
+@end
+@rule
+ {{dim}}${elapsed}{{/}}
+@foot note
+@endbox
