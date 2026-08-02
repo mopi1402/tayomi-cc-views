@@ -9,6 +9,7 @@ const AT = "@";
 const keyword = (name: string): string => AT + name;
 
 export const MAP = keyword("map");
+export const TEXT = keyword("text");
 export const FIELDS = keyword("fields");
 export const TONE = keyword("tone");
 export const BOX = keyword("box");
@@ -26,8 +27,16 @@ const closes = (open: string): string => END + open.slice(AT.length);
 export const ENDBOX = closes(BOX);
 export const ENDASIDE = closes(ASIDE);
 
-/** What separates a key from its value in an @map pair or an @frame pair. */
+/** What separates a key from its value in an @map pair, an @frame pair or an @text pair. */
 export const PAIR_SEP = "=";
+
+/**
+ * The entry a lookup table reserves for a value that never arrived. Spelled once,
+ * because the directive that DECLARES it and the lookup that SPENDS it are two modules,
+ * and a table whose default key is `*` in one and `default` in the other holds an entry
+ * nothing can ever reach. A literal `default` would also be a plausible enum value.
+ */
+export const DEFAULT_KEY = "*";
 
 /**
  * What separates the TOKENS in a directive's tail: an @map's pairs, an @fields' names,
@@ -44,7 +53,7 @@ export const TOKEN_SEP = /\s+/;
 export const LABEL = "label";
 export const BULLET = "bullet";
 export const CAP = "cap";
-const QUOTED = String.raw`"([^"]*)"`;
+export const QUOTED = String.raw`"([^"]*)"`;
 const FRACTION = String.raw`"(\d+)\/([1-9]\d*)"`;
 export const DECLS: Record<string, string> = {
   [LABEL]: QUOTED,
@@ -54,6 +63,34 @@ export const DECLS: Record<string, string> = {
 
 /** One declaration, as it appears after an @each's field. */
 export const declSource = (name: string): string => String.raw`[ \t]${name}${PAIR_SEP}${DECLS[name]}`;
+
+/**
+ * One `<key>="<value>"` pair of an @text table.
+ *
+ * QUOTED where @map's pairs are not, and that is the whole difference between the two
+ * readers: a tag name has no space in it, so @map splits its tail on whitespace, while a
+ * text value has spaces by definition. Reusing that splitter would cut `"⚠ WARNING"` at
+ * its first space and do it silently. The key stops at the separator, so the pattern is
+ * one anchored quantifier over an atom that cannot contain what follows it.
+ */
+export const TEXT_PAIR = String.raw`([^\s${PAIR_SEP}]+)${PAIR_SEP}${QUOTED}`;
+
+/**
+ * The KIND marker a decorated blockquote may open with, `[!WARNING]`.
+ *
+ * ONE uppercase run, and the narrowness is the point: the moment a space is legal,
+ * `[!📦 VERSION]` and `[!THE BUILD FAILED ON NODE 20]` are the same shape and the marker
+ * has become the label slot a template's table exists to remove. Anything wider is not a
+ * marker, and the line stays the first line of the content, printed where the author can
+ * see it.
+ *
+ * It lives HERE, beside the directives, rather than with the message forms in markup.ts,
+ * because what the token names is a KEY of an @text table: the word a model writes in a
+ * message and the word an author declares in a template are one vocabulary, and they are
+ * spelled once.
+ */
+export const MARKER_TOKEN = String.raw`[A-Z][A-Z0-9_-]*`;
+export const MARKER_SOURCE = String.raw`\[!(${MARKER_TOKEN})\]`;
 
 /**
  * What a template writes to reach the engine's own bookkeeping (scope.ts). Punctuation

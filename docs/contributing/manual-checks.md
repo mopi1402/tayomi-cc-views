@@ -85,8 +85,8 @@ It bundles the engine AND installs as a plugin, so it hits all three steps at on
 #    `claude plugin marketplace list` prints where a local checkout lives.
 pnpm add @tayomi/cc-views@0.1.1-rc.N --registry http://localhost:4873
 
-# 2. its build esbuilds the hook, then ends on
-#    cp -f node_modules/@tayomi/cc-views/views/*.view views/
+# 2. its build esbuilds the hook with --external:@tayomi/cc-views, so the
+#    engine stays a real package and keeps finding its own views/
 pnpm build
 
 # 3. bump plugins/core/.claude-plugin/plugin.json, then

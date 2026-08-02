@@ -5,19 +5,32 @@
 // at least its longest key plus the chip's padding, and an off-map value may raise it
 // past that bound. Get the second wrong and a list holding one unmapped value shifts
 // every column to its right.
+//
+// A TEXT column is measured on a third rule, and it has to be a third: what occupies the
+// cell is the WORD that comes out, never the key that chose it, so a column of `warning`
+// keys holding `⚠ WARNING` words is nine columns wide and not seven.
 
 import { describe, it, expect } from "vitest";
+import { DEFAULT_KEY } from "../data/language.js";
 import { CHIP_CHROME } from "../style.js";
 import { columnWidths } from "./columns.js";
-import type { Maps } from "../scope.js";
+import { STYLE_TABLE, TEXT_TABLE, type Tables } from "./../scope.js";
+import { printedWidth } from "./measure.js";
 
-const MAPS: Maps = { states: { ok: "success", failing: "error" } };
+const WARNING = "⚠ WARNING";
+const NOTE = "ⓘ NOTE";
+const MAPS: Tables = {
+  states: { kind: STYLE_TABLE, entries: { ok: "success", failing: "error" } },
+  kinds: { kind: TEXT_TABLE, entries: { ok: WARNING, [DEFAULT_KEY]: NOTE } },
+};
 const LONGEST_KEY = "failing".length;
 const CHIPPED = LONGEST_KEY + CHIP_CHROME;
 
 const FIELDS = ["state", "text"];
 /** The template line that renders the column through its @map. */
 const MAPPED = ["${state:states} ${text}"];
+/** The same, through the @text table beside it. */
+const WORDED = ["${state:kinds} ${text}"];
 const UNMAPPED = ["${state} ${text}"];
 
 const item = (state: string): Record<string, string> => ({ state, text: "prose" });
@@ -44,6 +57,31 @@ describe("a mapped column", () => {
 
   it("measures an off-map value TRIMMED, the same value the chip lookup would see", () => {
     expect(columnWidths([item("  ok  ")], FIELDS, MAPPED, MAPS)).toEqual({ state: CHIPPED });
+  });
+});
+
+describe("a text column", () => {
+  it("is as wide as the WORD it renders, never as the key that chose it", () => {
+    // The key is two columns narrower than its word here, which is the whole point: a
+    // cell measured on `ok` would cut `⚠ WARNING` on an ellipsis it never earned.
+    expect(columnWidths([item("ok")], FIELDS, WORDED, MAPS)).toEqual({
+      state: printedWidth(WARNING),
+    });
+  });
+
+  it("counts the reserved entry for an item carrying no value at all", () => {
+    expect(columnWidths([{ text: "prose" }], FIELDS, WORDED, MAPS)).toEqual({
+      state: printedWidth(NOTE),
+    });
+  });
+
+  it("counts an OFF-MAP token at the width it ECHOES, which is uppercase", () => {
+    const off = "deploy";
+    expect(columnWidths([item(off)], FIELDS, WORDED, MAPS)).toEqual({ state: off.length });
+  });
+
+  it("reserves nothing for a chip, because a text table never draws one", () => {
+    expect(columnWidths([], FIELDS, WORDED, MAPS)).toEqual({ state: 0 });
   });
 });
 

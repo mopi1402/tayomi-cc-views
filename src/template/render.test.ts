@@ -15,9 +15,10 @@ import os from "node:os";
 import path from "node:path";
 import { VIEW_EXT } from "../data/markup.js";
 import { hasControlMark } from "../data/marks.js";
-import { ANSI_RE, tagMark } from "../style.js";
+import { ANSI_RE, renderTags, tagMark } from "../style.js";
 import { renderView } from "./render.js";
-import { TONE } from "../data/language.js";
+import { parseTemplate } from "./parse.js";
+import * as LANG from "../data/language.js";
 
 const NAME = "probe";
 const WIDTH = 60;
@@ -59,6 +60,19 @@ describe("rendering a view", () => {
     view("run `it` now");
     expect(render({})).toContain(ESC);
   });
+
+  it("hands a code span's line back the style the TEMPLATE opened around it", () => {
+    // The chain is the assertion: markCode has to run before fillTone and renderTags, or
+    // the span's terminator is a sequence by the time the enclosing style is resolved and
+    // the rest of the line prints plain. That is the defect this whole ticket is, and it
+    // is invisible to any test that composes the three passes by hand.
+    const seq = (name: string): string => renderTags(tagMark(name));
+    const DIM = "dim";
+    view(`${tagMark(DIM)}- Read \`trace.ts\` again${tagMark("/")}`);
+    expect(render({}).trim()).toBe(
+      `${seq(DIM)}- Read ${seq("code")}trace.ts${seq("/")}${seq(DIM)} again${seq("/")}`
+    );
+  });
 });
 
 describe("raw over hollow", () => {
@@ -75,6 +89,168 @@ describe("raw over hollow", () => {
   it("never lets injected fields make an empty block look parsed", () => {
     view("${said}");
     expect(() => render("prose", undefined, { injected: "x" })).toThrow(NAME);
+  });
+
+  // The SECOND reading of the rule, and the one no test of the OUTPUT can deliver: data
+  // arrived and the template reads none of it. A template drawing literal furniture puts
+  // ink on screen whatever it was handed, so the ink is the wrong thing to measure, and
+  // what answers is the reads the accessor RECORDED while the render ran.
+  describe("data arrived that the template reads none of", () => {
+    // Literal furniture around one slot: exactly the shape that defeated the ink test.
+    const FURNITURE = "[[ ";
+    const furnished = (): string => view(`${FURNITURE}\${said} ]]`);
+
+    it("throws rather than drawing its furniture around nothing", () => {
+      furnished();
+      expect(() => render({ unrelated: "value" })).toThrow(NAME);
+    });
+
+    it("renders as soon as ONE field it reads arrived, whatever came with it", () => {
+      furnished();
+      expect(plain(render({ unrelated: "v", said: "here" }))).toContain("here");
+    });
+
+    it("counts the field a DOTTED path walks into, not the path", () => {
+      // The regression this guard is most prone to, and the only direction that costs
+      // anything: a template naming `${row.inner.deep}` reads the key `row`, and reading
+      // the whole path here would blank a render nothing was wrong with.
+      view("deep: ${row.inner.deep}");
+      expect(plain(render({ row: { inner: { deep: "found" } } }))).toContain("deep: found");
+    });
+
+    it("counts a field named by a DIRECTIVE, not only one inside a ${}", () => {
+      // The loop names `rows` on its own line; nothing spends `${rows}` anywhere.
+      view("@each rows\n- ${.}\n@end");
+      expect(plain(render({ rows: ["one"] }))).toContain("one");
+    });
+
+    it("counts a field the HOST injected, since a view is meant to read those", () => {
+      furnished();
+      expect(plain(render({ unrelated: "v" }, undefined, { said: "from the host" }))).toContain(
+        "from the host"
+      );
+    });
+
+    it("exempts a STATIC template, which reads nothing by definition", () => {
+      view("a static line");
+      expect(plain(render({ unrelated: "value" }))).toContain("a static line");
+    });
+
+    // What MEASURING the reads buys over gathering the names, beyond closing the hole.
+    //
+    // A gathered set is the union of every name the source mentions, so it holds names
+    // no render can ever spend, and a block carrying one of those passed the guard and
+    // drew a skeleton. Recorded reads hold what this render truly asked for, which makes
+    // the guard exact in the permissive direction too: each case below rendered EMPTY
+    // before, which is the very thing "raw over hollow" exists to prevent.
+    it("refuses data whose only match lives inside a loop that never ran", () => {
+      view("@fields rows a b\n@each rows\n${a}/${b}\n@end");
+      expect(() => render({ a: "x" })).toThrow(NAME);
+      // The same template with its list is untouched, or the rule would cost the loop.
+      expect(plain(render({ rows: [{ a: "1", b: "2" }] }))).toContain("1/2");
+    });
+
+    it("refuses data named after a TAG, which is a palette word and no field", () => {
+      // `@tone gold` mentions `gold`, so a gathered set held it and a block writing a
+      // `gold` field rendered a blank line. Nothing ever looks it up.
+      view(`${LANG.TONE} gold\n\${said}`);
+      expect(() => render({ gold: "x" })).toThrow(NAME);
+    });
+
+    it("refuses data named after an ASIDE's view, for the same reason", () => {
+      view(`${LANG.ASIDE} tayo\n\${said}\n${LANG.ENDASIDE}`);
+      expect(() => render({ tayo: "x" })).toThrow(NAME);
+    });
+
+    // EVERY way a template can name a top-level field, walked in one table.
+    //
+    // The guard now decides on what the render ASKED the scope for, recorded by the
+    // accessor itself, so a naming form it has never heard of counts the day it resolves
+    // a field: there is no list of forms to fall behind. What is left for a table to
+    // catch is the one way back into the old defect, a directive reading the scope
+    // WITHOUT going through lookup, which no accessor can count for it.
+    //
+    // The table is not trusted to be complete either: the test under it holds the
+    // language's own vocabulary against it, so a directive added to language.ts arrives
+    // here whether or not anyone thought to write its line.
+    const NAMED_BY: Array<[string, string, object]> = [
+      ["${field}", "x ${said}", { said: "v" }],
+      ["${field:table}", '@text t a="A"\nx ${said:t}', { said: "a" }],
+      ["a dotted path", "x ${row.inner.deep}", { row: { inner: { deep: "v" } } }],
+      ["blanks inside the braces", "x ${ said }", { said: "v" }],
+      ["@each", "@each note\n- ${.}\n@end", { note: ["one"] }],
+      ["@fields then @each", "@fields rows a b\n@each rows\n${a}/${b}\n@end", { rows: [{ a: "1", b: "2" }] }],
+      // The slot in these two is UNFILLED on purpose: it makes the template one the
+      // guard applies to, and leaves the directive's own field as the only match there
+      // is. Without it the template spends nothing, the guard exempts it, and the case
+      // passes whatever the directive does.
+      ["@foot", "@box\n${unfilled}\n@foot cause\n@endbox", { cause: "why" }],
+      ["@frame", "@box\n${unfilled}\nlit\n@frame state ok=success\n@endbox", { state: "ok" }],
+      ["@head", "@box\n@head ${title}\nlit\n@endbox", { title: "T" }],
+      ["@right", "@box\n@right ${badge}\nlit\n@endbox", { badge: "B" }],
+      ["@rule", "@rule ${label}\nlit", { label: "L" }],
+      // The bullet's own slot cannot be the sole match by construction: it is only ever
+      // substituted once the loop runs, so the LIST is always in the data beside it.
+      ["@each carrying a bullet", '@each rows bullet="${k} "\n${.}\n@end', { rows: ["one"] }],
+      ["@each nested in a @box", "@box\n@each note\n- ${.}\n@end\n@endbox", { note: ["one"] }],
+      ["@aside around a slot", "@aside tayo\n${said}\n@endaside", { said: "v" }],
+    ];
+
+    // Rendering IS the assertion, now that the guard measures rather than gathers: had
+    // the field been read by some path the accessor never saw, the recorded set would
+    // not hold it and this render would be refused.
+    //
+    // Which only holds if the entry is one the guard can REFUSE, and two of them were
+    // not: a template spending no slot is exempt, so `@foot` and `@frame` were driven by
+    // cases that passed whatever those directives did. The two expectations below are
+    // that hole made impossible, and they belong here rather than in a reviewer's head:
+    // the guard has to apply, and the form under test has to be the only way in.
+    it.each(NAMED_BY)("renders when the field is named by %s", (_label, body, data) => {
+      expect(parseTemplate(body).spendsSlots).toBe(true);
+      expect(Object.keys(data)).toHaveLength(1);
+      view(body);
+      expect(() => render(data)).not.toThrow();
+    });
+
+    // The forcing function, and the reason the table above cannot silently fall behind.
+    //
+    // The words are read from the VOCABULARY, not listed here, so a directive added to
+    // language.ts arrives in this test the moment it is declared. Its author then has
+    // exactly two ways forward: drive it in the table above, or write down here that it
+    // names no field of a scope. Both are a decision; neither can be forgotten.
+    const DIRECTIVES = Object.values(LANG).filter(
+      (v): v is string => typeof v === "string" && v.startsWith("@")
+    );
+
+    /** A directive whose argument is not a field, each with what it names instead. */
+    const NAMES_NO_FIELD: Record<string, string> = {
+      [LANG.MAP]: "declares a lookup table, under a name no scope holds",
+      [LANG.TEXT]: "the same, for the enum-to-word half of the registry",
+      [LANG.TONE]: "names a palette class, resolved against the tags and never the data",
+      [LANG.ASIDE]: "names a VIEW file, whose body is taken as text and never substituted",
+      [LANG.BOX]: "structure alone: it takes no argument at all",
+      [LANG.ENDBOX]: "a terminator, which takes none either",
+      [LANG.ENDASIDE]: "a terminator, which takes none either",
+      [LANG.END]: "a terminator, which takes none either",
+    };
+
+    const DRIVEN = new Set(
+      NAMED_BY.flatMap(([, body]) => body.split("\n"))
+        .map((l) => /^@\w+/.exec(l)?.[0])
+        .filter((w): w is string => w !== undefined)
+    );
+
+    it.each(DIRECTIVES)("%s is either driven by the table above, or says why it names no field", (word) => {
+      if (NAMES_NO_FIELD[word] !== undefined) return;
+      expect([...DRIVEN]).toContain(word);
+    });
+
+    it("holds no exemption for a word the language no longer declares", () => {
+      // The other direction, or the list rots into a list of excuses: a directive that
+      // is renamed or dropped leaves an entry answering for nothing.
+      expect(DIRECTIVES.length).toBeGreaterThan(Object.keys(NAMES_NO_FIELD).length);
+      expect(Object.keys(NAMES_NO_FIELD).filter((w) => !DIRECTIVES.includes(w))).toEqual([]);
+    });
   });
 });
 
@@ -102,9 +278,9 @@ describe("the tone chain", () => {
   });
 
   it("falls back to what the template declared with @tone", () => {
-    view(`${TONE} warning\n${tagMark(TONE_SLOT)}x`);
+    view(`${LANG.TONE} warning\n${tagMark(TONE_SLOT)}x`);
     const declared = render({});
-    view(`${TONE} success\n${tagMark(TONE_SLOT)}x`);
+    view(`${LANG.TONE} success\n${tagMark(TONE_SLOT)}x`);
     expect(declared).not.toBe(render({}));
   });
 

@@ -18,7 +18,7 @@
 
 **✓ Templates you own.** `.view` files resolved through ordered directories: name a file the same and you shadow any view, a plugin's included.
 
-**✓ Two carriers.** A fenced `view:` block, or a plain markdown table under a one-line decorator: where the hook does not run, the table stays a table.
+**✓ Two carriers.** A fenced `view:` block, or ONE DECORATOR LINE OVER MARKDOWN THAT STANDS ON ITS OWN: a table, or an alert quote. Where the hook does not run, each stays what it was.
 
 **✓ One template, any tone.** `type:warning` or `tone:dim` recolours a view where it stands, like sticking a class on it. No second file.
 
@@ -108,7 +108,9 @@ To learn the language by example, read [`views/welcome.view`](views/welcome.view
 
 ## Prefer plain markdown? Use the decorator
 
-A fenced block's fallback is a code wall. The decorator flips the trade: the payload IS a plain markdown table, so anywhere the hook does not run, the reader still gets a native table. One line above it names the template (and optionally a semantic type):
+A fenced block's fallback is a code wall. The decorator flips the trade: **the payload is markdown that stands on its own**, so anywhere the hook does not run, the reader still gets a real block. One line above it names the template (and optionally a semantic type).
+
+A **table**, for rows:
 
 ```
 @{view:table, type:warning}
@@ -117,7 +119,25 @@ A fenced block's fallback is a code wall. The decorator flips the trade: the pay
 | Status | all green |
 ```
 
-On screen the decorator line disappears and the table renders through `table.view`, dressed in the kind's colour. A starting point lives in [`examples/table.view`](examples/table.view); `type:`, `tone:` and the typed forms are specified in [the language reference](docs/view-language.md).
+An **alert quote**, for one band:
+
+```
+@{view:banner}
+> [!WARNING]
+> two flaky suites, publication is blocked
+```
+
+On screen the decorator line disappears: the table renders through `table.view` dressed in the kind's colour, and the quote renders as a full-width coloured band whose word (`⚠ WARNING`) comes from the packaged template's own table, so nothing has to be created to use it. The marker is one uppercase token and there is no other way to name a kind in a quote, which is what keeps it from becoming a label the model writes prose into.
+
+What each degrades to, where the hook is absent:
+
+| Payload | Re-rendered as markdown | Read raw in a transcript |
+| --- | --- | --- |
+| Fenced `view:` block | a code wall | a code wall |
+| Table under a decorator | a native table, one stray line above it | a table, one stray line above it |
+| Alert quote under a decorator | a native alert box for `NOTE`, `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`; an ordinary quote otherwise | a quote whose first line names its kind |
+
+A starting point for a table lives in [`examples/table.view`](examples/table.view); the marker, `@text`, `type:`, `tone:` and the typed forms are specified in [the language reference](docs/view-language.md).
 
 ## Use it in your plugin or framework
 

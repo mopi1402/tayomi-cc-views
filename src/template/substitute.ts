@@ -1,28 +1,46 @@
-// ${field} and ${field:mapname}: one expression, resolved against the scope.
+// ${field} and ${field:tablename}: one expression, resolved against the scope.
 
 import type { PadCtx } from "../layout/columns.js";
 import { fitCell, longestKey, padCell } from "../layout/measure.js";
 import { CHIP_CHROME, chip } from "../style.js";
-import { SUBST_RE, lookup, stringify, type Maps, type Scope } from "../scope.js";
+import {
+  SUBST_RE,
+  TEXT_TABLE,
+  lookup,
+  stringify,
+  tableWord,
+  type Scope,
+  type Tables,
+} from "../scope.js";
 
-export function subst(text: string, scope: Scope, maps: Maps, pad?: PadCtx): string {
+export function subst(text: string, scope: Scope, tables: Tables, pad?: PadCtx): string {
   return text.replace(SUBST_RE, (_m: string, expr: string) => {
-    const [rawField, rawMap] = expr.split(":");
+    const [rawField, rawTable] = expr.split(":");
     const field = rawField.trim();
     const val = lookup(scope, field);
     // The prose tail is emitted verbatim: never padded, in a list or out of one.
     const aligned = pad != null && field !== pad.tail;
     const cell = aligned ? pad!.widths[field] : undefined;
+    const table = rawTable ? tables[rawTable.trim()] : undefined;
+    // A TEXT table answers for the value that never arrived, which is what its reserved
+    // entry exists for, so its lookup runs BEFORE the absent-value exit below rather
+    // than after it. @map keeps that exit untouched, and with it every byte it draws
+    // today: an absent value there has no word to fall back on and never had one.
+    if (table?.kind === TEXT_TABLE) {
+      const word = tableWord(table, val == null ? "" : stringify(val).trim());
+      return cell == null ? word : padCell(fitCell(word, cell), cell);
+    }
     if (val == null) return cell == null ? "" : " ".repeat(cell);
     const text0 = stringify(val);
-    const map = rawMap ? maps[rawMap.trim()] : undefined;
-    if (map) {
+    if (table !== undefined) {
       // The enum resolves on the TRIMMED value, so column padding upstream can never
       // lose a chip.
       const key = text0.trim();
-      const tag = map[key];
+      const tag = table.entries[key];
       if (tag) {
-        const label = aligned ? Math.max(longestKey(map), cell == null ? 0 : cell - CHIP_CHROME) : 0;
+        const label = aligned
+          ? Math.max(longestKey(table.entries), cell == null ? 0 : cell - CHIP_CHROME)
+          : 0;
         return chip(tag, padCell(key.toUpperCase(), label));
       }
       // Off the map: bare text, no chip, but padded to the same cell so the following

@@ -6,11 +6,21 @@
 // stripped both would size a line mentioning a literal {{tag}} in its prose short.
 
 import { describe, it, expect } from "vitest";
-import { RESET_MARK, isTag, tagMark } from "../style.js";
+import {
+  RESET_MARK,
+  RESUME_MARK,
+  SPAN_MARK,
+  isTag,
+  renderTags,
+  spanOpen,
+  tagMark,
+} from "../style.js";
 import { HANG_MARK, RULE_MARK } from "./marks.js";
 import { fitCell, longestKey, padCell, printedWidth } from "./measure.js";
 
 const KNOWN = "b";
+/** A second known tag, for the cases that need two of them open at once. */
+const SECOND = "dim";
 const UNKNOWN = "not_a_palette_name";
 const ELLIPSIS = "…";
 const ESC = "\x1b";
@@ -46,6 +56,16 @@ describe("printedWidth", () => {
   it("charges nothing for the engine's own control marks", () => {
     expect(printedWidth(`${RULE_MARK}CHECKS`)).toBe("CHECKS".length);
     expect(printedWidth(`- ${HANG_MARK}item`)).toBe("- item".length);
+  });
+
+  it("charges nothing for either mark of a span, wherever on the line it sits", () => {
+    // BETWEEN two characters, which is the case a mark measured alone cannot answer:
+    // a mark the measurer read as text moves every column on the line and says nothing.
+    expect(printedWidth(`a${RESUME_MARK}b`)).toBe("ab".length);
+    expect(printedWidth(`a${SPAN_MARK}b`)).toBe("ab".length);
+    expect(printedWidth(`${tagMark(KNOWN)}text${RESUME_MARK}`)).toBe("text".length);
+    // And a whole span costs its TEXT, which is the number every column is padded to.
+    expect(printedWidth(`x ${spanOpen(KNOWN)}in${RESUME_MARK} y`)).toBe("x in y".length);
   });
 
   it("counts a wide glyph as the two columns it draws", () => {
@@ -84,8 +104,8 @@ describe("fitCell", () => {
 
   it("closes a style the cut left open, so no colour bleeds past the cell", () => {
     const out = fitCell(`${tagMark(KNOWN)}aaaaaaaaaa${RESET_MARK}`, CAP);
-    expect(out.startsWith(tagMark(KNOWN))).toBe(true);
-    expect(out).toContain(RESET_MARK);
+    expect(out.startsWith(`${SPAN_MARK}${tagMark(KNOWN)}`)).toBe(true);
+    expect(out).toContain(RESUME_MARK);
     expect(printedWidth(out)).toBe(CAP);
   });
 
@@ -93,6 +113,67 @@ describe("fitCell", () => {
     const out = fitCell("`aaaaaaaaaaaa`", CAP);
     expect([...out].filter((c) => c === "`")).toHaveLength(2);
     expect(printedWidth(out)).toBe(CAP);
+  });
+
+  it("cuts a value carrying a COMPLETE span at the same character as one without", () => {
+    const head = `${tagMark(KNOWN)}ab${spanOpen(SECOND)}${RESUME_MARK}`;
+    const tail = "cdefghij";
+    const room = CAP - printedWidth(ELLIPSIS) - printedWidth(head);
+    // The span closed before the cut, so it leaves nothing behind it: both its marks are
+    // walked for the notion, and neither costs the budget a column.
+    expect(fitCell(head + tail, CAP)).toBe(
+      `${SPAN_MARK}${head}${tail.slice(0, room)}${RESUME_MARK}${ELLIPSIS}`
+    );
+  });
+
+  it("frames the value's OWN tags, so the resume closing them cannot reach the row's", () => {
+    // Two tags and no span of the engine's: they belong to no frame, so the cut opens one
+    // around them. Without it the closing resume finds no boundary and unwinds the tags
+    // the TEMPLATE opened around the cell along with the cell's, and the ellipsis and
+    // everything after it print plain.
+    const head = `${tagMark(KNOWN)}${tagMark(SECOND)}a`;
+    const tail = "bcdefghij";
+    const room = CAP - printedWidth(ELLIPSIS) - printedWidth(head);
+    expect(fitCell(head + tail, CAP)).toBe(
+      `${SPAN_MARK}${head}${tail.slice(0, room)}${RESUME_MARK}${ELLIPSIS}`
+    );
+  });
+
+  it("closes ONE resume per FRAME the cut left half-open, never one per tag", () => {
+    // The cut lands inside the engine's own span: one resume ends that frame, a second
+    // ends the one the cut opened around the value's tag. Counting tags would write
+    // three here, and the third would unwind the row.
+    const head = `${tagMark(KNOWN)}${spanOpen(SECOND)}a`;
+    const tail = "bcdefghij";
+    const room = CAP - printedWidth(ELLIPSIS) - printedWidth(head);
+    expect(fitCell(head + tail, CAP)).toBe(
+      `${SPAN_MARK}${head}${tail.slice(0, room)}${RESUME_MARK.repeat(2)}${ELLIPSIS}`
+    );
+  });
+
+  it("counts the frame it opens ITSELF, where the value left only a boundary standing", () => {
+    // A chip whose class the palette cannot answer for: the name reaches the screen as
+    // text, so it stacks nothing and the boundary stands alone. Count the frames on the
+    // value's stack rather than on the one the ROW will see and this writes one resume
+    // too few, leaving the cut's own boundary open for the next resume to stop at.
+    const out = fitCell(`${spanOpen(UNKNOWN)}aaaa`, CAP);
+    expect(out.endsWith(RESUME_MARK.repeat(2) + ELLIPSIS)).toBe(true);
+  });
+
+  it("gives the ROW back the colour the template opened around a cut", () => {
+    // The end of the chain, and the only assertion here that reads what reaches a screen:
+    // the marks above are right only if what follows the ellipsis is the row's own style.
+    const cell = fitCell(`${spanOpen(KNOWN)}aaaaaaaaaa`, CAP);
+    const rendered = renderTags(`${tagMark(SECOND)}${cell} tail${RESET_MARK}`);
+    const before = rendered.split(ELLIPSIS)[0];
+    expect(before.endsWith(renderTags(RESET_MARK) + renderTags(tagMark(SECOND)))).toBe(true);
+  });
+
+  it("closes nothing where the value's own reset already did, mid-cell", () => {
+    const head = `${tagMark(KNOWN)}ab${RESET_MARK}`;
+    const tail = "cdefghij";
+    const room = CAP - printedWidth(ELLIPSIS) - printedWidth(head);
+    expect(fitCell(head + tail, CAP)).toBe(`${head}${tail.slice(0, room)}${ELLIPSIS}`);
   });
 
   it("never splits a wide glyph in half", () => {

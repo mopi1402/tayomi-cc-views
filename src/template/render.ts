@@ -2,7 +2,7 @@
 // other (where the template lives, how the block's data parses, how a line draws).
 
 import { HANG_MARK } from "../layout/marks.js";
-import { dropInert, fillTone, renderCode, renderTags, toneClass } from "../style.js";
+import { dropInert, fillTone, markCode, renderTags, toneClass } from "../style.js";
 import type { Scope } from "../scope.js";
 import { renderBody } from "./directives.js";
 import { loadTemplate, viewsDir } from "./load.js";
@@ -46,7 +46,7 @@ export function renderView(
   options?: RenderOptions,
   dressing?: Dressing
 ): string {
-  const { maps, objectLists, body, labelWidth, tone, spendsSlots } = loadTemplate(
+  const { tables, objectLists, body, labelWidth, tone, spendsSlots } = loadTemplate(
     name,
     dir,
     dressing?.type
@@ -78,6 +78,12 @@ export function renderView(
     }
     if (spendsSlots) throw new Error(`view ${name}: nothing to fill its slots`);
   }
+  // WHAT ARRIVED, snapshotted before the engine's own bookkeeping joins it below.
+  //
+  // The injected fields count as data the template got: they are not the message's, but
+  // a host supplies them precisely so a view can read them. They stay out of the check
+  // ABOVE, where the question is whether the author wrote anything at all.
+  const got = Object.keys(injected == null ? scope : { ...scope, ...injected });
   // Injected fields come from the DISPLAY layer: state the model never wrote and must
   // not be trusted to remember. Merged AFTER the hollow check, so they can never make
   // an otherwise empty block look parsed.
@@ -88,9 +94,39 @@ export function renderView(
   // the one thing the tone slot cannot do. It OVERRIDES a field of the same name: a
   // block cannot be of two kinds, and the carrier's word is the one the reader sees.
   if (dressing?.type != null) full.type = dressing.type;
-  // Width and search path are both resolved ONCE here and handed down as values: the
-  // layers below never import platform/ and never probe for a file.
-  const out = renderBody(body, full, maps, objectLists, maxBoxWidth(options), dir);
+  // Opened before the render and read after it, by the guard below.
+  const read = new Set<string>();
+  full.__read = read;
+  let out: string[];
+  try {
+    // Width and search path are both resolved ONCE here and handed down as values: the
+    // layers below never import platform/ and never probe for a file.
+    out = renderBody(body, full, tables, objectLists, maxBoxWidth(options), dir);
+  } finally {
+    // The set is the engine's, and `full` may BE the caller's own object. Left on it, a
+    // second render of the same data would count it among the fields that ARRIVED, and
+    // the throwing path is the one that leaves it there: a template failing mid-render
+    // is exactly when a caller retries.
+    delete full.__read;
+  }
+  // The SECOND reading of "raw over hollow", and the one an ink test could never
+  // deliver: data ARRIVED and the template read none of it. banner.view fills a band and
+  // draws two caps against it, so handed a table's `rows` it printed a pill around
+  // nothing and the carrier's `rendered.trim() === ""` saw ink and shipped it,
+  // swallowing the table whole.
+  //
+  // Decided on what the render ACTUALLY asked the scope for, recorded by the accessor
+  // itself (scope.ts), which is why it runs down HERE with the output already built and
+  // about to be thrown away. Reading the template's source instead gathered an
+  // approximation of the same answer, and every naming form it failed to recognise
+  // blanked a render nothing was wrong with. There is no list of forms to keep in step
+  // now: a field a template resolves is a field this set holds.
+  //
+  // A STATIC template asks for nothing and is exempt, which is what keeps
+  // `@{view:welcome}` a health check summoned by its line alone.
+  if (spendsSlots && got.length > 0 && !got.some((key) => read.has(key))) {
+    throw new Error(`view ${name}: reads none of the fields it was given`);
+  }
   // MOST EXPLICIT FIRST: the carrier's own tone, the block's `tone` field (the fenced
   // form's only way in, since it carries no attributes), the kind under either name,
   // then what the template declared with @tone. Named nowhere the palette knows, the
@@ -98,6 +134,6 @@ export function renderView(
   const cls = toneClass(dressing?.tone, nameField(full, "tone"), nameField(full, "type"), tone);
   // Both marks exist for the layers above and must never reach a terminal. Inert goes
   // LAST, after renderTags, so what it protected is text by then.
-  const drawn = renderTags(fillTone(renderCode(out.join("\n")), cls));
+  const drawn = renderTags(fillTone(markCode(out.join("\n")), cls));
   return dropInert(drawn).split(HANG_MARK).join("");
 }

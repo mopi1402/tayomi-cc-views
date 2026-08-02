@@ -34,8 +34,9 @@
     "test": "vitest run",
     "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
     "check:sidecars": "node scripts/check-sidecars.mjs",
+    "check:vocabulary": "node scripts/check-vocabulary.mjs",
     "verify:pack": "pnpm build && node scripts/verify-pack.mjs",
-    "verify": "pnpm lint && pnpm typecheck && pnpm check:sidecars && pnpm test && pnpm verify:pack",
+    "verify": "pnpm lint && pnpm typecheck && pnpm check:sidecars && pnpm check:vocabulary && pnpm test && pnpm verify:pack",
     "prepublishOnly": "pnpm verify"
   },
   "dependencies": {

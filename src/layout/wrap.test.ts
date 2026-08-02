@@ -7,7 +7,7 @@
 // keeping the gutter bar and blanking everything before it.
 
 import { describe, it, expect } from "vitest";
-import { RESET_MARK, tagMark } from "../style.js";
+import { RESET_MARK, RESUME_MARK, SPAN_MARK, chip, tagMark } from "../style.js";
 import { HANG_MARK } from "./marks.js";
 import { printedWidth } from "./measure.js";
 import { wrapLine } from "./wrap.js";
@@ -71,6 +71,23 @@ describe("the fill", () => {
     expect(rows).toHaveLength(wrapLine(plain, LIMIT).length);
     expect(rows[0]).toContain(tagMark("b"));
   });
+
+  it("charges nothing for a resume either, so no break point moves behind one", () => {
+    const shed = (rows: string[], mark: string): string[] =>
+      rows.map((r) => r.split(mark).join(""));
+    const closed = `${tagMark("b")}alpha${RESET_MARK} beta gamma delta`;
+    const resumed = `${tagMark("b")}alpha${RESUME_MARK} beta gamma delta`;
+    expect(shed(wrapLine(resumed, LIMIT), RESUME_MARK)).toEqual(
+      shed(wrapLine(closed, LIMIT), RESET_MARK)
+    );
+  });
+
+  it("charges nothing for a resume on a row that is already FULL", () => {
+    // The case the comparison above cannot see: it sheds the mark from both sides, so a
+    // mark costing a column would only show where the row has no slack left to hide it.
+    const full = "a".repeat(LIMIT);
+    expect(wrapLine(`${full}${RESUME_MARK} b`, LIMIT)).toEqual([`${full}${RESUME_MARK}`, " b"]);
+  });
 });
 
 describe("a code span the wrap cuts", () => {
@@ -107,6 +124,23 @@ describe("the continuation's prefix", () => {
     const rows = wrapLine(dressed, LIMIT);
     expect(rows.length).toBeGreaterThan(1);
     expect(rows[1]).toContain(tagMark("dim"));
+  });
+
+  it("keeps BOTH ends of a span in the prefix, the boundary as much as the terminator", () => {
+    // A real chip sitting in the label, asked of the module that builds one. Drop the
+    // terminator and the fill runs on, painting every continuation row out to the border.
+    // Drop the boundary and the terminator that survives it unwinds the ROW's own tags
+    // instead of the chip's. Neither weighs a column, which is why these are cases and
+    // not notes: nothing the measurer sees would ever report the loss.
+    // The chip sits AFTER a word, so neither mark is alone at the edge of a part. A
+    // keep-list that splits on one and tests for the other would pass on an isolated
+    // mark and blank this one, which is where a real label puts it.
+    const dressed = `run ${chip("b", "OK")} ${BAR} alpha beta gamma delta`;
+    const rows = wrapLine(dressed, LIMIT);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows[1]).toContain(SPAN_MARK);
+    expect(rows[1]).toContain(tagMark("b"));
+    expect(rows[1]).toContain(RESUME_MARK);
   });
 
   it("stops at the LAST bar, so a two-bar line hangs from the inner one", () => {

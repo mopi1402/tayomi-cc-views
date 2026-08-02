@@ -1,25 +1,53 @@
 # banner.view: ONE band, full-colour background, rounded Powerline caps.
-# Two flat fields, because a single line has no business declaring a list:
 #
-#   ```view:banner
-#   label: ⚠ WARNING
-#   content: two flaky suites, publication is blocked
-#   ```
+# THREE ways in, cheapest first.
 #
-# `type:` (or `tone:`) on a decorator picks the colour, same file for every
-# kind. SEVERAL bands are several blocks, never one list: the caps exist to
-# make ONE band read as a pill, and stacking them scallops both flanks.
-# The caps are U+E0B6/U+E0B4 (Powerline). A font without them shows two
-# hollow boxes around the band; swap them for ▐ and ▌ if yours does not.
-# The default is `info`: an undecorated @{view:banner} is a cyan NOTE band.
-# The caps spend {{tone_cap}}, which the engine DERIVES from the chip filling
-# the band, so they match it exactly whatever the class and whatever the
-# theme. Spending {{tone}} there is off by one shade and was the bug: bold
-# promotes a base-sixteen foreground to the bright slot, nothing promotes a
-# background. Every COLOUR fills a band: the severities (warning, error,
-# success, info, warn, fail, pass, high, med, low) and the plain names alike
-# (red, green, yellow, cyan, orange, gold, key, dim). What has no chip is
-# furniture (`code`, `box_rule`) and a host's own foreground tag: name one and
-# the band vanishes, leaving two solid caps around bare text. Do not.
-@tone info
-{{tone_cap}}{{/}}{{tone_bg}} ${label}  ${content} {{/}}{{tone_cap}}{{/}}
+# 1. A decorator over a marked quote. Nothing to create, and the fallback where this
+#    hook does not run is a native alert box:
+#
+#      @{view:banner}
+#      > [!WARNING]
+#      > two flaky suites, publication is blocked
+#
+#    The marker is `[!TOKEN]` alone on the first line, ONE uppercase run: no space, no
+#    glyph, no second word. Anything wider is not a marker, it is the first line of the
+#    content, and it prints inside the band where you can see it. The quote must be
+#    followed by a BLANK LINE or end the message: prose on the very next line joins the
+#    zone, no parser claims the mixture, and the raw text shows instead.
+#
+# 2. Your OWN vocabulary: shadow this file from an earlier dir on the search path and
+#    change the @text table below. You patch nothing in the package, and the order of
+#    viewsPath is the whole mechanism.
+#
+# 3. A fenced block, for a one-off the table has no entry for. The extra lines are the
+#    honest price of writing presentation in a message:
+#
+#      ```view:banner
+#      type: deploy
+#      content: shipped to staging
+#      ```
+#
+# The COLOUR comes from the tone slot, never from the table: the table holds the WORD, so
+# a kind has one place to declare its look and one to declare its name. `type` picks it
+# when the palette knows the word (`warning` is yellow), `tone:` on the decorator
+# overrides it outright, and anything the palette does not know falls to the @tone below.
+# SEVERAL bands are several blocks, never one list: the caps exist to make ONE band read
+# as a pill, and stacking them scallops both flanks.
+#
+# The caps are U+E0B6/U+E0B4 (Powerline). A font without them shows two hollow boxes
+# around the band; swap them for ▐ and ▌ if yours does not. They spend {{tone_cap}},
+# which the engine DERIVES from the chip filling the band, so they match it exactly
+# whatever the class and whatever the theme. Spending {{tone}} there is off by one shade
+# and was the bug: bold promotes a base-sixteen foreground to the bright slot, nothing
+# promotes a background. Every COLOUR fills a band: the severities (warning, error,
+# success, info, warn, fail, pass, high, med, low) and the plain names alike (red, green,
+# yellow, cyan, orange, gold, key, dim). What has no chip is furniture (`code`, `box_rule`)
+# and a host's own foreground tag: name one and the band vanishes, leaving two solid caps
+# around bare text. Do not.
+#
+# The band is emitted on ONE line and nothing measures it: a body wider than the terminal
+# is soft-wrapped by the terminal itself, the colour continues on the next row and the
+# closing cap lands at the end of the last one. That is the accepted look, not an oversight.
+@tone chip
+@text kinds note="ⓘ NOTE" tip="✔ TIP" important="★ IMPORTANT" warning="⚠ WARNING" caution="⛔ CAUTION" error="✖ ERROR" success="✔ SUCCESS" info="ⓘ INFO" warn="⚠ WARN" fail="✖ FAIL" pass="✔ PASS" high="▲ HIGH" med="■ MED" low="▼ LOW" version="◆ VERSION" *="ⓘ NOTE"
+{{tone_cap}}{{/}}{{tone_bg}} ${type:kinds}  ${content} {{/}}{{tone_cap}}{{/}}

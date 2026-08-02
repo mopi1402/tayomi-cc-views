@@ -10,7 +10,19 @@
 // on the review-spec-verdict view). Accepted with the merge: a column holding a code
 // span is now two columns narrower per pair, which is its real printed width.
 
-import { ANSI_RE, CODE_RE, CODE_TICK, RESET_MARK, TAG_AT, TAG_RE, isTag } from "../style.js";
+import {
+  ANSI_RE,
+  CODE_RE,
+  CODE_TICK,
+  RESUME_MARK,
+  SPAN_MARK,
+  TAG_AT,
+  TAG_RE,
+  closeCut,
+  isTag,
+  popSpan,
+  trackTag,
+} from "../style.js";
 import { HANG_MARK, RULE_MARK } from "./marks.js";
 import { displayWidth } from "./width.js";
 
@@ -46,7 +58,10 @@ export function fitCell(s: string, width: number): string {
   const budget = width - displayWidth(ELLIPSIS);
   let out = "";
   let w = 0;
-  let styled = false;
+  // The shared notion of what is open (style.ts), never a copy: a boolean here could
+  // say whether a style was open and never which, and it counted the tag of a COMPLETE
+  // engine span as still standing.
+  const open: string[] = [];
   let code = false;
   let i = 0;
   while (i < s.length) {
@@ -54,8 +69,21 @@ export function fitCell(s: string, width: number): string {
     const tag = TAG_AT.exec(s);
     if (tag !== null && isTag(tag[1])) {
       out += tag[0];
-      styled = tag[0] !== RESET_MARK;
+      trackTag(open, tag[1]);
       i = TAG_AT.lastIndex;
+      continue;
+    }
+    // Zero columns, so neither touches the budget: they are walked for the notion alone.
+    if (s[i] === SPAN_MARK) {
+      out += SPAN_MARK;
+      trackTag(open, SPAN_MARK);
+      i += SPAN_MARK.length;
+      continue;
+    }
+    if (s[i] === RESUME_MARK) {
+      out += RESUME_MARK;
+      popSpan(open);
+      i += RESUME_MARK.length;
       continue;
     }
     // An opening backtick is markup only when a NON-EMPTY span closes ahead,
@@ -74,8 +102,11 @@ export function fitCell(s: string, width: number): string {
     i += ch.length;
   }
   if (code) out += CODE_TICK;
-  if (styled) out += RESET_MARK;
-  return out + ELLIPSIS;
+  // Never a reset: the value is a span the engine put inside a line whose style it did
+  // not choose, so a reset here kills the colour the TEMPLATE opened around the cell and
+  // the ellipsis and everything after it print plain. How many resumes that takes is the
+  // frame arithmetic, and it lives in style.ts beside the rule they resolve by.
+  return closeCut(out, open) + ELLIPSIS;
 }
 
 export function longestKey(map: Record<string, string>): number {
