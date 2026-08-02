@@ -123,29 +123,38 @@ npm adduser --registry http://localhost:4873 # first time only
 Then, from this repo:
 
 ```bash
-# 1. bump to a prerelease so nothing real is ever shadowed
-#    (package.json: "version": "X.Y.Z-rc.N")
-# 2. publish with PNPM, not npm: pnpm is what applies publishConfig
-#    (npm publish would ship the dev exports pointing at src/, which the
-#    tarball does not carry)
+# 1. bump to a prerelease so nothing real is ever shadowed. The registry
+#    REFUSES a version it already holds, so this is once per ITERATION and not
+#    once per session: the second round is rc.N+1, never a re-push of rc.N.
+#    The flag is load-bearing, a bare `pnpm version` commits AND tags.
+pnpm version X.Y.Z-rc.N --no-git-tag-version
+# 2. publish with PNPM, not npm: pnpm is what applies publishConfig (npm
+#    publish would ship the dev exports pointing at src/, which the tarball
+#    does not carry). prepublishOnly runs `pnpm verify` on the way, so a red
+#    state cannot reach the registry and dist/ is rebuilt before it is packed.
 pnpm publish --registry http://localhost:4873 --access public --no-git-checks
 ```
 
-And from the consumer:
+And from the consumer, IN the workspace that declares the dependency. A
+monorepo root would take the dep on itself, leaving the workspace that actually
+imports the engine on the version it already had:
 
 ```bash
 pnpm add @tayomi/cc-views@X.Y.Z-rc.N --registry http://localhost:4873
+pnpm build   # installing is not enough: see the third trap
 ```
 
-Two traps, learned the hard way:
+Three traps, learned the hard way:
 
 - A prerelease (`-rc.N`) does not satisfy a `^X.Y.Z` range: pin it exactly in
   the consumer while testing.
 - The consumer's lockfile now points at `localhost:4873`. Revert the dep and
   the lockfile to the public registry before committing the consumer.
-- A consumer that BUNDLES the engine (esbuild) must re-copy the engine's
-  `views/` after every install: see the bundling caveat in
-  [docs/display-host.md](docs/display-host.md).
+- A consumer that BUNDLES the engine (esbuild) sees NOTHING of the new version
+  until it rebuilds: the bundle still carries the old engine, and its `views/`
+  still holds the old templates. Its build must re-copy the engine's `views/`
+  after every install, which is what TAYOMI's `plugins/core` build ends on. See
+  the bundling caveat in [docs/display-host.md](docs/display-host.md).
 
 ## House rules
 
