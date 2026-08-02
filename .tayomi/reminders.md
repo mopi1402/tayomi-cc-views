@@ -1,1 +1,1 @@
-- Mettre à jour le test obsolète de tayomi `plugins/core/src/display-integration/pipeline.test.ts` ("no leak") : il exige qu'un `{{pass}}` écrit dans la prose du modèle soit rendu, ce que cc-views a retiré ("only a template writes presentation"). Panne préexistante, isolée le 2026-08-02.
+- Commiter dans `tayomi` le test `pipeline.test.ts` remis à jour le 2026-08-02 : la modification est faite et verte, mais elle attend dans un arbre où sept autres fichiers sont déjà modifiés sur `master`.
