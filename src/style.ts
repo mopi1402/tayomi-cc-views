@@ -367,6 +367,22 @@ function resolveTag(name: string): string | undefined {
   return derivedTag(name);
 }
 
+/**
+ * Every tag NAME the palette answers to: the engine's own, and whatever a host registered here.
+ *
+ * NAMES and never sequences. The palette's values stay unexported on purpose, since that is what stops a second module
+ * growing its own opinion about a colour, and a catalogue needs the vocabulary, never the ink.
+ *
+ * The `cap` and `bg` forms are deliberately absent: they are a RULE rather than entries, any colour above suffixing
+ * into one, so a reader is told the rule (`TAG_SUFFIXES`) instead of a list that could never be complete.
+ */
+export function tagNames(): string[] {
+  return [...new Set([...Object.keys(TAGS), ...Object.keys(EXTENDED)])].sort();
+}
+
+/** The suffixes a colour name derives into, so a reader can state the rule rather than enumerate its results. */
+export const TAG_SUFFIXES: readonly string[] = [CAP, BG];
+
 /** What one extendTags call did not apply SILENTLY: names that took over a definition, and names the shape rejected. */
 export interface TagReport {
   shadowed: string[];

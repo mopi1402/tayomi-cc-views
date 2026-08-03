@@ -50,6 +50,7 @@ Flat, line-oriented, values opaque to end of line (a colon or a backtick inside 
 | `key: value` | a scalar field |
 | `key:` | opens a list field |
 | `- item` | appends to the open list |
+| `  k: v` | indented: turns the key above into a mapping. One level, and what `@use ... from` reads. |
 
 A missing field renders empty, never as an error. A scalar reads as a list of one where a list is expected.
 With `@fields <list> a b c`, each item splits: every leading field takes one token, the LAST takes the rest.
@@ -67,6 +68,7 @@ With `@fields <list> a b c`, each item splits: every leading field takes one tok
 | `@rule [prefix]` | an inner division; survives only between two lines that printed. |
 | `@each <field> ... @end` | repeats per item. `label="..."`, `bullet="- "`, `cap="1/3"`, values QUOTED. |
 | `@aside <view> ... @endaside` | a second column on the left, holding a named view read as plain rows. |
+| `@use <view> [from <field>]` | draws a named view HERE, rendered, with its own tables and tone. `from` feeds it one field; without it the view inherits your scope. |
 | `@map <name> v=<tag>` | value to STYLE (a chip). Pairs split on whitespace. |
 | `@text <name> v="..."` | value to WORD. Pairs QUOTED. `*="..."` serves the absent value. |
 | `@fields <list> a b c` | declares that items of `<list>` split into named fields. |

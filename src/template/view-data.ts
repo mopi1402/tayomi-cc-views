@@ -3,10 +3,13 @@
 //   "key: value"  -> scalar field, value = the rest of the line, verbatim
 //   "key:"        -> opens a list field named key
 //   "- item"      -> appends an item to the current list
+//   "  k: v"      -> a pair of the mapping that key opened, ONE level and no deeper
 //   anything else -> ignored (keeps the parser total)
 //
-// NOT a recursive format, because the blocks carry prose YAML chokes on: a ": " inside a value would read as a nested
-// mapping, a leading backtick is reserved. Here a value is OPAQUE to end of line, and the parser never throws.
+// Not YAML and never will be: the blocks carry prose it chokes on, so a value stays OPAQUE to end of line and the
+// parser never throws. Nesting rides on INDENTATION alone, which leaves that opacity untouched. It exists because a
+// view fed to another (`@use x from k`) needs its own field, and because these lines used to match nothing and be
+// dropped in silence: a field a message wrote then reached no screen at all, neither drawn nor in the raw fallback.
 //
 // Its OWN module because the format has TWO readers that must never disagree: this engine, and a host's gate judging
 // the same block without drawing it. That gate cannot reuse the hook edge's parse (an edge ends in a main()-guard, and
@@ -23,6 +26,8 @@ export type ObjectLists = Record<string, string[]>;
 const KV_RE = /^([A-Za-z_][\w-]*):[ \t]?(.*)$/;
 /** `- item`, an entry appended to the list the key above opened. */
 const ITEM_RE = /^[ \t]*-[ \t]+(.*)$/;
+/** The same pair, INDENTED: it belongs to the key above rather than to the block. The indent is the whole signal. */
+const NESTED_KV_RE = /^[ \t]+([A-Za-z_][\w-]*):[ \t]?(.*)$/;
 /** A leading @fields field takes ONE token; whatever follows is the next field's. */
 const LEADING_FIELD_RE = /^(\S+)[ \t]+([\s\S]*)$/;
 /** Trailing blanks, dropped so an invisible tail never lands inside a value. */
@@ -65,6 +70,8 @@ export function parseData(
 ): Record<string, unknown> {
   const data: Record<string, unknown> = {};
   let list: unknown[] | null = null;
+  let map: Record<string, unknown> | null = null;
+  let open = "";
   let listFields: string[] | null = null;
   for (const raw of text.split("\n")) {
     const line = raw.replace(TRAILING_WS_RE, "");
@@ -74,9 +81,24 @@ export function parseData(
       list.push(listFields ? splitFields(item[1], listFields) : item[1]);
       continue;
     }
+    // A bare `key:` opens a LIST, as it always has, and turns into a mapping the first time an indented pair arrives.
+    // Deciding on the pair rather than up front is what keeps a key followed by nothing the empty list it used to be.
+    const nested = line.match(NESTED_KV_RE);
+    if (nested && (map !== null || (list !== null && list.length === 0))) {
+      if (map === null) {
+        map = {};
+        data[open] = map;
+        list = null;
+        listFields = null;
+      }
+      map[nested[1]] = nested[2];
+      continue;
+    }
     const kv = line.match(KV_RE);
     if (kv) {
       const [, key, val] = kv;
+      map = null;
+      open = key;
       if (val === "") {
         list = [];
         listFields = objectLists[key] ?? null;

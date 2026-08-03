@@ -13,6 +13,7 @@ import {
   RESUME_MARK,
   TAG_RE,
   TAG_SOURCE,
+  TAG_SUFFIXES,
   ansi256,
   chip,
   dropInert,
@@ -26,6 +27,7 @@ import {
   rgb,
   spanOpen,
   tagMark,
+  tagNames,
   tagSource,
   toneClass,
 } from "./style.js";
@@ -637,5 +639,39 @@ describe("the patterns a measurer shares", () => {
   it("renders a code span in the pinned accent", () => {
     expect(renderCode("run `it`")).toContain(ESC);
     expect(renderCode("run it")).toBe("run it");
+  });
+});
+
+// The one hole in a deliberately closed module. What it has to prove is the BOUNDARY: the vocabulary leaves, the ink
+// never does.
+describe("the enumeration of tag names", () => {
+  it("carries the engine's own names and hands back no sequence at all", () => {
+    const names = tagNames();
+    expect(names).toContain("pass");
+    expect(names).toContain("dim");
+    // The near-miss that matters: a listing that leaked its values would be caught here and nowhere else.
+    expect(names.some((n) => n.includes(ESC))).toBe(false);
+  });
+
+  it("carries a name a host registered, since a catalogue of a VERSION would miss what an install added", () => {
+    const name = "catalogueprobe";
+    expect(tagNames()).not.toContain(name);
+    extendTags({ [name]: `${ESC}[35m` });
+    expect(tagNames()).toContain(name);
+  });
+
+  it("states the derived forms as a RULE rather than listing them, since any colour suffixes into one", () => {
+    // A cap or a bg resolves on demand, so enumerating the results could never be complete: the suffixes are what a
+    // reader needs, and they are the same two the resolver strips.
+    // Some of these forms ARE listed, being explicit entries; the point is that being listed is not what makes them
+    // resolve. A host colour registered a second ago carries them too, which is why a reader is handed the suffixes
+    // rather than a list that could never be complete.
+    const name = "suffixprobe";
+    extendTags({ [name]: rgb(10, 20, 30) });
+    expect(TAG_SUFFIXES.length).toBeGreaterThan(0);
+    for (const suffix of TAG_SUFFIXES) {
+      expect(isTag(name + suffix)).toBe(true);
+      expect(tagNames()).not.toContain(name + suffix);
+    }
   });
 });

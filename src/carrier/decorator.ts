@@ -14,7 +14,13 @@
 // Why a quote rather than a paragraph, why the trade is worth it, and why engagement is on INTENT and never on shape:
 // docs/architecture/architecture.md, "The decorator's trade". The two attributes are docs/architecture/view-language.md's.
 
-import { MARKER_SOURCE } from "../data/language.js";
+import {
+  FIELD_CONTENT,
+  FIELD_LABEL,
+  FIELD_ROWS,
+  FIELD_TYPE,
+  MARKER_SOURCE,
+} from "../data/language.js";
 import { DECORATOR_CLOSE, DECORATOR_HINT } from "../data/markup.js";
 import { renderView, type Dressing } from "../template/render.js";
 import { inert, spanClose, spanOpen } from "../style.js";
@@ -50,7 +56,7 @@ function parseDecorator(line: string): Decorator | null {
   for (const attr of attrs) {
     const m = attr.match(ATTR_RE);
     if (m === null) return null; // any other attribute is not the token
-    if (m[1] === "type") deco.type = m[2];
+    if (m[1] === FIELD_TYPE) deco.type = m[2];
     else deco.tone = m[2];
   }
   return deco;
@@ -92,11 +98,8 @@ const DELIM_RE = /^[ \t]*\|[ \t]*:?-+:?[ \t]*\|[ \t]*:?-+:?[ \t]*\|[ \t]*$/;
 /** That escape, unwritten: inside a cell the pipe is content, not a column boundary. */
 const ESCAPED_PIPE_RE = /\\\|/g;
 
-/** One payload row as the template receives it. */
-interface DecoratedRow {
-  label: string;
-  content: string;
-}
+/** One payload row as the template receives it. Keyed from the language, so a rename is one edit there. */
+type DecoratedRow = Record<typeof FIELD_LABEL | typeof FIELD_CONTENT, string>;
 
 // PER SPAN, so the emphasis survives every re-render from the transcript and nothing is added the message did not
 // carry. Whole-cell bolding is what buried the POC.
@@ -136,7 +139,7 @@ function parseRows(lines: string[]): DecoratedRow[] | null {
   for (const line of lines.slice(2)) {
     const m = line.match(ROW_RE);
     if (!m) return null;
-    rows.push({ label: cell(m[1]), content: cell(m[2]) });
+    rows.push({ [FIELD_LABEL]: cell(m[1]), [FIELD_CONTENT]: cell(m[2]) });
   }
   return rows;
 }
@@ -180,7 +183,13 @@ function parseQuote(zone: string[]): Payload | null {
       .filter((l) => l !== "")
       .join(" ")
   );
-  return { data: type === undefined ? { content } : { type, content }, type };
+  return {
+    data:
+      type === undefined
+        ? { [FIELD_CONTENT]: content }
+        : { [FIELD_TYPE]: type, [FIELD_CONTENT]: content },
+    type,
+  };
 }
 
 /**
@@ -202,7 +211,7 @@ const SHAPES: Shape[] = [
     holds: (l) => PIPE_LINE_RE.test(l),
     parse: (zone) => {
       const rows = parseRows(zone);
-      return rows === null ? null : { data: { rows } };
+      return rows === null ? null : { data: { [FIELD_ROWS]: rows } };
     },
   },
   {

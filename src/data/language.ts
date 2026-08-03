@@ -17,6 +17,7 @@ export const FRAME = keyword("frame");
 export const RULE = keyword("rule");
 export const EACH = keyword("each");
 export const ASIDE = keyword("aside");
+export const USE = keyword("use");
 export const END = keyword("end");
 
 /**
@@ -24,6 +25,55 @@ export const END = keyword("end");
  * than a second directive, because the two draw the same body and differ only in what they put around it.
  */
 export const BARE = "bare";
+
+/**
+ * The tokens an @aside may carry, saying where the SHORTER column sits against the taller one. Three readers must agree
+ * on their spelling: the matcher that reads the declaration, the padding that acts on it, and the type that names the
+ * set, so the words live here and the other two derive.
+ *
+ * A bare token is invisible to `check-vocabulary`, whose matcher only sees `@words`, and that is exactly why these
+ * three drifted out here in the first place.
+ */
+/**
+ * What points an included view at the FIELD holding its data, `@use banner from alert`. A field rather than the
+ * caller's whole scope, because `banner` and `quote` both spend `content`.
+ */
+export const FROM = "from";
+
+export const ALIGN_CENTER = "center";
+export const ALIGN_TOP = "top";
+export const ALIGN_BOTTOM = "bottom";
+export const ALIGNS = [ALIGN_CENTER, ALIGN_TOP, ALIGN_BOTTOM] as const;
+
+/** The set as a TYPE, derived rather than retyped: a fourth alignment is one edit above. */
+export type Align = (typeof ALIGNS)[number];
+
+/** Whether a token an author wrote is one of them, so a near-miss stays a near-miss. */
+export const isAlign = (token: string): token is Align => (ALIGNS as readonly string[]).includes(token);
+
+/**
+ * The fields a PAYLOAD yields, spent by these names in a template. Three readers must agree on them: the carrier that
+ * builds the scope, the author who writes the slot, and the catalogue that derives which payload a view expects FROM
+ * the slots it spends, which is the only way `banner` and `quote` can be classified at all since neither declares
+ * `@fields` (having no list to split).
+ */
+export const FIELD_ROWS = "rows";
+export const FIELD_LABEL = "label";
+export const FIELD_CONTENT = "content";
+export const FIELD_TYPE = "type";
+
+/** The field a block names a tone CLASS with, outranking its kind. Read with FIELD_TYPE wherever a tone is resolved. */
+export const FIELD_TONE = "tone";
+
+/** The payload shapes a decorator claims, named so a catalogue can say which one a view wants. */
+export const PAYLOAD_TABLE = "table";
+export const PAYLOAD_QUOTE = "quote";
+
+/** Which shape yields which fields. Spending one of them is what says a view expects that payload. */
+export const PAYLOAD_FIELDS: Record<string, readonly string[]> = {
+  [PAYLOAD_TABLE]: [FIELD_ROWS, FIELD_LABEL, FIELD_CONTENT],
+  [PAYLOAD_QUOTE]: [FIELD_CONTENT, FIELD_TYPE],
+};
 
 /** A closing keyword is its opener's name behind `@end`. */
 const closes = (open: string): string => END + open.slice(AT.length);

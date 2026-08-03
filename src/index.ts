@@ -43,6 +43,8 @@ export {
   rgb,
   tagMark,
   ANSI_RE,
+  tagNames,
+  TAG_SUFFIXES,
 } from "./style.js";
 export type { TagReport } from "./style.js";
 

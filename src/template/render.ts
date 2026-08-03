@@ -3,7 +3,8 @@
 
 import { HANG_MARK } from "../layout/marks.js";
 import { dropInert, fillTone, markCode, renderTags, toneClass } from "../style.js";
-import type { Scope } from "../scope.js";
+import { nameField, type Scope } from "../scope.js";
+import { FIELD_TONE, FIELD_TYPE } from "../data/language.js";
 import { renderBody } from "./directives.js";
 import { loadTemplate, viewsDir } from "./load.js";
 import { maxBoxWidth } from "../platform/tty-width.js";
@@ -19,12 +20,6 @@ export interface Dressing {
   type?: string;
   /** The tone CLASS: a palette tag name, no file, no semantics. Outranks the kind. */
   tone?: string;
-}
-
-// Only a string can name a class: a block that wrote a list under that key holds data the slot must not read.
-function nameField(scope: Scope, key: string): string | undefined {
-  const val = scope[key];
-  return typeof val === "string" ? val.trim() : undefined;
 }
 
 export function renderView(
@@ -63,7 +58,7 @@ export function renderView(
   full.__labelWidth = labelWidth;
   // As an ordinary FIELD, so a template can print it or drive its border from it (@frame type warning=fail), the one
   // thing the tone slot cannot do. It OVERRIDES a field of the same name: a block cannot be of two kinds.
-  if (dressing?.type != null) full.type = dressing.type;
+  if (dressing?.type != null) full[FIELD_TYPE] = dressing.type;
   const read = new Set<string>();
   full.__read = read;
   let out: string[];
@@ -86,7 +81,12 @@ export function renderView(
   // MOST EXPLICIT FIRST: the carrier's own tone, the block's `tone` field (the fenced form's only way in, carrying no
   // attributes), the kind under either name, then what the template declared with @tone. Named nowhere the palette
   // knows, the slot keeps its neutral.
-  const cls = toneClass(dressing?.tone, nameField(full, "tone"), nameField(full, "type"), tone);
+  const cls = toneClass(
+    dressing?.tone,
+    nameField(full, FIELD_TONE),
+    nameField(full, FIELD_TYPE),
+    tone
+  );
   // Both marks exist for the layers above and must never reach a terminal. Inert goes LAST, after renderTags, so what
   // it protected is text by then.
   const drawn = renderTags(fillTone(markCode(out.join("\n")), cls));

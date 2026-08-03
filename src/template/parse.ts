@@ -6,6 +6,7 @@
 import {
   EACH,
   FIELDS,
+  FROM,
   LABEL,
   MAP,
   PAIR_SEP,
@@ -13,6 +14,7 @@ import {
   TEXT_PAIR,
   TOKEN_SEP,
   TONE,
+  USE,
   declSource,
 } from "../data/language.js";
 import { printedWidth } from "../layout/measure.js";
@@ -33,6 +35,7 @@ const FIELDS_RE = re(`^${FIELDS}${NAME_AND_REST}`);
 // in this parser.
 const TONE_RE = re(String.raw`^${TONE}[ \t]+(\w+)[ \t]*$`);
 const LABELS_RE = re(String.raw`^${EACH}[ \t]+\S+[ \t]*${declSource(LABEL)}`, "gm");
+const USE_FIELD_RE = re(String.raw`^${USE}[ \t]+\S+[ \t]+${FROM}[ \t]+\S+[ \t]*$`);
 
 /** A line the template author wrote for themselves: dropped before anything reads it. */
 const COMMENT_RE = /^\s*#/;
@@ -58,7 +61,7 @@ export interface Template {
   // template drawing literal furniture always puts ink on screen, so measuring the OUTPUT can never tell.
   //
   // Bookkeeping refs (`${#}`, `${#label}`) count, deliberately: spending one with no list to walk renders a column of
-  // spaces, which is the same skeleton.
+  // spaces, which is the same skeleton. So does an include NAMING a field, which waits for data without holding a slot.
   spendsSlots: boolean;
 }
 
@@ -125,6 +128,7 @@ export function parseTemplate(text: string): Template {
   );
   // Over the BODY alone: a comment documenting a slot is not a template spending one, and comments are exactly where an
   // author writes the shape out to explain it.
-  const spendsSlots = body.join("\n").match(SUBST_RE) !== null;
+  const spendsSlots =
+    body.join("\n").match(SUBST_RE) !== null || body.some((line) => USE_FIELD_RE.test(line));
   return { tables, objectLists, body, labelWidth, tone, spendsSlots };
 }

@@ -137,3 +137,40 @@ describe("inertData", () => {
     expect(parseData(`said: ${MARKUP}`)).toEqual({ said: MARKUP });
   });
 });
+
+describe("an indented pair", () => {
+  it("becomes a mapping under the key above, which is what @use ... from reads", () => {
+    expect(parseData("alert:\n  type: warning\n  content: blocked\n")).toEqual({
+      alert: { type: "warning", content: "blocked" },
+    });
+  });
+
+  it("keeps the block's own fields beside it, list and scalar alike", () => {
+    expect(parseData("alert:\n  type: warning\nsaid: plain\nrows:\n- one\n")).toEqual({
+      alert: { type: "warning" },
+      said: "plain",
+      rows: ["one"],
+    });
+  });
+
+  it("leaves a key followed by nothing the empty LIST it has always been", () => {
+    expect(parseData("rows:\n")).toEqual({ rows: [] });
+    expect(parseData("rows:\n- one\n")).toEqual({ rows: ["one"] });
+  });
+
+  it("counts no DEPTH: the indent says `not the block`, and every pair joins the one open mapping", () => {
+    expect(parseData("a:\n  b: 1\n    c: 2\n")).toEqual({ a: { b: "1", c: "2" } });
+  });
+
+  it("is not claimed by prose, whose words carry no key before the colon", () => {
+    // The reason this format is not YAML: a value is opaque, so a sentence indented under a key stays ignored rather
+    // than reading as a mapping.
+    expect(parseData("content:\n  two flaky suites: publication is blocked\n")).toEqual({
+      content: [],
+    });
+  });
+
+  it("stays out of a list that already has items", () => {
+    expect(parseData("rows:\n- one\n  k: v\n")).toEqual({ rows: ["one"] });
+  });
+});

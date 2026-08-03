@@ -32,6 +32,15 @@ export interface Scope extends Record<string, unknown> {
 }
 
 /**
+ * A scope key read as a NAME. Only a string can name a class: a block that wrote a list under that key holds data the
+ * slot must not read. Here because a view's own render and an include both resolve a tone this way.
+ */
+export function nameField(scope: Scope, key: string): string | undefined {
+  const val = scope[key];
+  return typeof val === "string" ? val.trim() : undefined;
+}
+
+/**
  * What a declared table turns a value INTO: a style TAG, which renders as a chip (@map), or a WORD, which renders as
  * itself (@text).
  *
@@ -74,18 +83,25 @@ const PSEUDO: Record<string, (scope: Scope) => unknown> = {
   [BULLET_REF]: (s) => s.__bullet ?? "",
 };
 
-export function lookup(scope: Scope, key: string): unknown {
+/**
+ * The walk alone, recorded by NOBODY: for a reader that must know whether it can USE a value before it claims to have
+ * read it. An include reads this way, because one that then falls through has to leave the guard free to refuse and
+ * hand the raw block back, or the message it carried reaches no screen at all.
+ */
+export function peek(scope: Scope, key: string): unknown {
   const pseudo = PSEUDO[key];
   // Resolved against the bookkeeping, never against a key the data holds, so it is no part of what a caller records.
   if (pseudo !== undefined) return pseudo(scope);
-  const path = key.split(".");
-  // Recorded HERE and never by the four callers, so a fifth one written tomorrow cannot forget to. A dotted path is
-  // walked from the root, so its first segment is the only name the data can hold.
-  scope.__read?.add(path[0]);
-  return path.reduce<unknown>(
-    (o, k) => (o == null ? undefined : (o as Record<string, unknown>)[k]),
-    scope
-  );
+  return key
+    .split(".")
+    .reduce<unknown>((o, k) => (o == null ? undefined : (o as Record<string, unknown>)[k]), scope);
+}
+
+export function lookup(scope: Scope, key: string): unknown {
+  // Recorded HERE and never by the callers, so one written tomorrow cannot forget to. A dotted path is walked from the
+  // root, so its first segment is the only name the data can hold.
+  if (PSEUDO[key] === undefined) scope.__read?.add(key.split(".")[0]);
+  return peek(scope, key);
 }
 
 // An object-list item (from a view's @fields split) is a mapping, not a string, and a naive String() would show

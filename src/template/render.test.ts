@@ -105,6 +105,19 @@ describe("raw over hollow", () => {
       expect(plain(render({ unrelated: "v", said: "here" }))).toContain("here");
     });
 
+    it("counts NO read for an include that fell through, so the block comes back raw", () => {
+      // What the user loses if this passes instead: Claude sends a warning, the include cannot use the field, and the
+      // screen shows one line of template source with the content gone from the transcript. Refusing is what hands the
+      // block back to the carrier, where the words are still readable (pipeline.ts).
+      view(`@use ${INCLUDED} from said`);
+      expect(() => render({ said: "a string, where the include wants a mapping" })).toThrow(NAME);
+    });
+
+    it("counts the read as soon as the include DRAWS, and then the view stands", () => {
+      view(`@use ${INCLUDED} from said`);
+      expect(plain(render({ said: { content: "drawn" } }))).toContain("drawn");
+    });
+
     it("counts the field a DOTTED path walks into, not the path", () => {
       // The regression this guard is most prone to, and the only direction that costs anything: a template naming
       // `${row.inner.deep}` reads the key `row`, and reading the whole path here would blank a render nothing was wrong
@@ -159,6 +172,9 @@ describe("raw over hollow", () => {
     // What is left for a table to catch is the one way back into the old defect: a directive reading the scope WITHOUT
     // going through lookup. The test under this one holds the language's vocabulary against the table, so a directive
     // added to language.ts arrives here whether or not anyone wrote its line.
+    // The view an include points AT: this temp dir is the whole search path, and an unresolvable name reads nothing.
+    const INCLUDED = view("${content}", "included");
+
     const NAMED_BY: Array<[string, string, object]> = [
       ["${field}", "x ${said}", { said: "v" }],
       ["${field:table}", '@text t a="A"\nx ${said:t}', { said: "a" }],
@@ -179,6 +195,8 @@ describe("raw over hollow", () => {
       ["@each carrying a bullet", '@each rows bullet="${k} "\n${.}\n@end', { rows: ["one"] }],
       ["@each nested in a @box", "@box\n@each note\n- ${.}\n@end\n@endbox", { note: ["one"] }],
       ["@aside around a slot", "@aside tayo\n${said}\n@endaside", { said: "v" }],
+      // Nothing else here spends a slot: a view made of includes alone is still one the guard must be able to refuse.
+      ["@use pointed at a field", `@use ${INCLUDED} from said`, { said: { content: "v" } }],
     ];
 
     // Rendering IS the assertion: had the field been read by a path the accessor never saw, the recorded set would not

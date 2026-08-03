@@ -112,3 +112,44 @@ grep '"version"' ~/.claude/plugins/cache/tayomi/tayomi/<version>/node_modules/@t
 One line, and the whole chain answers at once: the prerelease reached the registry, the workspace installed it, `plugin update` copied it. The wrong version here tells you which of the three failed, and the directory's own timestamp (`ls -ldT` on it) says whether the copy happened at all.
 
 Nothing here proves the RESTART, and no check should: a session already running keeps the engine it loaded, you are the one who restarts it, and restarting again costs three seconds against two commands. When in doubt, restart rather than measure.
+
+## A composed layout
+
+`@use` puts one view inside another, and no assertion answers whether the result READS right: the suite can prove a border is whole and a slot is gone, never that two columns beside each other are legible at the width a person actually runs. So this one is looked at.
+
+Write a template on your search path, `views/compose.view` in this repo:
+
+```
+@fields rows label content
+@box
+@aside tayo
+@use banner
+@rule
+@use lines
+@endaside
+@endbox
+```
+
+Then send a message carrying the block, in a real session:
+
+````
+```view:compose
+type: warning
+content: deux suites instables
+rows:
+- Deploy  staging est rouge
+- Build  vert
+```
+````
+
+What to look for, and each of these is a thing that has come out wrong:
+
+- the band is drawn in the banner's own colour, not in the tone the outer template declares
+- the art column, the separator and both included views hold one straight gutter down the screen
+- the rule between them runs the width of the column, never the width of the box
+- the frame's corners sit on their own rows, unbroken
+- nothing reads `@use` or `${...}` on screen
+
+Then **narrow the terminal** until the aside is dropped. The column goes whole, the included views take the full width, and the frame still stands. A layout half-dropped is the failure worth catching here, and only a drag of the window shows it.
+
+The `@fields` line is not decoration: the block is parsed once against the template that was NAMED, so a list an included view iterates has to be declared by the caller. Drop that line and `lines` draws the outer `content` on every row, which is what the wrong version looks like.

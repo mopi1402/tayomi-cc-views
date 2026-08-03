@@ -23,14 +23,18 @@ import {
   INDEX_REF,
   ITEM_REF,
   LABEL_REF,
+  FROM,
   RIGHT,
   RULE,
+  TEXT,
+  TONE,
+  USE,
 } from "../data/language.js";
 import { VIEW_EXT } from "../data/markup.js";
 import { HANG_MARK, RULE_MARK } from "../layout/marks.js";
-import { renderTags } from "../style.js";
+import { fillTone, renderTags, tagMark } from "../style.js";
 import { renderBody } from "./directives.js";
-import type { Scope, Tables } from "../scope.js";
+import { TEXT_TABLE, type Scope, type Tables } from "../scope.js";
 
 const LIMIT = 60;
 const NO_TABLES: Tables = {};
@@ -342,5 +346,68 @@ describe("@aside", () => {
 
   it("yields no column when the named view resolves nowhere, never losing the flow", () => {
     expect(text([`${ASIDE} no_such_view`, FLOW, ENDASIDE])).toContain(FLOW);
+  });
+});
+
+describe(USE, () => {
+  // A copy, and the sanctioned kind: style.ts keeps the slot's name private on purpose.
+  const TONE_SLOT = "tone";
+  const OWN = "red";
+  const CALLER = "green";
+  const SAID = "said";
+  const TABLE = "kinds";
+
+  const toned = view("toned", `${TONE} ${OWN}\n${tagMark(TONE_SLOT)}${ref("content")}`);
+  // A table under a name the CALLER also declares, with a different word behind it.
+  const worded = view("worded", `${TEXT} ${TABLE} a="ALPHA"\n${ref(`k:${TABLE}`)}`);
+  const echo = view("echo", ref("content"));
+
+  it("draws the named view in place, fed the field it was pointed at", () => {
+    const out = render([`${USE} ${toned} ${FROM} ${SAID}`], { said: { content: "hi" } });
+    expect(out).toEqual([`${tagMark(OWN)}hi`]);
+  });
+
+  it("inherits the caller's own scope when it names no field", () => {
+    expect(render([`${USE} ${echo}`], { content: "inherited" })).toEqual(["inherited"]);
+  });
+
+  it("keeps its OWN tone, leaving the caller's later pass nothing to fill", () => {
+    const out = render([`${USE} ${toned} ${FROM} ${SAID}`], { said: { content: "hi" } }).join("\n");
+    expect(out).not.toContain(tagMark(TONE_SLOT));
+    expect(fillTone(out, CALLER)).toBe(out);
+  });
+
+  it("resolves through the INCLUDED view's tables, never the caller's of the same name", () => {
+    const callerTables: Tables = { [TABLE]: { kind: TEXT_TABLE, entries: { a: "CALLER" } } };
+    const out = render([`${USE} ${worded} ${FROM} ${SAID}`], { said: { k: "a" } }, callerTables);
+    expect(out).toEqual(["ALPHA"]);
+  });
+
+  describe("draws ITSELF when it cannot draw the view", () => {
+    // None of these lines spends a slot, so the line printed IS the line written.
+    const cases: Array<[string, string, Scope]> = [
+      ["the name resolves nowhere", `${USE} no_such_view ${FROM} ${SAID}`, { said: { content: "x" } }],
+      ["the field is absent", `${USE} ${echo} ${FROM} no_such_field`, { said: { content: "x" } }],
+      ["the field holds a plain string", `${USE} ${echo} ${FROM} ${SAID}`, { said: "flat" }],
+      ["the field holds a list", `${USE} ${echo} ${FROM} ${SAID}`, { said: ["one"] }],
+      ["the tail is neither empty nor a from", `${USE} ${echo} with ${SAID}`, { said: { content: "x" } }],
+      ["the word carries no name at all", USE, {}],
+      [`the ${FROM} carries no field`, `${USE} ${echo} ${FROM}`, {}],
+    ];
+    it.each(cases)("%s", (_label, line, scope) => {
+      expect(render([line], scope)).toEqual([line]);
+    });
+  });
+
+  it("stops a view that includes itself, and prints the line that would repeat", () => {
+    const line = `${USE} selfie`;
+    view("selfie", `top\n${line}`);
+    expect(render([line])).toEqual(["top", line]);
+  });
+
+  it("stops a cycle that runs through a second view", () => {
+    view("ping", `P\n${USE} pong`);
+    view("pong", `Q\n${USE} ping`);
+    expect(render([`${USE} ping`])).toEqual(["P", "Q", `${USE} ping`]);
   });
 });

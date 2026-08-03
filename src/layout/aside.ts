@@ -6,12 +6,13 @@
 // exactly what wrapLine breaks on, and the language carries no bypass mark. The row survives only because every
 // composed line is built to fit the box already, so the wrapper hands it back whole.
 
+import { ALIGN_BOTTOM, ALIGN_TOP, type Align } from "../data/language.js";
 import { RESET_MARK, tagMark } from "../style.js";
 import { padCell, printedWidth } from "./measure.js";
 import { wrapLine } from "./wrap.js";
 
-/** Where the SHORTER column sits against the taller one, declared on the region. */
-export type AsideAlign = "center" | "top" | "bottom";
+/** Where the SHORTER column sits against the taller one, declared on the region. The words are the language's. */
+export type AsideAlign = Align;
 
 const SEPARATOR = `${tagMark("dim")}│${RESET_MARK}`;
 const GUTTER_PAD = "  ";
@@ -26,7 +27,8 @@ export const ASIDE_MIN_MAIN = 40;
 function padColumn(col: string[], height: number, align: AsideAlign, filler: string): string[] {
   const missing = height - col.length;
   if (missing <= 0) return col;
-  const above = align === "top" ? 0 : align === "bottom" ? missing : Math.floor(missing / 2);
+  const above =
+    align === ALIGN_TOP ? 0 : align === ALIGN_BOTTOM ? missing : Math.floor(missing / 2);
   return [
     ...new Array<string>(above).fill(filler),
     ...col,
@@ -35,12 +37,22 @@ function padColumn(col: string[], height: number, align: AsideAlign, filler: str
 }
 
 /**
- * The region, line by line. `content` is the width the frame wraps a body line to (the box's limit less its chrome),
- * NOT the terminal's width.
+ * The width the MAIN column gets beside this aside, `content` itself when the aside is DROPPED. It degrades whole and
+ * never half way: no aside row, or a main column under the floor, both take that exit.
  *
- * Degrades to the main flow at full width and never half way: no aside row, an aside wider than the space, or a main
- * column under the floor all take the same exit. That is what lets an unresolvable name reach here as an empty column
- * instead of taking the box down.
+ * Exported because the render draws the region's body before composing it, and a body drawn at the box's full width
+ * loses a nested border when cut to size afterwards. One function, so the two can never disagree.
+ */
+export function asideMainWidth(asideRows: string[], content: number): number {
+  const asideWidth = asideRows.reduce((n, l) => Math.max(n, printedWidth(l)), 0);
+  const main = content - asideWidth - ASIDE_GUTTER;
+  return asideRows.length === 0 || main < ASIDE_MIN_MAIN ? content : main;
+}
+
+/**
+ * The region, line by line. `content` is the width the frame wraps a body line to (the box's limit less its chrome),
+ * NOT the terminal's width. An unresolvable name reaches here as an empty column and degrades instead of taking the
+ * box down.
  */
 export function composeAside(
   asideRows: string[],
@@ -48,11 +60,11 @@ export function composeAside(
   align: AsideAlign,
   content: number
 ): string[] {
-  const asideWidth = asideRows.reduce((n, l) => Math.max(n, printedWidth(l)), 0);
-  const mainWidth = content - asideWidth - ASIDE_GUTTER;
-  if (asideRows.length === 0 || mainWidth < ASIDE_MIN_MAIN) {
+  const mainWidth = asideMainWidth(asideRows, content);
+  if (mainWidth === content) {
     return mainLines.flatMap((l) => wrapLine(l, content));
   }
+  const asideWidth = asideRows.reduce((n, l) => Math.max(n, printedWidth(l)), 0);
   // Wrapped BEFORE the columns are zipped: a main line taking three rows takes three rows of the region.
   const flow = mainLines.flatMap((l) => wrapLine(l, mainWidth));
   // Padded, so a row of art that ends early (a transparent right edge the encoder trimmed) still puts the separator on

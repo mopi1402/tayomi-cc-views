@@ -12,6 +12,7 @@
 // never a sweep through these matchers.
 
 import {
+  ALIGN_CENTER,
   ASIDE,
   BARE,
   BOX,
@@ -22,23 +23,31 @@ import {
   END,
   ENDASIDE,
   ENDBOX,
+  FIELD_TONE,
+  FIELD_TYPE,
   FOOT,
   FRAME,
+  FROM,
   HEAD,
   LABEL,
   PAIR_SEP,
   RIGHT,
   RULE,
   TOKEN_SEP,
+  USE,
   declSource,
+  isAlign,
 } from "../data/language.js";
-import { composeAside, type AsideAlign } from "../layout/aside.js";
+import { IN_BOX, IN_BOX_BARE, IN_EACH, TOP, readsHere } from "../data/grammar.js";
+import { asideMainWidth, composeAside, type AsideAlign } from "../layout/aside.js";
 import { BOX_CHROME, flowBody, frameBox } from "../layout/box.js";
 import { columnWidths, type PadCtx } from "../layout/columns.js";
 import { HANG_MARK, RULE_MARK } from "../layout/marks.js";
 import { printedWidth } from "../layout/measure.js";
-import { lookup, stringify, type Tables, type Scope } from "../scope.js";
+import { lookup, nameField, peek, stringify, type Tables, type Scope } from "../scope.js";
+import { fillTone, toneClass } from "../style.js";
 import { loadTemplate } from "./load.js";
+import type { Template } from "./parse.js";
 import { subst } from "./substitute.js";
 import type { ObjectLists } from "./view-data.js";
 
@@ -65,6 +74,8 @@ const FOOT_RE = re(String.raw`^${FOOT}[ \t]+(\S+)[ \t]*$`);
 const FRAME_RE = re(String.raw`^${FRAME}[ \t]+(\S+)[ \t]+(.*)$`);
 const ASIDE_RE = re(`^${ASIDE}${NAME_THEN_REST}`);
 const ENDASIDE_RE = re(`^${ENDASIDE}${ALONE}`);
+const USE_RE = re(`^${USE}${NAME_THEN_REST}`);
+const FROM_RE = re(String.raw`^[ \t]+${FROM}[ \t]+(\S+)[ \t]*$`);
 const EACH_RE = re(`^${EACH}${NAME_THEN_REST}`);
 // NB: this cannot match "@endbox" or "@endaside", so the terminators never collide.
 const END_RE = re(`^${END}${ALONE}`);
@@ -150,15 +161,52 @@ function asideRows(name: string, dirs: string | string[]): string[] {
   return rows.slice(first, last);
 }
 
+// A view drawn INSIDE another: RENDERED, unlike an aside's rows, and with ITS OWN declarations, or a view would change
+// look depending on who drew it. Null for every way an include cannot happen, and the caller then prints the LINE: a
+// half-drawn include is what an author cannot diagnose from the screen.
+function useRows(
+  name: string,
+  field: string | null,
+  scope: Scope,
+  limit: number,
+  viewsPath: string | string[],
+  drawing: readonly string[]
+): string[] | null {
+  if (drawing.includes(name)) return null;
+  let tpl: Template;
+  try {
+    tpl = loadTemplate(name, viewsPath);
+  } catch {
+    return null;
+  }
+  const data = field == null ? scope : peek(scope, field);
+  if (data == null || typeof data !== "object" || Array.isArray(data)) return null;
+  // Claimed only once the view is going to DRAW. Counting the read before that disarms the guard that refuses a hollow
+  // render, and a message whose only consumer was this include then reaches the screen as a template line, its content
+  // gone from the transcript.
+  if (field != null) lookup(scope, field);
+  const sub: Scope = { ...(data as Scope), __labelWidth: tpl.labelWidth };
+  const rows = renderBody(tpl.body, sub, tpl.tables, tpl.objectLists, limit, viewsPath, [
+    ...drawing,
+    name,
+  ]);
+  // Filled HERE, never left to the caller's single pass (render.ts), which carries the CALLER's class and would paint
+  // an included banner's band in it.
+  const cls = toneClass(nameField(sub, FIELD_TONE), nameField(sub, FIELD_TYPE), tpl.tone);
+  return rows.map((row) => fillTone(row, cls));
+}
+
 // `limit` is the box width ceiling and `viewsPath` the ordered template dirs, both resolved once by the render entry
-// and carried down: the directives ask the platform nothing.
+// and carried down: the directives ask the platform nothing. `drawing` is the chain of view names being drawn, which is
+// what stops an include cycle.
 export function renderBody(
   body: string[],
   scope: Scope,
   tables: Tables,
   objectLists: ObjectLists,
   limit: number,
-  viewsPath: string | string[]
+  viewsPath: string | string[],
+  drawing: readonly string[] = []
 ): string[] {
   const out: string[] = [];
   for (let i = 0; i < body.length; i++) {
@@ -174,19 +222,21 @@ export function renderBody(
       const inner: string[] = [];
       i++;
       for (; i < body.length && !ENDBOX_RE.test(body[i]); i++) {
-        // A bare container has no border to hang them on, so these four are not its words: they fall through to the
-        // body and print, which is already what they do outside any box at all.
-        const hm = bare ? null : body[i].match(HEAD_RE);
-        const rm = bare ? null : body[i].match(RIGHT_RE);
-        const fm = bare ? null : body[i].match(FOOT_RE);
-        const cm = bare ? null : body[i].match(FRAME_RE);
+        // Asked of the TABLE, never decided here: a word taken out of this container's entry stops being read and
+        // falls through to the body, which is already what these four do outside any box at all. That is what makes
+        // src/data/grammar.ts load-bearing rather than a description sitting beside the code.
+        const where = bare ? IN_BOX_BARE : IN_BOX;
+        const hm = readsHere(where, HEAD) ? body[i].match(HEAD_RE) : null;
+        const rm = readsHere(where, RIGHT) ? body[i].match(RIGHT_RE) : null;
+        const fm = readsHere(where, FOOT) ? body[i].match(FOOT_RE) : null;
+        const cm = readsHere(where, FRAME) ? body[i].match(FRAME_RE) : null;
         if (hm) head = subst(hm[1], scope, tables);
         else if (rm) right = subst(rm[1], scope, tables);
         else if (fm) footField = fm[1];
         else if (cm) tone = frameTone(scope, cm[1], cm[2]);
         else inner.push(body[i]);
       }
-      const drawn = renderBody(inner, scope, tables, objectLists, limit, viewsPath);
+      const drawn = renderBody(inner, scope, tables, objectLists, limit, viewsPath, drawing);
       out.push(
         ...(bare
           ? flowBody(drawn, limit)
@@ -200,20 +250,35 @@ export function renderBody(
     const aside = body[i].match(ASIDE_RE);
     const token = aside ? aside[2].trim() : "";
     const align: AsideAlign | null =
-      token === "" ? "center" : token === "top" ? "top" : token === "bottom" ? "bottom" : null;
+      token === "" ? ALIGN_CENTER : isAlign(token) ? token : null;
     if (aside && align != null) {
       const inner: string[] = [];
       i++;
       for (; i < body.length && !ENDASIDE_RE.test(body[i]); i++) inner.push(body[i]);
+      const art = asideRows(aside[1], viewsPath);
+      const content = limit - BOX_CHROME;
+      // Drawn at the width it will be COMPOSED at: cut to size afterwards, an included view's border breaks mid-row.
+      const main = asideMainWidth(art, content);
       out.push(
         ...composeAside(
-          asideRows(aside[1], viewsPath),
-          renderBody(inner, scope, tables, objectLists, limit, viewsPath),
+          art,
+          renderBody(inner, scope, tables, objectLists, main, viewsPath, drawing),
           align,
-          limit - BOX_CHROME
+          content
         )
       );
       continue;
+    }
+    // Asked of the TABLE like the chrome words above, and read in two steps like @aside's alignment: a tail that is
+    // neither empty nor a well-formed `from <field>` is not an include, so the line prints.
+    const use = readsHere(TOP, USE) ? body[i].match(USE_RE) : null;
+    const from = use ? use[2].match(FROM_RE) : null;
+    if (use && (from != null || use[2].trim() === "")) {
+      const rows = useRows(use[1], from ? from[1] : null, scope, limit, viewsPath, drawing);
+      if (rows != null) {
+        out.push(...rows);
+        continue;
+      }
     }
     if (isRuleLine(body[i])) {
       out.push(ruleLine(body[i], scope, tables));
@@ -278,11 +343,14 @@ export function renderBody(
         if (bullet != null) {
           itemScope.__bullet = subst(bullet, itemScope, tables) + HANG_MARK;
         }
-        // A rule is the ONE directive an @each body honours. A divider BETWEEN items is a thing only the loop can
-        // place, and the collapsing in box.ts is what then drops the trailing one; everything else in there is a line
-        // of the item and belongs to substitution.
+        // Which directives a loop body honours is the table's answer, not this line's. Everything it does not name
+        // is a line of the item and belongs to substitution.
         for (const l of inner) {
-          out.push(isRuleLine(l) ? ruleLine(l, itemScope, tables, pad) : subst(l, itemScope, tables, pad));
+          out.push(
+            readsHere(IN_EACH, RULE) && isRuleLine(l)
+              ? ruleLine(l, itemScope, tables, pad)
+              : subst(l, itemScope, tables, pad)
+          );
         }
       });
     } else {

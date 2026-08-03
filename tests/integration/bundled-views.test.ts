@@ -12,8 +12,9 @@
 // Width is a fixed NUMBER (first in the resolution order), so no env var, probe or
 // terminal reaches the render.
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { transform } from "../../src/pipeline.js";
@@ -457,5 +458,73 @@ describe("the welcome the package ships", () => {
 
   it("colours what it draws, so a hook that fired is visible as such", () => {
     expect(seqs(render(BLOCK)).length).toBeGreaterThan(0);
+  });
+});
+
+// The layout this engine exists for, composed from the shipped views rather than retyped: an art column on the left,
+// a banner and the lines view drawn INSIDE the right one. It renders through the same pipeline as everything above,
+// with the bundled corpus on the search path behind a temp dir holding the one composing template.
+describe("a view composed of other views", () => {
+  const WIDE = 100;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-compose-"));
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  // The CALLER declares the split its included view iterates, and has to: the block's raw text is parsed ONCE, against
+  // this template alone (render.ts), so `lines`'s own @fields never reaches the parse.
+  fs.writeFileSync(
+    path.join(dir, "compose" + VIEW_EXT),
+    [
+      "@fields rows label content",
+      "@box",
+      "@aside tayo",
+      "@use banner",
+      "@rule",
+      "@use lines",
+      "@endaside",
+      "@endbox",
+      "",
+    ].join("\n")
+  );
+
+  const composed = (): string =>
+    transform(
+      lines(
+        BLOCK_HINT + "compose",
+        "type: warning",
+        "content: deux suites instables",
+        "rows:",
+        "- Deploy  staging est rouge",
+        "- Build  vert",
+        FENCE
+      ),
+      undefined,
+      true,
+      undefined,
+      { viewsPath: [dir, BUNDLED], width: WIDE }
+    );
+
+  const ART = "▀";
+
+  it("draws each included view INSIDE the column, beside the art", () => {
+    const rows = plainly(composed()).split("\n");
+    for (const text of ["WARNING", "deux suites instables", "Deploy", "staging est rouge"]) {
+      const found = rows.filter((l) => l.includes(text));
+      expect(found).toHaveLength(1);
+      expect(found[0]).toContain(ART);
+    }
+  });
+
+  it("leaves no include and no slot standing", () => {
+    const out = plainly(composed());
+    expect(out).not.toContain("@use");
+    expect(out).not.toContain("${");
+    expect(out).not.toContain("{{");
+  });
+
+  it("keeps the frame whole, its corners one row each", () => {
+    const rows = plainly(composed()).split("\n");
+    expect(rows.filter((l) => l.includes("╭"))).toHaveLength(1);
+    expect(rows.filter((l) => l.includes("╰"))).toHaveLength(1);
+    for (const l of rows) expect(printedWidth(l)).toBeLessThanOrEqual(WIDE);
   });
 });

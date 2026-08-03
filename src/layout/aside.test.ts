@@ -9,7 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { renderView, ANSI_RE } from "../index.js";
-import { ASIDE_GUTTER, ASIDE_MIN_MAIN } from "./aside.js";
+import { ASIDE_GUTTER, ASIDE_MIN_MAIN, asideMainWidth } from "./aside.js";
 import { BOX_CHROME } from "./box.js";
 import { printedWidth } from "./measure.js";
 
@@ -41,7 +41,7 @@ const mainWidth = (limit: number): number => contentWidth(limit) - ART_WIDTH - A
 const ABOVE = "ABOVE a line long enough to need more than the main column can give it";
 const BELOW = "BELOW the region, the flow returns to the whole width of the box content";
 
-import { ASIDE, BOX, ENDASIDE, ENDBOX, HEAD } from "../data/language.js";
+import { ASIDE, BOX, ENDASIDE, ENDBOX, HEAD, USE } from "../data/language.js";
 import { SCRATCH_DIR, VIEW_EXT } from "../data/markup.js";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-aside-`));
@@ -83,6 +83,9 @@ write("missing", [
   ENDASIDE,
   ENDBOX,
 ]);
+// A BOX inside a region: a border is the one thing here that cannot survive being cut to size after the fact.
+write("inner-box", [BOX, `${HEAD} INCLUDED`, "a line the included view drew", ENDBOX]);
+write("nested", [BOX, `${ASIDE} art`, `${USE} inner-box`, ENDASIDE, ENDBOX]);
 
 afterAll(() => {
   fs.rmSync(dir, { recursive: true, force: true });
@@ -95,6 +98,8 @@ const rows = (out: string): string[] => out.replace(ANSI_RE, "").split("\n");
 // A framed line carries two borders; a line the region composed carries the separator between them, so counting bars is
 // what tells the two apart. The glyph is spelled here because box.ts keeps its own private.
 const BAR_RE = /│/g;
+const CORNER_OPEN = "╭";
+const CORNER_CLOSE = "╮";
 const FRAME_BARS = 2;
 const REGION_BARS = FRAME_BARS + 1;
 const bars = (line: string): number => (line.match(BAR_RE) ?? []).length;
@@ -212,6 +217,34 @@ describe("the art itself", () => {
     const columns = new Set(regionRows(out).map((l) => l.indexOf("│", 1)));
     expect(columns.size).toBe(1);
     expect([...columns][0]).toBe(2 + ART_WIDTH + 2);
+  });
+});
+
+describe("the width the main column gets", () => {
+  it("is the number the composition actually lays the flow out to", () => {
+    expect(asideMainWidth(ART, contentWidth(FITS))).toBe(mainWidth(FITS));
+  });
+
+  it("hands the whole content back wherever the aside is dropped", () => {
+    expect(asideMainWidth([], contentWidth(FITS))).toBe(contentWidth(FITS));
+    expect(mainWidth(NARROW)).toBeLessThan(ASIDE_MIN_MAIN);
+    expect(asideMainWidth(ART, contentWidth(NARROW))).toBe(contentWidth(NARROW));
+  });
+});
+
+describe("a region whose body INCLUDES a view that draws a box", () => {
+  const out = render("nested", FITS);
+
+  it("draws that box at the width of the column, its border whole on one row", () => {
+    // Over EVERY corner rather than the inner one alone, so the outer frame answers here too.
+    const opens = rows(out).filter((l) => l.includes(CORNER_OPEN));
+    expect(opens).toHaveLength(2);
+    for (const line of opens) expect(line).toContain(CORNER_CLOSE);
+  });
+
+  it("puts the included view's own content beside the art and not under it", () => {
+    expect(rowWith(out, "a line the included view drew")).toHaveLength(1);
+    expect(rowWith(out, "INCLUDED")).toHaveLength(1);
   });
 });
 
