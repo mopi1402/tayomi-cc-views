@@ -13,7 +13,7 @@ import path from "node:path";
 import { VIEW_EXT } from "../data/markup.js";
 import { hasControlMark } from "../data/marks.js";
 import { ANSI_RE, renderTags, tagMark } from "../style.js";
-import { renderView } from "./render.js";
+import { renderView, traceView } from "./render.js";
 import { parseTemplate } from "./parse.js";
 import * as LANG from "../data/language.js";
 
@@ -323,5 +323,25 @@ describe("injected fields", () => {
   it("win over a field of the same name the block wrote", () => {
     view("${said}");
     expect(plain(render({ said: "model" }, undefined, { said: "display" }))).toContain("display");
+  });
+});
+
+// The set the render builds to answer its own third refusal, handed back rather than discarded. It is what `check`
+// reads to name a field that arrived and was read nowhere, and the reason it is a RETURN value is asserted here: a
+// scope carrying its own would be carrying a field.
+describe("what a render recorded", () => {
+  it("holds the fields the body ASKED FOR, and not the ones it merely received", () => {
+    view("${said}");
+    const { out, read } = traceView(NAME, { said: "x", spare: "y" }, [dir], undefined, options);
+    expect(plain(out)).toContain("x");
+    expect([...read]).toEqual(["said"]);
+  });
+
+  it("takes the set OFF the caller's scope, where a second render would read it as a field that arrived", () => {
+    view("${said}");
+    const scope: Record<string, unknown> = { said: "x" };
+    const { read } = traceView(NAME, scope, [dir], undefined, options);
+    expect(scope.__read).toBeUndefined();
+    expect([...read]).toEqual(["said"]);
   });
 });

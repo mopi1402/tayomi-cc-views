@@ -4,6 +4,10 @@ Everything here is stable across installs. What is NOT here, because it depends 
 stale in a file: the tags a host added with `extendTags`, and which views your `viewsPath` already
 resolves. Run `cc-views dict` for those, which prints THIS install's own answer as JSON.
 
+Written one and it draws nothing? Run `cc-views check <view> '<block>'`, which renders it against a
+sample block and answers with the reason, naming the template line. It is silent when there is none,
+non-zero on an error, and zero on a warning. The block also reads from a pipe.
+
 Reading this as a machine? Take `agent/catalogue.json` instead: the same language, generated from the
 tables the engine executes and gated at the byte, with every view's path, declarations and expected
 payload. This page is the human short version. The full boundary of the language, every form and every

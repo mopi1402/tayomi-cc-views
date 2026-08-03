@@ -22,6 +22,19 @@ export interface Dressing {
   tone?: string;
 }
 
+/**
+ * A render and what it RECORDED: every top-level field the body actually asked the scope for.
+ *
+ * A RETURN value and not a seventh parameter, deliberately. The set lives on the scope while the body runs, so a caller
+ * able to hand one in would be handing in a field: `got` is taken before the set is attached, and a scope arriving with
+ * its own `__read` would count among the fields that ARRIVED and could flip the third refusal below.
+ */
+export interface Traced {
+  out: string;
+  read: Set<string>;
+}
+
+/** The render, discarding what it recorded. What the runtime spends, and what every host has always called. */
 export function renderView(
   name: string,
   data: Scope | string,
@@ -30,6 +43,17 @@ export function renderView(
   options?: RenderOptions,
   dressing?: Dressing
 ): string {
+  return traceView(name, data, dir, injected, options, dressing).out;
+}
+
+export function traceView(
+  name: string,
+  data: Scope | string,
+  dir: string | string[] = viewsDir(),
+  injected?: Scope,
+  options?: RenderOptions,
+  dressing?: Dressing
+): Traced {
   const { tables, objectLists, body, labelWidth, tone, spendsSlots } = loadTemplate(
     name,
     dir,
@@ -90,5 +114,5 @@ export function renderView(
   // Both marks exist for the layers above and must never reach a terminal. Inert goes LAST, after renderTags, so what
   // it protected is text by then.
   const drawn = renderTags(fillTone(markCode(out.join("\n")), cls));
-  return dropInert(drawn).split(HANG_MARK).join("");
+  return { out: dropInert(drawn).split(HANG_MARK).join(""), read };
 }
