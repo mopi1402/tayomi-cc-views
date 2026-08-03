@@ -46,7 +46,7 @@
     "prepublishOnly": "pnpm verify",
     "check:skill": "node scripts/check-skill.mjs",
     "sync:version": "node scripts/sync-version.mjs",
-    "version": "node scripts/sync-version.mjs && git add .claude-plugin"
+    "version": "node scripts/sync-version.mjs && git add .claude-plugin views/welcome.view"
   },
   "dependencies": {
     "@tayomi/utils": "^0.1.0"

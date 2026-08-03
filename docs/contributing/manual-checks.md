@@ -4,7 +4,7 @@ For contributors only. If you are using the engine rather than changing it, you 
 
 `pnpm verify:pack` covers everything a machine can check. It feeds the packaged binary directly, so it never goes through Claude Code: it can never tell you whether Claude Code actually RAN the hook, nor whether the result looks right. That is what you do by hand, here, before publishing.
 
-Two targets, in this order. A throwaway project settles what the render looks like, one `pnpm build` per cycle. Your own consumer proves the engine reaches the screen you actually work on, and costs a publish plus an install, so go there once the render is already right.
+Three targets, in this order. A throwaway project settles what the render looks like, one `pnpm build` per cycle. Your own consumer proves the engine reaches the screen you actually work on, and costs a publish plus an install, so go there once the render is already right. The third judges the SKILL, which travels by a different road entirely and which no gate above can see.
 
 ## Target 1: `sandbox/`, a throwaway Claude Code project
 
@@ -64,6 +64,16 @@ A second, complementary ask is `@{view:welcome}`: that view ships INSIDE the tar
 
 Everything else there is disposable: `node_modules/`, the `.tgz`, any lockfile, any `*.ansi` dump.
 
+## The release: one command
+
+The version lives in three files: `package.json` and the two `.claude-plugin/` manifests, which Claude Code reads before our code runs and so cannot import it. One command writes all three.
+
+```bash
+pnpm version prerelease   # rc.21 -> rc.22, manifests staged, commit and tag made
+```
+
+`--no-git-tag-version` skips the commit and tag, but the hook fires anyway: you get aligned manifests staged beside an unstaged `package.json`. Then publish with pnpm and not npm, for the `publishConfig` reason in [CONTRIBUTING.md](../../CONTRIBUTING.md).
+
 ## Target 2: your own project or plugin
 
 The sandbox judges a tarball in a folder built for the occasion. This judges the engine inside the consumer you actually work in, installed from a registry the way a real release would be. Publish a prerelease to Verdaccio from the repo root (see [CONTRIBUTING.md](../../CONTRIBUTING.md)), then, in your consumer:
@@ -112,6 +122,26 @@ grep '"version"' ~/.claude/plugins/cache/tayomi/tayomi/<version>/node_modules/@t
 One line, and the whole chain answers at once: the prerelease reached the registry, the workspace installed it, `plugin update` copied it. The wrong version here tells you which of the three failed, and the directory's own timestamp (`ls -ldT` on it) says whether the copy happened at all.
 
 Nothing here proves the RESTART, and no check should: a session already running keeps the engine it loaded, you are the one who restarts it, and restarting again costs three seconds against two commands. When in doubt, restart rather than measure.
+
+## Target 3: the skill
+
+`skills/write-view` is out of the tarball on purpose, so nothing above tests it. No publish needed: a marketplace source can be a directory.
+
+```bash
+claude plugin marketplace add /path/to/tayomi-cc-views
+claude plugin install cc-views@tayomi-cc-views
+# restart Claude Code
+```
+
+Ask for a view in a real session and watch the PROCEDURE, which is all the skill teaches: `cc-views dict` first, the cheatsheet read rather than improvised, the file in `views/`, `cc-views check` before it is handed back.
+
+**Local is not live.** A directory source is copied into the plugin cache like any other, and `plugin update` compares versions before copying. No bump, no copy, and the old skill keeps answering in silence.
+
+```bash
+claude plugin marketplace update tayomi-cc-views
+claude plugin update cc-views@tayomi-cc-views
+# restart Claude Code
+```
 
 ## A composed layout
 

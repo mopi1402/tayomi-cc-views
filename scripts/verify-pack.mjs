@@ -14,6 +14,8 @@ import os from "node:os";
 import path from "node:path";
 
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
+/** What this package SAYS it is, which the welcome's badge has to agree with once drawn. */
+const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const fail = (msg) => {
   console.error(`\nverify-pack: FAIL, ${msg}`);
   process.exit(1);
@@ -158,6 +160,12 @@ try {
   if (!widePlain.includes("╭")) fail("no box frame in the output");
   if (!widePlain.includes("Welcome!")) fail("the title did not render");
   if (widePlain.includes("```")) fail("the raw fence reached the screen");
+  // The badge names the engine AND its version, and the number is a copy in a file that cannot
+  // import it. Read off the SCREEN drawn by the installed tarball, so it answers for the whole
+  // chain at once: sync-version wrote it, the whitelist shipped it, and this box is the one place
+  // a user can tell which of two engines drew their message.
+  const badge = `${pkg.name} v${pkg.version}`;
+  if (!widePlain.includes(badge)) fail(`the box does not name "${badge}", so its version is stale`);
   for (const label of SECTIONS) {
     if (!widePlain.includes(label)) fail(`the ${label} section is missing at ${WIDE} columns`);
   }

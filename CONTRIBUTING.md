@@ -108,10 +108,12 @@ Then, from this repo:
 
 ```bash
 # 1. bump to a prerelease so nothing real is ever shadowed. The registry
-#    REFUSES a version it already holds, so this is once per ITERATION and not
-#    once per session: the second round is rc.N+1, never a re-push of rc.N.
-#    The flag is load-bearing, a bare `pnpm version` commits AND tags.
-pnpm version X.Y.Z-rc.N --no-git-tag-version
+#    REFUSES a version it already holds, so this is once per ITERATION:
+#    `prerelease` walks rc.N to rc.N+1 on its own. The `version` hook writes
+#    the number into the two .claude-plugin/ manifests, which cannot import it.
+#    A bare `pnpm version` commits and tags, which is what carries them;
+#    --no-git-tag-version leaves them staged for you to commit.
+pnpm version prerelease
 # 2. publish with PNPM, not npm: pnpm is what applies publishConfig (npm
 #    publish would ship the dev exports pointing at src/, which the tarball
 #    does not carry). prepublishOnly runs `pnpm verify` on the way, so a red
