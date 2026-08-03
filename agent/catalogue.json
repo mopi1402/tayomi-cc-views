@@ -175,16 +175,77 @@
       "@rule"
     ]
   },
-  "payloads": {
-    "table": [
-      "rows",
-      "label",
-      "content"
+  "block": {
+    "carriers": [
+      {
+        "kind": "fenced",
+        "opens": "```view:<view>",
+        "closedBy": "```",
+        "carries": "the data lines below it, to the closing fence",
+        "attributes": [],
+        "withoutPayload": null
+      },
+      {
+        "kind": "decorator",
+        "opens": "@{view:<view>}",
+        "closedBy": null,
+        "carries": "the plain markdown on the NEXT line, which still reads where this engine does not run",
+        "attributes": [
+          {
+            "name": "type",
+            "takes": "<kind>",
+            "does": "the KIND of content, and it may select a typed view file"
+          },
+          {
+            "name": "tone",
+            "takes": "<tag>",
+            "does": "the LOOK only, and it outranks the kind"
+          }
+        ],
+        "withoutPayload": "a blank line under it, or the end of the message"
+      }
     ],
-    "quote": [
-      "content",
-      "type"
+    "lines": [
+      {
+        "form": "<field>: <value>",
+        "does": "a scalar field, the value opaque to end of line"
+      },
+      {
+        "form": "<field>:",
+        "does": "opens a list field"
+      },
+      {
+        "form": "- <value>",
+        "does": "appends an item to the list the key above opened"
+      },
+      {
+        "form": "  <field>: <value>",
+        "does": "a pair of the mapping that key holds, ONE level and no deeper"
+      },
+      {
+        "form": "anything else",
+        "does": "ignored: no line of a block is ever refused"
+      }
     ]
+  },
+  "payloads": {
+    "table": {
+      "fields": [
+        "rows",
+        "label",
+        "content"
+      ],
+      "selectedBy": "a first line starting with |",
+      "marker": null
+    },
+    "quote": {
+      "fields": [
+        "content",
+        "type"
+      ],
+      "selectedBy": "a first line starting with >",
+      "marker": "[!TOKEN]"
+    }
   },
   "tags": {
     "names": [

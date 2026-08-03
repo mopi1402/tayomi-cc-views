@@ -126,6 +126,14 @@ export const MARKER_TOKEN = String.raw`[A-Z][A-Z0-9_-]*`;
 export const MARKER_SOURCE = String.raw`\[!(${MARKER_TOKEN})\]`;
 
 /**
+ * The same marker as an author TYPES it, for a catalogue that cannot hand a regex to its reader. Written out rather
+ * than derived, a pattern having no readable spelling, and the sidecar feeds this form to the matcher above so the two
+ * cannot part company.
+ */
+export const MARKER_SLOT = "TOKEN";
+export const MARKER_FORM = `[!${MARKER_SLOT}]`;
+
+/**
  * What a template writes to reach the engine's own bookkeeping (scope.ts). Punctuation rather than names, so a block's
  * own field can never shadow one.
  */

@@ -18,16 +18,23 @@
 // For a list declared with `@fields`, each item splits into the declared fields: every leading field takes one
 // whitespace-delimited token, the LAST takes the rest.
 
+import { ITEM_MARK, NAME_MARK } from "../data/markup.js";
 import { inert } from "../style.js";
 
 export type ObjectLists = Record<string, string[]>;
 
-/** `key: value`, the value OPAQUE to end of line. An empty one OPENS a list instead. */
-const KV_RE = /^([A-Za-z_][\w-]*):[ \t]?(.*)$/;
+// eslint-disable-next-line security/detect-non-literal-regexp
+const re = (source: string): RegExp => new RegExp(source);
+
+/** One pair, the key NAMED and the value OPAQUE to end of line. Indented or not is what parts the two matchers below. */
+const PAIR_SOURCE = String.raw`([A-Za-z_][\w-]*)${NAME_MARK}[ \t]?(.*)$`;
+
+/** `key: value`. An empty value OPENS a list instead. */
+const KV_RE = re(`^${PAIR_SOURCE}`);
 /** `- item`, an entry appended to the list the key above opened. */
-const ITEM_RE = /^[ \t]*-[ \t]+(.*)$/;
+const ITEM_RE = re(String.raw`^[ \t]*${ITEM_MARK}[ \t]+(.*)$`);
 /** The same pair, INDENTED: it belongs to the key above rather than to the block. The indent is the whole signal. */
-const NESTED_KV_RE = /^[ \t]+([A-Za-z_][\w-]*):[ \t]?(.*)$/;
+const NESTED_KV_RE = re(`^[ \t]+${PAIR_SOURCE}`);
 /** A leading @fields field takes ONE token; whatever follows is the next field's. */
 const LEADING_FIELD_RE = /^(\S+)[ \t]+([\s\S]*)$/;
 /** Trailing blanks, dropped so an invisible tail never lands inside a value. */

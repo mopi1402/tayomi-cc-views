@@ -27,6 +27,8 @@ import {
   LABEL,
   LABEL_REF,
   MAP,
+  MARKER_FORM,
+  MARKER_SLOT,
   MARKER_SOURCE,
   PAIR_SEP,
   QUOTED,
@@ -168,6 +170,14 @@ describe("the kind marker", () => {
 
   it("must open on a letter, so a leading digit is not a kind", () => {
     expect(token("[!2FAST]")).toBeUndefined();
+  });
+
+  it("is SPELLED the same way it is matched, since a catalogue cannot hand a reader a pattern", () => {
+    // The one place the written form and the matcher meet: fill the slot of the form an agent is shown, and the
+    // matcher above must read it back. Two spellings drifting apart is exactly what this catches.
+    const KIND = "WARNING";
+    expect(MARKER_FORM).toContain(MARKER_SLOT);
+    expect(token(MARKER_FORM.replace(MARKER_SLOT, KIND))).toBe(KIND);
   });
 });
 

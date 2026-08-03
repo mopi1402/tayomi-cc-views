@@ -18,10 +18,17 @@ import {
   FIELD_CONTENT,
   FIELD_LABEL,
   FIELD_ROWS,
+  FIELD_TONE,
   FIELD_TYPE,
   MARKER_SOURCE,
 } from "../data/language.js";
-import { DECORATOR_CLOSE, DECORATOR_HINT } from "../data/markup.js";
+import {
+  DECORATOR_CLOSE,
+  DECORATOR_HINT,
+  NAME_MARK,
+  QUOTE_MARK,
+  TABLE_MARK,
+} from "../data/markup.js";
 import { renderView, type Dressing } from "../template/render.js";
 import { inert, spanClose, spanOpen } from "../style.js";
 import { fenceAt, fenceSpans } from "./fences.js";
@@ -33,8 +40,12 @@ export { DECORATOR_HINT };
 
 // Parsed by string, not by one composed regex: an optional inner group plus a trailing anchor backtracks on a near-miss
 // (the lesson directives.ts already paid for), and the SAST gate rightly refuses the shape.
+// eslint-disable-next-line security/detect-non-literal-regexp
+const re = (source: string): RegExp => new RegExp(source);
+
 const NAME_RE = /^[\w-]+$/;
-const ATTR_RE = /^(type|tone):([\w-]+)$/;
+/** The two attributes, spelled from the FIELDS they land in: a rename there must never leave this pattern behind. */
+const ATTR_RE = re(String.raw`^(${FIELD_TYPE}|${FIELD_TONE})${NAME_MARK}([\w-]+)$`);
 /** A comma, whitespace, or both: `@{view:table, type:warning}` is `@{view:table type:warning}`. */
 const ATTR_SEP = /[,\s]+/;
 
@@ -71,12 +82,14 @@ function hasPayload(lines: string[], below: number, stop: number): boolean {
   return below < stop && lines[below].trim() !== "";
 }
 
+/** A pipe is an alternation anywhere else, so the mark is escaped ONCE here and the three patterns below compose. */
+const TABLE_SOURCE = `\\${TABLE_MARK}`;
 /** Anything pipe-shaped: the table payload's own line shape, and where its zone ends. */
-const PIPE_LINE_RE = /^[ \t]*\|/;
+const PIPE_LINE_RE = re(String.raw`^[ \t]*${TABLE_SOURCE}`);
 /** Anything quote-shaped: the blockquote payload's own line shape. */
-const QUOTE_LINE_RE = /^[ \t]*>/;
+const QUOTE_LINE_RE = re(String.raw`^[ \t]*${QUOTE_MARK}`);
 /** The marker off a body line, and the one optional space markdown allows after `>`. */
-const QUOTE_PREFIX_RE = /^[ \t]*>[ \t]?/;
+const QUOTE_PREFIX_RE = re(String.raw`^[ \t]*${QUOTE_MARK}[ \t]?`);
 // eslint-disable-next-line security/detect-non-literal-regexp
 const MARKER_RE = new RegExp(`^${MARKER_SOURCE}$`);
 

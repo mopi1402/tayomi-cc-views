@@ -9,6 +9,23 @@
 export const VIEW = "view";
 export const VIEWS = `${VIEW}s`;
 
+/**
+ * What parts a NAME from what it holds, everywhere the surface has that shape: the fence's info string, a decorator's
+ * attribute, and a pair of the data block. One token, so the matchers and the form a catalogue states cannot drift.
+ */
+export const NAME_MARK = ":";
+
+/**
+ * The rest of the data block's own shapes: what marks an item of a list, and the INDENT that makes a pair belong to the
+ * key above rather than to the block. Two readers each, the parser and the catalogue that publishes the form.
+ */
+export const ITEM_MARK = "-";
+export const NEST_INDENT = "  ";
+
+/** What a decorator's payload is told apart by, on its FIRST line and nothing else: a table, or a blockquote. */
+export const TABLE_MARK = "|";
+export const QUOTE_MARK = ">";
+
 export const TAG_OPEN = "{{";
 export const TAG_CLOSE = "}}";
 
@@ -19,7 +36,7 @@ export const FENCE = "```";
  * The INFO STRING marking a fence as this engine's own carrier rather than an ordinary code block. It is what tells the
  * fence scanner which fences to shield and which one to hand to the block carrier, so the two readings cannot drift.
  */
-export const BLOCK_INFO = `${VIEW}:`;
+export const BLOCK_INFO = `${VIEW}${NAME_MARK}`;
 /** What an opening fence starts with, and what ENGAGES the pipeline. */
 export const BLOCK_HINT = `${FENCE}${BLOCK_INFO}`;
 
@@ -27,7 +44,7 @@ export const BLOCK_HINT = `${FENCE}${BLOCK_INFO}`;
  * Nothing shorter than `@{view:`: PowerShell writes `@{Name='x'}` and Perl writes `@{$ref}`, so a bare `@{` would
  * capture them.
  */
-export const DECORATOR_HINT = `@{${VIEW}:`;
+export const DECORATOR_HINT = `@{${BLOCK_INFO}`;
 export const DECORATOR_CLOSE = "}";
 
 /** A template file, and the directory a host keeps its templates in. */

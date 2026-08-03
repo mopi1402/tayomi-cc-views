@@ -102,6 +102,8 @@ export const ARG_TAG = arg("tag");
 export const ARG_NAME = arg("name");
 export const ARG_LIST = arg("list");
 export const ARG_VALUE = arg("value");
+/** Not a directive's, but the same placeholder vocabulary: what a decorator's `type:` attribute takes. */
+export const ARG_KIND = arg("kind");
 
 /**
  * What each word takes after it, written as an author types it.

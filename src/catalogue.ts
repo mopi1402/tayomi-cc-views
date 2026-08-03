@@ -11,7 +11,11 @@
 
 import {
   ARG_FIELD,
+  ARG_KIND,
   ARG_LIST,
+  ARG_TAG,
+  ARG_VALUE,
+  ARG_VIEW,
   CLOSES,
   CONTAINERS,
   READS,
@@ -19,8 +23,29 @@ import {
   opensContainers,
   readsHere,
 } from "./data/grammar.js";
-import { INDEX_REF, PAYLOAD_FIELDS, TOKEN_SEP } from "./data/language.js";
-import { VIEWS_DIR, VIEW_EXT } from "./data/markup.js";
+import {
+  FIELD_TONE,
+  FIELD_TYPE,
+  INDEX_REF,
+  MARKER_FORM,
+  PAYLOAD_FIELDS,
+  PAYLOAD_QUOTE,
+  PAYLOAD_TABLE,
+  TOKEN_SEP,
+} from "./data/language.js";
+import {
+  BLOCK_HINT,
+  DECORATOR_CLOSE,
+  DECORATOR_HINT,
+  FENCE,
+  ITEM_MARK,
+  NAME_MARK,
+  NEST_INDENT,
+  QUOTE_MARK,
+  TABLE_MARK,
+  VIEWS_DIR,
+  VIEW_EXT,
+} from "./data/markup.js";
 import { SUBST_RE } from "./scope.js";
 import { TAG_SUFFIXES, builtinTagNames, tagNames } from "./style.js";
 import {
@@ -66,12 +91,49 @@ export interface ViewDoc {
   lists: Record<string, readonly string[]>;
 }
 
+export interface AttributeDoc {
+  name: string;
+  takes: string;
+  does: string;
+}
+
+export interface CarrierDoc {
+  kind: string;
+  opens: string;
+  closedBy: string | null;
+  carries: string;
+  attributes: AttributeDoc[];
+  /** What asks for a STATIC view, on the carriers that have such a form, and null on the ones that do not. */
+  withoutPayload: string | null;
+}
+
+export interface LineDoc {
+  form: string;
+  does: string;
+}
+
+export interface PayloadDoc {
+  /** The fields this shape yields. Spending one of them is what says a view expects it. */
+  fields: readonly string[];
+  /** What SELECTS this shape, decided on the payload's first line and nowhere else. */
+  selectedBy: string;
+  /** The kind marker this shape may open with, on the one shape that has one. */
+  marker: string | null;
+}
+
+export interface BlockDoc {
+  carriers: CarrierDoc[];
+  lines: LineDoc[];
+}
+
 export interface Catalogue {
   directives: DirectiveDoc[];
   /** Which words each container reads. The composition graph, as the engine executes it. */
   containers: Record<string, readonly string[]>;
-  /** Which fields each payload shape yields, so a view spending one of them is asking for that shape. */
-  payloads: Record<string, readonly string[]>;
+  /** How a message CARRIES data to a view: the two carriers, and the lines the data format recognises. */
+  block: BlockDoc;
+  /** Which fields each payload shape yields and what selects it. */
+  payloads: Record<string, PayloadDoc>;
   tags: { names: string[]; suffixes: readonly string[] };
   views: ViewDoc[];
 }
@@ -178,12 +240,78 @@ function viewDoc(name: string, dir: string, file: string): ViewDoc {
   };
 }
 
+/**
+ * How a message CARRIES data to a view, which is the half a reader cannot infer from the views above: knowing that
+ * `banner` wants a quote spending `content` says nothing about what to type.
+ *
+ * Every form is spelled from the token the engine ENGAGES on, so a rename reaches this dump with no edit here.
+ */
+function block(): BlockDoc {
+  const attribute = (name: string, takes: string, does: string): AttributeDoc => ({
+    name,
+    takes,
+    does,
+  });
+  return {
+    carriers: [
+      {
+        kind: "fenced",
+        opens: BLOCK_HINT + ARG_VIEW,
+        closedBy: FENCE,
+        carries: "the data lines below it, to the closing fence",
+        attributes: [],
+        withoutPayload: null,
+      },
+      {
+        kind: "decorator",
+        opens: DECORATOR_HINT + ARG_VIEW + DECORATOR_CLOSE,
+        closedBy: null,
+        carries: "the plain markdown on the NEXT line, which still reads where this engine does not run",
+        attributes: [
+          attribute(FIELD_TYPE, ARG_KIND, "the KIND of content, and it may select a typed view file"),
+          attribute(FIELD_TONE, ARG_TAG, "the LOOK only, and it outranks the kind"),
+        ],
+        withoutPayload: "a blank line under it, or the end of the message",
+      },
+    ],
+    lines: [
+      { form: `${ARG_FIELD}${NAME_MARK} ${ARG_VALUE}`, does: "a scalar field, the value opaque to end of line" },
+      { form: `${ARG_FIELD}${NAME_MARK}`, does: "opens a list field" },
+      { form: `${ITEM_MARK} ${ARG_VALUE}`, does: "appends an item to the list the key above opened" },
+      {
+        form: `${NEST_INDENT}${ARG_FIELD}${NAME_MARK} ${ARG_VALUE}`,
+        does: "a pair of the mapping that key holds, ONE level and no deeper",
+      },
+      { form: "anything else", does: "ignored: no line of a block is ever refused" },
+    ],
+  };
+}
+
+/** What selects each payload, on its first line and nowhere else, beside the fields it yields. */
+function payloads(): Record<string, PayloadDoc> {
+  const selector: Record<string, string> = {
+    [PAYLOAD_TABLE]: TABLE_MARK,
+    [PAYLOAD_QUOTE]: QUOTE_MARK,
+  };
+  return Object.fromEntries(
+    Object.entries(PAYLOAD_FIELDS).map(([shape, fields]) => [
+      shape,
+      {
+        fields,
+        selectedBy: `a first line starting with ${selector[shape]}`,
+        marker: shape === PAYLOAD_QUOTE ? MARKER_FORM : null,
+      },
+    ])
+  );
+}
+
 /** The half both callers share, so neither states the language a second time. */
 function assemble(views: ViewDoc[], tags: string[]): Catalogue {
   return {
     directives: directives(),
     containers: { ...READS },
-    payloads: { ...PAYLOAD_FIELDS },
+    block: block(),
+    payloads: payloads(),
     tags: { names: tags, suffixes: TAG_SUFFIXES },
     views,
   };
