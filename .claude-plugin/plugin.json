@@ -4,7 +4,8 @@
   "version": "0.1.1-rc.21",
   "description": "Write a .view template for @tayomi/cc-views: pick a bundled view, write the template and the block that feeds it, and verify with cc-views check.",
   "author": {
-    "name": "mopi"
+    "name": "Pierre Moati",
+    "url": "https://github.com/mopi1402"
   },
   "repository": "git+https://github.com/mopi1402/tayomi-cc-views.git",
   "license": "MIT",

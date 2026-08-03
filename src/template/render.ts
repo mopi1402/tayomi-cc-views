@@ -91,10 +91,14 @@ export function traceView(
     // never probe for a file.
     out = renderBody(body, full, tables, objectLists, maxBoxWidth(options), dir);
   } finally {
-    // The set is the engine's, and `full` may BE the caller's own object. Left on it, a second render of the same data
-    // would count it among the fields that ARRIVED, and the throwing path is the one that leaves it there: a template
-    // failing mid-render is exactly when a caller retries.
+    // Both are the ENGINE's, and `full` may BE the caller's own object, so neither is left on it. The throwing path is
+    // the one that would: a template failing mid-render is exactly when a caller retries.
+    //
+    // The set has the sharper consequence, since a second render of the same data would count it among the fields that
+    // ARRIVED. The width is the template's and not the data's, so a scope carrying one from a PREVIOUS view would hand
+    // the next its predecessor's label column. Nothing reads either past this line: both are spent inside renderBody.
     delete full.__read;
+    delete full.__labelWidth;
   }
   // Third reading: data ARRIVED and the template read none of it. Decided on what the render actually ASKED the scope
   // for, recorded by the accessor (scope.ts), which is why it runs down here with the output already built and about to

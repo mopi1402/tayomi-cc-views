@@ -71,6 +71,12 @@ try {
   if (!listing.includes(CHEATSHEET)) {
     fail("docs/CHEATSHEET.md, the doc an agent reads to write a view, is not in the tarball");
   }
+  // The cheatsheet's machine half, and it falls out of the whitelist just as silently: every render
+  // keeps working, and only an agent trying to LEARN the language in someone else's project comes up
+  // empty. Asserted positively here because `files` is what decides it, and nothing else would say.
+  if (!listing.includes("package/agent/catalogue.json")) {
+    fail("agent/catalogue.json, the language an agent reads, is not in the tarball");
+  }
   // docs/ stays documentation scope and the cheatsheet is its ONE exception, so the ban is
   // written per ENTRY rather than on the directory: banning the prefix is no longer possible
   // now that something legitimate lives under it, and a reference doc added to the whitelist
@@ -219,6 +225,32 @@ try {
   // The two ways in differ in what the AUTHOR types and in nothing else.
   if (quoted !== fenced) fail("the quote and the fenced block drew two different bands");
   if (quoted.split("\n").length !== 1) fail("the band did not stay one line");
+
+  // 8. The OTHER bin, through the shim an adopter actually types. `dict` is the one
+  // command that makes the whole install answer at once: the binary shipped and is
+  // executable, the `bin` mapping resolved, and the engine resolved its own bundled
+  // views from inside node_modules with no plugin root and no CC_VIEWS_PATH to help it.
+  // A `files` edit dropping either the bin or the catalogue lands here.
+  const CLI = "cc-views";
+  const shim = path.join(proj, "node_modules", ".bin", CLI);
+  if (!fs.existsSync(shim)) fail(`the ${CLI} bin was not linked into node_modules/.bin`);
+  const cliEnv = { ...process.env };
+  delete cliEnv.CLAUDE_PLUGIN_ROOT;
+  delete cliEnv.CC_VIEWS_PATH;
+  const dict = spawnSync(shim, ["dict"], { cwd: proj, env: cliEnv, encoding: "utf8" });
+  if (dict.status !== 0) fail(`${CLI} dict exited ${dict.status}: ${dict.stderr}`);
+  let published;
+  try {
+    published = JSON.parse(dict.stdout);
+  } catch {
+    fail(`${CLI} dict emitted no JSON (stdout: ${JSON.stringify(dict.stdout.slice(0, 200))})`);
+  }
+  // The health check is the one view that must resolve from an install, so it is the one
+  // named here: a dump listing directives but no view means the search path came up empty.
+  if (!published.directives?.length) fail(`${CLI} dict published no directive`);
+  if (!published.views?.some((v) => v.name === "welcome")) {
+    fail(`${CLI} dict resolved no welcome view from the installed package`);
+  }
 
   console.log(wide);
   console.log(narrow);

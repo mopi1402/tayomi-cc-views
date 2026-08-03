@@ -44,7 +44,9 @@
     "check:catalogue": "node scripts/gen-catalogue.mjs --check",
     "verify": "pnpm lint && pnpm typecheck && pnpm check:sidecars && pnpm check:vocabulary && pnpm test && pnpm verify:pack && pnpm check:catalogue && pnpm check:skill",
     "prepublishOnly": "pnpm verify",
-    "check:skill": "node scripts/check-skill.mjs"
+    "check:skill": "node scripts/check-skill.mjs",
+    "sync:version": "node scripts/sync-version.mjs",
+    "version": "node scripts/sync-version.mjs && git add .claude-plugin"
   },
   "dependencies": {
     "@tayomi/utils": "^0.1.0"

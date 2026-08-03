@@ -337,11 +337,21 @@ describe("what a render recorded", () => {
     expect([...read]).toEqual(["said"]);
   });
 
-  it("takes the set OFF the caller's scope, where a second render would read it as a field that arrived", () => {
+  it("leaves the caller's own scope exactly as it arrived, every piece of bookkeeping taken back off", () => {
+    // `full` IS the caller's object when nothing is injected, so what the engine writes on it for the duration of the
+    // render has to come back off: the read set would count as a field that ARRIVED on a second render, and the label
+    // width belongs to the TEMPLATE, so a scope keeping one would hand the next view its predecessor's column.
     view("${said}");
     const scope: Record<string, unknown> = { said: "x" };
     const { read } = traceView(NAME, scope, [dir], undefined, options);
-    expect(scope.__read).toBeUndefined();
+    expect(Object.keys(scope)).toEqual(["said"]);
     expect([...read]).toEqual(["said"]);
+  });
+
+  it("takes them back off the scope a render THREW on, which is when a caller retries", () => {
+    view("${said}");
+    const scope: Record<string, unknown> = {};
+    expect(() => traceView(NAME, scope, [dir], undefined, options)).toThrow();
+    expect(Object.keys(scope)).toEqual([]);
   });
 });

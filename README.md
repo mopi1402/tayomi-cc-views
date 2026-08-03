@@ -12,19 +12,26 @@
 
 ## Features
 
-**✓ Boxes, columns, chips.** Titled and badged boxes, aligned columns, coloured status chips, all from plain data.
+**✨ Boxes, columns, chips.**  
+Titled and badged boxes, aligned columns, coloured status chips, all from plain data.
 
-**✓ Zero tokens on presentation** (minus one decorator line). Only a template writes it: a tag resolves inside a view, never in a message, so the model names a template and hands it data, and can open no colour of its own.
+**✨ Zero tokens on presentation** (minus one decorator line).  
+Only a template writes it: a tag resolves inside a view, never in a message, so the model names a template and hands it data, and can open no colour of its own.
 
-**✓ Templates you own.** `.view` files resolved through ordered directories: name a file the same and you shadow any view, a plugin's included.
+**✨ Templates you own.**  
+`.view` files resolved through ordered directories: name a file the same and you shadow any view, a plugin's included.
 
-**✓ Two carriers.** A fenced `view:` block, or ONE DECORATOR LINE OVER MARKDOWN THAT STANDS ON ITS OWN: a table, or an alert quote. Where the hook does not run, each stays what it was.
+**✨ Two carriers.**  
+A fenced `view:` block, or ONE DECORATOR LINE OVER MARKDOWN THAT STANDS ON ITS OWN: a table, or an alert quote. Where the hook does not run, each stays what it was.
 
-**✓ One template, any tone.** `type:warning` or `tone:dim` recolours a view that spends the tone slot, where it stands, like sticking a class on it. No second file.
+**✨ One template, any tone.**  
+`type:warning` or `tone:dim` recolours a view that spends the tone slot, where it stands, like sticking a class on it. No second file.
 
-**✓ Your palette.** `extendTags` adds your own `{{tags}}` process-wide, measured and rendered alike, and yours shadow the built-ins.
+**✨ Your palette.**  
+`extendTags` adds your own `{{tags}}` process-wide, measured and rendered alike, and yours shadow the built-ins.
 
-**✓ Fail-open.** A failing view shows its original text in place, the rest of the message still renders. Never a blank.
+**✨ Fail-open.**  
+A failing view shows its original text in place, the rest of the message still renders. Never a blank.
 
 ## Use it in your project
 
