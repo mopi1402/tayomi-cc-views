@@ -6,7 +6,8 @@
 
 import { describe, it, expect } from "vitest";
 import { BOX, ENDBOX, HEAD, RULE, EACH, END } from "./language.js";
-import { CLOSES, IN_BOX, IN_EACH, READS, TOP, readsHere } from "./grammar.js";
+import * as LANG from "./language.js";
+import { CLOSES, IN_BOX, IN_EACH, READS, TAKES, TOP, opensContainers, readsHere } from "./grammar.js";
 import { renderBody } from "../template/directives.js";
 import { RULE_MARK } from "../layout/marks.js";
 import type { Scope, Tables } from "../scope.js";
@@ -66,6 +67,15 @@ describe("what the entries hold", () => {
     expect(readsHere(IN_EACH, BOX)).toBe(false);
   });
 
+  it("names the containers a word opens after the word itself, so nothing tables the link twice", () => {
+    // Derived from the naming rather than declared: @box opens the two regions NAMED for it, one of them the bare form
+    // reading strictly fewer words, and a word opening nothing answers with nothing.
+    expect(opensContainers(BOX)).toEqual([IN_BOX, "box-bare"]);
+    expect(opensContainers(EACH)).toEqual([IN_EACH]);
+    expect(opensContainers(RULE)).toEqual([]);
+    for (const open of Object.keys(CLOSES)) expect(opensContainers(open).length).toBeGreaterThan(0);
+  });
+
   it("closes every opener with @end, bare or carrying the opener's own name", () => {
     // The two shapes the language actually has: a REGION closes on its own name (@endbox), a LOOP on the bare @end,
     // which is why @end can never collide with the two terminators above it.
@@ -74,5 +84,34 @@ describe("what the entries hold", () => {
     for (const [open, close] of Object.entries(CLOSES)) {
       expect(close === END || close === END + open.slice(1)).toBe(true);
     }
+  });
+});
+
+describe("what each word takes after it", () => {
+  // Read from the VOCABULARY rather than listed here, so a directive added to language.ts arrives the moment it is
+  // declared and its author has to say what it takes. The forcing function render.test.ts uses on the same words.
+  const DIRECTIVES = Object.values(LANG).filter(
+    (v): v is string => typeof v === "string" && v.startsWith(END[0])
+  );
+
+  it.each(DIRECTIVES)("%s declares its call form", (word) => {
+    expect(TAKES).toHaveProperty(word);
+  });
+
+  it("declares nothing for a word the language no longer has", () => {
+    // The other direction, or the table rots: an entry answering for a renamed or dropped directive fails here.
+    expect(Object.keys(TAKES).sort()).toEqual([...DIRECTIVES].sort());
+  });
+
+  it("spells the tokens it names from the language, never by hand", () => {
+    // What makes half of this table derived: rename `bare` or `from` and these forms follow with no edit next door.
+    expect(TAKES[BOX]).toContain(LANG.BARE);
+    expect(TAKES[LANG.USE]).toContain(LANG.FROM);
+    expect(TAKES[LANG.ASIDE]).toContain(LANG.ALIGN_BOTTOM);
+    for (const decl of Object.keys(LANG.DECLS)) expect(TAKES[EACH]).toContain(decl);
+  });
+
+  it("gives a terminator an EMPTY form, which is a decision and not a hole", () => {
+    for (const close of Object.values(CLOSES)) expect(TAKES[close]).toBe("");
   });
 });

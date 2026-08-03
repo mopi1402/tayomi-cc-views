@@ -2,8 +2,12 @@
 
 Everything here is stable across installs. What is NOT here, because it depends on the host and would go
 stale in a file: the tags a host added with `extendTags`, and which views your `viewsPath` already
-resolves. Ask the running engine for those. The full boundary of the language, every form and every edge,
-is [architecture/view-language.md](architecture/view-language.md); this page is the part you need
+resolves. Run `cc-views dict` for those, which prints THIS install's own answer as JSON.
+
+Reading this as a machine? Take `agent/catalogue.json` instead: the same language, generated from the
+tables the engine executes and gated at the byte, with every view's path, declarations and expected
+payload. This page is the human short version. The full boundary of the language, every form and every
+edge, is [architecture/view-language.md](architecture/view-language.md); this page is the part you need
 to write your first one.
 
 ## A whole view, both halves

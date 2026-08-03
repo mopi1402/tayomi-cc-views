@@ -15,6 +15,7 @@ import {
   TAG_SOURCE,
   TAG_SUFFIXES,
   ansi256,
+  builtinTagNames,
   chip,
   dropInert,
   extendTags,
@@ -657,6 +658,16 @@ describe("the enumeration of tag names", () => {
     const name = "catalogueprobe";
     expect(tagNames()).not.toContain(name);
     extendTags({ [name]: `${ESC}[35m` });
+    expect(tagNames()).toContain(name);
+  });
+
+  it("keeps a host's name out of the enumeration a GENERATED file may state", () => {
+    // The other half of the pair above, and the reason there are two: what a committed file can say is true of a
+    // VERSION, so a name this process registered a second ago must not reach it.
+    const name = "builtinprobe";
+    extendTags({ [name]: `${ESC}[35m` });
+    expect(builtinTagNames()).not.toContain(name);
+    expect(builtinTagNames()).toContain("pass");
     expect(tagNames()).toContain(name);
   });
 

@@ -48,6 +48,17 @@ export {
 } from "./style.js";
 export type { TagReport } from "./style.js";
 
+// What the engine says about itself, for an agent writing a view and for the generator that freezes the stable half
+// into agent/catalogue.json.
+export {
+  stableCatalogue,
+  liveCatalogue,
+  type Catalogue,
+  type LiveCatalogue,
+  type DirectiveDoc,
+  type ViewDoc,
+} from "./catalogue.js";
+
 // Printed width, for a host that aligns text beside a rendered view.
 export { displayWidth } from "./layout/width.js";
 

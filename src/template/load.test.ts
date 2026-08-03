@@ -9,7 +9,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { VIEWS_DIR, VIEW_EXT } from "../data/markup.js";
-import { bundledViewsDir, defaultViewsPath, loadTemplate, viewsDir } from "./load.js";
+import {
+  bundledViewsDir,
+  defaultViewsPath,
+  listViews,
+  loadTemplate,
+  viewFile,
+  viewsDir,
+} from "./load.js";
 
 const NAME = "probe";
 const TYPE = "warning";
@@ -97,6 +104,29 @@ describe("a typed view", () => {
     const dir = mkdir();
     write(dir, `${NAME}.${TYPE}${VIEW_EXT}`, "typed");
     expect(loadTemplate(NAME, [dir], TYPE).body).toEqual(["typed"]);
+  });
+});
+
+describe("listing a directory", () => {
+  it("names every view it holds, by name and sorted, and nothing else in it", () => {
+    const dir = mkdir();
+    write(dir, "beta" + VIEW_EXT, "b");
+    write(dir, "alpha" + VIEW_EXT, "a");
+    write(dir, "README.md", "not a view");
+    expect(listViews(dir)).toEqual(["alpha", "beta"]);
+  });
+
+  it("yields nothing for a directory that does not exist, the way the resolution treats one", () => {
+    // A search path routinely names a dir nobody created, the project's own views/ under a host that has none. A throw
+    // here would take down a catalogue that is only trying to say what resolves.
+    expect(listViews(path.join(mkdir(), "absent"))).toEqual([]);
+  });
+
+  it("spells the file a name is read from, which is this module's job alone", () => {
+    const dir = mkdir();
+    write(dir, NAME + VIEW_EXT, "the body");
+    expect(viewFile(dir, NAME)).toBe(path.join(dir, NAME + VIEW_EXT));
+    expect(fs.existsSync(viewFile(dir, NAME))).toBe(true);
   });
 });
 

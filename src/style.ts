@@ -380,6 +380,14 @@ export function tagNames(): string[] {
   return [...new Set([...Object.keys(TAGS), ...Object.keys(EXTENDED)])].sort();
 }
 
+/**
+ * The names THIS VERSION defines, whatever a host later registered. What a GENERATED file may state, where `tagNames`
+ * answers for one install and can only be read where that install is running.
+ */
+export function builtinTagNames(): string[] {
+  return Object.keys(TAGS).sort();
+}
+
 /** The suffixes a colour name derives into, so a reader can state the rule rather than enumerate its results. */
 export const TAG_SUFFIXES: readonly string[] = [CAP, BG];
 

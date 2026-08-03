@@ -91,6 +91,27 @@ export function defaultViewsPath(): string[] {
   return search;
 }
 
+/** The file a named view is read from inside `dir`. Spelling a `.view` path is this module's job alone. */
+export const viewFile = (dir: string, name: string): string => path.join(dir, name + VIEW_EXT);
+
+/**
+ * Every view a directory holds, by name, sorted so a generated catalogue reads the same twice.
+ *
+ * A directory that does not exist yields nothing rather than throwing: a search path routinely names one (the project's
+ * own `views/` under a host that has none), and the resolution above already treats an absent dir as a miss.
+ */
+export function listViews(dir: string): string[] {
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((file) => file.endsWith(VIEW_EXT))
+      .map((file) => file.slice(0, -VIEW_EXT.length))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 /** The files a (name, type) pair may resolve to, most specific first. */
 function candidateFiles(name: string, type?: string): string[] {
   return type ? [`${name}.${type}${VIEW_EXT}`, name + VIEW_EXT] : [name + VIEW_EXT];

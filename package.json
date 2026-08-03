@@ -7,6 +7,7 @@
   "files": [
     "dist",
     "views",
+    "agent",
     "docs/CHEATSHEET.md"
   ],
   "exports": {
@@ -16,6 +17,7 @@
     }
   },
   "bin": {
+    "cc-views": "./dist/bin/cli.js",
     "cc-views-messagedisplay": "./dist/bin/messagedisplay.js"
   },
   "publishConfig": {
@@ -26,6 +28,7 @@
       }
     },
     "executableFiles": [
+      "./dist/bin/cli.js",
       "./dist/bin/messagedisplay.js"
     ]
   },
@@ -37,7 +40,9 @@
     "check:sidecars": "node scripts/check-sidecars.mjs",
     "check:vocabulary": "node scripts/check-vocabulary.mjs",
     "verify:pack": "pnpm build && node scripts/verify-pack.mjs",
-    "verify": "pnpm lint && pnpm typecheck && pnpm check:sidecars && pnpm check:vocabulary && pnpm test && pnpm verify:pack",
+    "gen:catalogue": "node scripts/gen-catalogue.mjs",
+    "check:catalogue": "node scripts/gen-catalogue.mjs --check",
+    "verify": "pnpm lint && pnpm typecheck && pnpm check:sidecars && pnpm check:vocabulary && pnpm test && pnpm verify:pack && pnpm check:catalogue",
     "prepublishOnly": "pnpm verify"
   },
   "dependencies": {

@@ -27,6 +27,8 @@ const SOURCE_EXT = ".ts";
  * "not yet" belongs in the suite, not here.
  */
 const EXCLUDED = {
+  "src/bin/cli.ts":
+    "an executable's wiring: a shebang and a main() guard over parts tested elsewhere, and importing it RUNS it",
   "src/bin/messagedisplay.ts":
     "an executable's wiring: a shebang and a main() guard over parts tested elsewhere, and importing it RUNS it",
   "src/data/markup.ts":

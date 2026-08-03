@@ -27,6 +27,12 @@ export const END = keyword("end");
 export const BARE = "bare";
 
 /**
+ * What points an included view at the FIELD holding its data, `@use banner from alert`. A field rather than the
+ * caller's whole scope, because `banner` and `quote` both spend `content`.
+ */
+export const FROM = "from";
+
+/**
  * The tokens an @aside may carry, saying where the SHORTER column sits against the taller one. Three readers must agree
  * on their spelling: the matcher that reads the declaration, the padding that acts on it, and the type that names the
  * set, so the words live here and the other two derive.
@@ -34,12 +40,6 @@ export const BARE = "bare";
  * A bare token is invisible to `check-vocabulary`, whose matcher only sees `@words`, and that is exactly why these
  * three drifted out here in the first place.
  */
-/**
- * What points an included view at the FIELD holding its data, `@use banner from alert`. A field rather than the
- * caller's whole scope, because `banner` and `quote` both spend `content`.
- */
-export const FROM = "from";
-
 export const ALIGN_CENTER = "center";
 export const ALIGN_TOP = "top";
 export const ALIGN_BOTTOM = "bottom";
@@ -75,8 +75,11 @@ export const PAYLOAD_FIELDS: Record<string, readonly string[]> = {
   [PAYLOAD_QUOTE]: [FIELD_CONTENT, FIELD_TYPE],
 };
 
+/** A directive stripped of its `@`. Its closer derives from it, and so does the name of the region an opener opens. */
+export const stem = (word: string): string => word.slice(AT.length);
+
 /** A closing keyword is its opener's name behind `@end`. */
-const closes = (open: string): string => END + open.slice(AT.length);
+const closes = (open: string): string => END + stem(open);
 export const ENDBOX = closes(BOX);
 export const ENDASIDE = closes(ASIDE);
 
