@@ -62,7 +62,7 @@ Two other kinds sit outside the rule. A suite answering for a PATH rather than a
 
 `pnpm check:vocabulary` refuses an `@word` spelled anywhere in `src/` outside `src/data/`, in a string, a template literal or a regex alike. Declare it in `language.ts` and compose the matcher from it (a scoped package specifier is the one `@` this rule lets through, told apart by its slash). Tests are exempt, deliberately: a fixture sharing its constant with the matcher it drives cannot catch a drift in it, so the words there are typed by hand.
 
-It reads as a style rule and it is a correctness one. "Raw over hollow" refuses a render whose template resolved none of the data it was handed, decided on the reads `lookup` RECORDED, so a directive reading the scope without going through it is counted by nobody and its render is refused. What stops that is the sweep in `render.test.ts` driving every directive of the language, and that sweep reads the vocabulary to know what "every" means. A word typed straight into a matcher is invisible to it, gets no case, and walks the engine back into a defect that cost a rewrite to close.
+It reads as a style rule and it is a correctness one. "Raw over hollow" refuses a render whose template resolved none of the data it was handed, decided on the reads `lookup` RECORDED, so a directive reading the scope without going through it is counted by nobody and its render is refused. What stops that is the sweep in `render.test.ts` driving every directive of the language, and that sweep reads the vocabulary to know what "every" means. A word typed straight into a matcher is invisible to that sweep and gets no case.
 
 Two habits go with it. Tests typecheck like the rest of the code, so a fixture that no longer matches the shape it drives proves nothing (`tsconfig.json` includes them; `tsconfig.build.json` declares its own scope so none of them reach `dist`). And write the NEAR-MISS as well as the hit: every matcher here is built so a malformed line falls through to the body, where an author sees it printed, and a test fed only valid input cannot tell that apart from a matcher that swallows.
 
@@ -80,9 +80,7 @@ Unit tests cannot catch a broken `files` whitelist, a mis-wired bin, or a resolu
 
 ## The eye test: `sandbox/`
 
-The one thing no script can judge is the screen itself, and it is the only storey that exercises the WIRING: `verify:pack` feeds the bin directly, so it can never catch a hook Claude Code declines to run.
-
-`sandbox/` is a pre-wired Claude Code project, and the whole recipe (setup, the prompt to type, how to read the verdict, what to check when nothing appears) lives in [docs/contributing/manual-checks.md](docs/contributing/manual-checks.md).
+`sandbox/` is a pre-wired Claude Code project, and the only storey that exercises the WIRING: `verify:pack` feeds the bin directly, so it can never catch a hook Claude Code declines to run. The whole recipe (setup, the prompt to type, how to read the verdict, what to check when nothing appears) lives in [docs/contributing/manual-checks.md](docs/contributing/manual-checks.md).
 
 ### Link the checkout instead of packing it every time
 
@@ -132,7 +130,7 @@ Three traps, learned the hard way:
 
 - A prerelease (`-rc.N`) does not satisfy a `^X.Y.Z` range: pin it exactly in the consumer while testing.
 - The consumer's lockfile now points at `localhost:4873`. Revert the dep and the lockfile to the public registry before committing the consumer.
-- A consumer that BUNDLES the engine (esbuild) sees NOTHING of the new version until it rebuilds: the bundle still carries the old engine, and its `views/` still holds the old templates. Its build must re-copy the engine's `views/` after every install, which is what TAYOMI's `plugins/core` build ends on. See the bundling caveat in [docs/display-host.md](docs/display-host.md).
+- A consumer that BUNDLES the engine (esbuild) sees NOTHING of the new version until it rebuilds: the bundle still carries the old engine, and its `views/` still holds the old templates. Its build must re-copy the engine's `views/` after every install, which is what TAYOMI's `plugins/core` build ends on. See the bundling caveat in [docs/architecture/display-host.md](docs/architecture/display-host.md).
 
 Getting a prerelease all the way onto the TAYOMI plugin's screen has its own four-step chain, in [docs/contributing/manual-checks.md](docs/contributing/manual-checks.md).
 
@@ -140,5 +138,5 @@ Getting a prerelease all the way onto the TAYOMI plugin's screen has its own fou
 
 - **Fail-open is the contract.** A failure shows the original text, never a blank, never a crash. Any change to a carrier or the pipeline must keep every fail-open test green, and a new failure mode ships with its fallback.
 - **Evidence over claims.** A behaviour is what a test or a rendered output shows, not what the diff suggests. The two dated entries in [docs/caveats.md](docs/caveats.md) were confirmed by execution before being written down; keep that standard.
-- **Docs move with the code.** A behaviour change lands with its update to [docs/view-language.md](docs/view-language.md), [docs/display-host.md](docs/display-host.md) and, if a guarantee moved, [docs/caveats.md](docs/caveats.md).
+- **Docs move with the code.** A behaviour change lands with its update to [docs/architecture/view-language.md](docs/architecture/view-language.md), [docs/architecture/display-host.md](docs/architecture/display-host.md) and, if a guarantee moved, [docs/caveats.md](docs/caveats.md).
 - **The transcript stays plain.** Nothing a template does may require the model to write colours, alignment, or anything but data.

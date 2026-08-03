@@ -1,5 +1,5 @@
 // The ANSI vocabulary: the tag names a view may write, and what they render as.
-// Why the palette is process-global, and why only a template may spend it: docs/architecture.md.
+// Why the palette is process-global, and why only a template may spend it: docs/architecture/architecture.md.
 
 import { CODE_TICK, TAG_CLOSE, TAG_OPEN } from "./data/markup.js";
 import { INERT_MARK, RESUME_MARK, SPAN_MARK, dropControl } from "./data/marks.js";

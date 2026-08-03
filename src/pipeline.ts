@@ -2,7 +2,7 @@
 // it composes them in the one order that is safe on a stream: render the closed blocks, withhold what is still
 // arriving, then render the zones a decorator names.
 //
-// Why slice() is pure and holds no offset between flushes: docs/architecture.md, "Streaming as a pure slice".
+// Why slice() is pure and holds no offset between flushes: docs/architecture/architecture.md, "Streaming as a pure slice".
 
 import { fenceAt, fenceSpans } from "./carrier/fences.js";
 import { BLOCK_HINT, BLOCK_RE, cutUnclosedBlock } from "./carrier/scan.js";

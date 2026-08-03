@@ -18,6 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { transform } from "../../src/pipeline.js";
 import { ANSI_RE } from "../../src/style.js";
+import { printedWidth } from "../../src/layout/measure.js";
 import { BLOCK_HINT, FENCE, VIEW_EXT } from "../../src/data/markup.js";
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -201,6 +202,244 @@ describe("the banner reached through a marked quote", () => {
       .readdirSync(BUNDLED)
       .filter((f) => f.startsWith("banner.") && f !== `banner${VIEW_EXT}`);
     expect(typed).toEqual([]);
+  });
+});
+
+// The other packaged consumer of the decorated table, and the counterpart of the banner:
+// where a band reads `content`, this one reads `rows`. Its whole contract on screen is a
+// bar between two columns and NOTHING around it, so a border or a title appearing here is
+// the defect this suite exists to catch.
+describe("the columns view the package ships", () => {
+  /** The glyph `box.ts` draws its sides with, and the dim it wears, both spelled here on purpose. */
+  const BAR = "│";
+  const DIM = "2";
+  const KEY = "1;36"; // what the template's own @tone resolves to
+  const YELLOW = "1;33";
+  const RESET = "0";
+
+  const table = (deco: string, ...rows: string[]): string =>
+    lines(deco, "| | |", "| --- | --- |", ...rows, "");
+  const ROW = "| Status | all green |";
+  const MSG = table("@{view:columns}", ROW);
+
+  it("splits the two columns on the bar, with no frame of any kind around them", () => {
+    const out = render(MSG);
+    const plain = plainly(out);
+    expect(plain).toBe(`Status  ${BAR}  all green`);
+    // Every glyph the box would add, absent: this view draws furniture and nothing else.
+    for (const frame of ["╭", "╰", "─"]) expect(plain).not.toContain(frame);
+    expect(seqs(out)).toEqual([KEY, RESET, DIM, RESET]);
+  });
+
+  it("pads the label column so the bars line up, and continues an empty label", () => {
+    const plain = plainly(render(table("@{view:columns}", ROW, "| Build | compiles |", "| | and more |")));
+    const at = plain.split("\n").map((l) => l.indexOf(BAR));
+    expect(new Set(at).size).toBe(1); // one column for every bar
+    expect(at[0]).toBeGreaterThan(0);
+    expect(plain.split("\n")[2].trimStart().startsWith(BAR)).toBe(true); // no label on the third row
+  });
+
+  it("answers the kind, because it SPENDS the tone slot, and changes nothing else", () => {
+    const warned = render(table("@{view:columns, type:warning}", ROW));
+    expect(seqs(warned)).toEqual([YELLOW, RESET, DIM, RESET]);
+    expect(plainly(warned)).toBe(plainly(render(MSG))); // colour is the ONLY difference
+  });
+
+  it("refuses a QUOTE payload outright, the mirror of the banner refusing a table", () => {
+    // It reads `rows`; a quote hands it `content`. Nothing enforces that, and nothing has
+    // to: a view refuses a payload shape by not reading it, and the raw markdown shows.
+    const msg = lines("@{view:columns}", "> [!WARNING]", "> no rows here", "");
+    expect(render(msg)).toBe(msg);
+  });
+});
+
+// columns.view turned through ninety degrees: the same payload, the same alignment, and
+// the separator drawn under each element instead of between the two cells. What this block
+// exists to catch is the pair drifting apart, so most of it is stated AGAINST the columns
+// view rather than on its own.
+describe("the lines view the package ships", () => {
+  /** The glyph `box.ts` draws every rule with, and the tag it paints them in. */
+  const DASH = "─";
+  const RULE_TAG = "38;5;238"; // {{box_rule}}
+  const BAR = "│"; // what this view must never draw
+  const KEY = "1;36"; // what the template's own @tone resolves to
+  const YELLOW = "1;33";
+  const RESET = "0";
+
+  const table = (deco: string, ...rows: string[]): string =>
+    lines(deco, "| | |", "| --- | --- |", ...rows, "");
+  const ROWS = ["| Status | all green |", "| Deploy | staging is red |"];
+  const MSG = table("@{view:lines}", ...ROWS);
+  const ruled = (out: string): string[] =>
+    plainly(out)
+      .split("\n")
+      .filter((l) => l.startsWith(DASH));
+
+  it("rules BETWEEN its elements and draws no vertical anything, which is the whole inversion", () => {
+    // Two elements, ONE rule. The template draws a divider under every item; the container's blank-run collapsing is
+    // what drops the one trailing the last, and that is the difference between separating and closing.
+    const plain = plainly(render(MSG));
+    expect(plain.split("\n")).toEqual([
+      "Status  all green",
+      DASH.repeat(printedWidth("Deploy  staging is red")),
+      "Deploy  staging is red",
+    ]);
+    expect(plain).not.toContain(BAR);
+    for (const frame of ["╭", "╰", "│"]) expect(plain).not.toContain(frame);
+  });
+
+  it("fills the rule to the body it divides, never to the terminal", () => {
+    // The bare container keeps the box's own width law. A rule running past its body would be furniture louder than
+    // what it separates, and a rule that ignored the body would be the fixed run this view shipped before.
+    const wide = ruled(transform(MSG, undefined, true, undefined, { viewsPath: [BUNDLED], width: 200 }));
+    expect(wide).toEqual(ruled(render(MSG)));
+    expect(wide[0].length).toBe(printedWidth("Deploy  staging is red"));
+  });
+
+  it("folds a long content column and keeps the fold in its own column", () => {
+    // The whole point of the container, and a case a suite fed only short rows cannot see: outside one, nothing here
+    // wraps at all and the fold restarts at the margin, under the label.
+    const long = "mot ".repeat(40).trim();
+    const plain = plainly(render(table("@{view:lines}", `| Deploy | ${long} |`)));
+    const rows = plain.split("\n");
+    expect(rows.length).toBeGreaterThan(1);
+    for (const row of rows) expect(printedWidth(row)).toBeLessThanOrEqual(options.width);
+    const indent = rows[0].indexOf("mot");
+    expect(indent).toBeGreaterThan(0);
+    for (const row of rows.slice(1)) expect(row.startsWith(" ".repeat(indent))).toBe(true);
+  });
+
+  it("recolours the labels on a kind and leaves the rules alone", () => {
+    const warned = render(table("@{view:lines, type:warning}", ...ROWS));
+    // The rule is furniture and never spends the slot: only the label answers the kind.
+    expect(seqs(warned)).toEqual([YELLOW, RESET, RULE_TAG, RESET, YELLOW, RESET]);
+    expect(seqs(render(MSG))[0]).toBe(KEY);
+    expect(plainly(warned)).toBe(plainly(render(MSG))); // colour is the ONLY difference
+  });
+
+  it("gives an empty label its own element, where columns.view would continue the row above", () => {
+    // The documented cost of ruling inside the loop, pinned so it cannot change in silence.
+    const rows = plainly(render(table("@{view:lines}", ROWS[0], "| | and more |"))).split("\n");
+    expect(rows[1].startsWith(DASH)).toBe(true);
+    expect(rows[2].trim()).toBe("and more");
+  });
+
+  it("refuses a QUOTE payload outright, exactly as the columns view does", () => {
+    const msg = lines("@{view:lines}", "> [!WARNING]", "> no rows here", "");
+    expect(render(msg)).toBe(msg);
+  });
+});
+
+// The third consumer of the decorated QUOTE, and the one that shares a payload shape with
+// the banner while drawing the opposite thing: where a band swallows its marker and prints
+// the WORD, this one swallows the marker and prints nothing but the sentence. The two
+// therefore have to be told apart on screen, which is what most of this block pins.
+describe("the quote view the package ships", () => {
+  /**
+   * U+258E, and the reason it is this glyph and not the box's `│`: it is what `wrap.ts`
+   * calls GUTTER_BAR, so a continuation row keeps the bar AND its colour. Spelled here
+   * because the owner keeps it unexported, which is the one case a copy is allowed.
+   */
+  const GUTTER = "▎";
+  const DIM = "2"; // what the template's own @tone resolves to
+  const GOLD = "38;5;220";
+  const YELLOW = "1;33";
+  const RESET = "0";
+
+  const SENTENCE = "une remarque qui tient sur une ligne";
+  const quote = (deco: string, ...rows: string[]): string =>
+    lines(deco, ...rows.map((r) => `> ${r}`), "");
+  const MSG = quote("@{view:quote}", SENTENCE);
+
+  it("draws the bar and the sentence, and no furniture of any kind", () => {
+    const out = render(MSG);
+    expect(plainly(out)).toBe(`${GUTTER} ${SENTENCE}`);
+    // Every glyph a frame or a band would add, absent: the bar is the only decoration.
+    // The last two are the banner's Powerline caps, the view that shares this payload shape.
+    for (const drawn of ["╭", "╰", "─", "", ""]) {
+      expect(plainly(out)).not.toContain(drawn);
+    }
+    expect(seqs(out)).toEqual([DIM, RESET]);
+  });
+
+  it("recolours the bar on `tone:` and changes nothing else about the line", () => {
+    const gold = render(quote("@{view:quote, tone:gold}", SENTENCE));
+    expect(seqs(gold)).toEqual([GOLD, RESET]);
+    expect(plainly(gold)).toBe(plainly(render(MSG))); // colour is the ONLY difference
+  });
+
+  it("takes its colour from a marker and DROPS the word, which is what parts it from the banner", () => {
+    const marked = render(quote("@{view:quote}", "[!WARNING]", SENTENCE));
+    expect(seqs(marked)).toEqual([YELLOW, RESET]);
+    // The band would print `⚠ WARNING` here off its @text table. This view carries no
+    // table, so the kind reaches the screen as a colour and in no other way.
+    expect(plainly(marked)).toBe(`${GUTTER} ${SENTENCE}`);
+  });
+
+  it("joins the quote's rows on ONE space, markdown's own soft-wrap semantics", () => {
+    // Load-bearing rather than cosmetic: the bar prefixes ONE line, so a body arriving as
+    // several would leave every row after the first with no bar at all.
+    const plain = plainly(render(quote("@{view:quote}", "premiere moitie", "seconde moitie")));
+    expect(plain).toBe(`${GUTTER} premiere moitie seconde moitie`);
+  });
+
+  it("refuses a TABLE payload outright, the mirror of the columns view refusing a quote", () => {
+    const msg = lines("@{view:quote}", "| a | b |", "| --- | --- |", "| x | y |", "");
+    expect(render(msg)).toBe(msg);
+  });
+});
+
+// The smallest view in the package, and the only one whose whole contract is that it takes
+// NOTHING: no payload, no field, no kind. What that buys is a decorator line on its own,
+// and what it costs is pinned here too, since nothing else in the engine can see it.
+describe("the hr view the package ships", () => {
+  const DASH = "─";
+  const RULE_TAG = "38;5;238"; // {{box_rule}}
+  const RESET = "0";
+  const MSG = lines("@{view:hr}", "");
+
+  it("draws one rule the width of the terminal, from a decorator line alone", () => {
+    // The one view here that reads its LIMIT rather than its content, because it has none.
+    const out = render(MSG);
+    expect(plainly(out)).toBe(DASH.repeat(options.width));
+    expect(seqs(out)).toEqual([RULE_TAG, RESET]);
+  });
+
+  it("follows the width it is given, which is the whole reason it is not literal dashes", () => {
+    const at = (width: number): string =>
+      plainly(transform(MSG, undefined, true, undefined, { viewsPath: [BUNDLED], width }));
+    expect(at(60)).toBe(DASH.repeat(60));
+    expect(at(140)).toBe(DASH.repeat(140));
+  });
+
+  it("ignores a kind, because a rule is furniture and says nothing about the message", () => {
+    // The same decision lines.view makes, where a kind recolours the labels and never the
+    // rules between them. Stated here because this view has nothing else a kind could touch.
+    expect(render(lines("@{view:hr, type:warning}", ""))).toBe(render(MSG));
+    expect(render(lines("@{view:hr, tone:gold}", ""))).toBe(render(MSG));
+  });
+
+  it("draws its rule between prose, without disturbing either side", () => {
+    const out = render(lines("above", "", "@{view:hr}", "", "below", ""));
+    const rows = plainly(out).split("\n");
+    expect(rows[0]).toBe("above");
+    expect(rows[rows.length - 1]).toBe("below");
+    expect(rows.filter((r) => r.startsWith(DASH))).toHaveLength(1);
+  });
+
+  it("SWALLOWS a payload it was never meant to be given, which is why its header forbids one", () => {
+    // Not a defect to fix here, and the sharpest edge in the package: a decorator claims its
+    // zone, this template reads no field, so a table handed to it is consumed and never
+    // drawn. "Raw over hollow" cannot catch it either, since it refuses a render that
+    // resolved none of the data it SPENT substitutions on, and this one spends none.
+    const eaten = render(lines("@{view:hr}", "| a | b |", "| --- | --- |", "| x | y |", ""));
+    expect(plainly(eaten)).toBe(DASH.repeat(options.width));
+    expect(plainly(eaten)).not.toContain("x");
+  });
+
+  it("prints raw under a line no parser claims, the loud half of the same trap", () => {
+    const msg = lines("@{view:hr}", "---", "");
+    expect(render(msg)).toBe(msg);
   });
 });
 

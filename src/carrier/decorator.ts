@@ -12,7 +12,7 @@
 // `type`.
 //
 // Why a quote rather than a paragraph, why the trade is worth it, and why engagement is on INTENT and never on shape:
-// docs/architecture.md, "The decorator's trade". The two attributes are docs/view-language.md's.
+// docs/architecture/architecture.md, "The decorator's trade". The two attributes are docs/architecture/view-language.md's.
 
 import { MARKER_SOURCE } from "../data/language.js";
 import { DECORATOR_CLOSE, DECORATOR_HINT } from "../data/markup.js";
@@ -109,7 +109,7 @@ const BOLD_SPAN = `${spanOpen(BOLD_TAG)}$1${spanClose(BOLD_TAG)}`;
 const TRAILING_BLANKS_RE = /\n+$/;
 
 /**
- * Message text becoming a SCOPE VALUE, one of the two neutralising seams (docs/architecture.md).
+ * Message text becoming a SCOPE VALUE, one of the two neutralising seams (docs/architecture/architecture.md).
  *
  * Neutralised FIRST, styled second: both end up in one string, so the ORDER is the whole guarantee. Shared by both
  * payload shapes, because a second copy is how the two would come to disagree on it.

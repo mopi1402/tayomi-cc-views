@@ -75,6 +75,21 @@ const ruleGap = (w: number): string => (w > 0 ? PAD : "");
 const contentTotal = (line: string): number => printedWidth(line) + BOX_CHROME;
 
 /**
+ * What a rule row carries BEFORE its dashes: the prefix a section label left, and the space setting it off. Shared by
+ * the two containers, which agree on where a rule's dashes begin and differ only in what surrounds them.
+ */
+function rulePrefix(line: string): { text: string; width: number } {
+  const carried = line.slice(RULE_MARK.length);
+  const w = printedWidth(carried);
+  const gap = ruleGap(w);
+  return { text: carried + gap, width: w + printedWidth(gap) };
+}
+
+/** The dashes a rule fills with. Never fewer than one, or a rule squeezed to nothing reads as a line the body lost. */
+const dashRun = (n: number): string =>
+  `${tagMark("box_rule")}${H.repeat(Math.max(MIN_FILL, n))}${RESET_MARK}`;
+
+/**
  * The same, for a line that may be a RULE, which does not cost what it measures.
  *
  * A rule row prints its prefix, then the gap and at least one dash carrying it into the border. Sized on the prefix
@@ -83,8 +98,7 @@ const contentTotal = (line: string): number => printedWidth(line) + BOX_CHROME;
  */
 function lineTotal(line: string): number {
   if (!isRule(line)) return contentTotal(line);
-  const w = printedWidth(line.slice(RULE_MARK.length));
-  return RULE_ROW_CHROME + w + printedWidth(ruleGap(w)) + MIN_FILL;
+  return RULE_ROW_CHROME + rulePrefix(line).width + MIN_FILL;
 }
 
 // `width` is passed explicitly where the payload carries styling the caller added AFTER measuring (the zone's tone), so
@@ -142,15 +156,12 @@ export function frameBox(
     // An inner rule keeps its prefix (a section label and its gutter bar) and then runs to the border, consuming the
     // padding AND the trailing space a content line leaves: a division of the section rather than one more line of it.
     if (isRule(line)) {
-      const prefix = line.slice(RULE_MARK.length);
-      const w = printedWidth(prefix);
-      const gap = ruleGap(w);
-      // lineTotal already sized the frame to honour this, so it never bites. Kept as a floor all the same: a negative
-      // count is not something to repeat.
-      const dashes = Math.max(MIN_FILL, total - RULE_ROW_CHROME - printedWidth(gap) - w);
+      const p = rulePrefix(line);
+      // lineTotal already sized the frame to honour the floor inside dashRun, so it never bites there. It stays all the
+      // same: a negative count is not something to repeat.
       out.push(
-        `${border(edge)}${PAD}${prefix}${gap}` +
-          `${tagMark("box_rule")}${H.repeat(dashes)}${RESET_MARK}${border(edge)}`
+        `${border(edge)}${PAD}${p.text}` +
+          `${dashRun(total - RULE_ROW_CHROME - p.width)}${border(edge)}`
       );
       continue;
     }
@@ -167,4 +178,36 @@ export function frameBox(
   }
   out.push(`${tagMark(edge)}${BL}${H.repeat(total - EDGES)}${BR}${RESET_MARK}`);
   return out;
+}
+
+/**
+ * The same container with no outline: the body machinery, and none of the chrome.
+ *
+ * Everything a frame buys a body it buys here too, because it IS the same code. The blank-run collapsing, which also
+ * decides a rule survives only between two lines that printed, so a loop drawing a divider under every item ends up
+ * with one BETWEEN them and none trailing. The wrap, and with it the hanging indent a declared bullet sets up and the
+ * gutter bar a continuation row keeps. And a rule filled to a width no template could have known.
+ *
+ * What it does not buy is a border, a title, a badge or a zone, so none of those reaches this function: those four
+ * directives are not a bare container's words and fall through to the body, where an author reads them on screen.
+ *
+ * It keeps the box's own width law and sizes to its CONTENT, so a rule divides the body it sits in rather than running
+ * out to a margin nothing else here reaches. Body lines are handed back unpadded: with no right border to meet, a pad
+ * would be trailing blanks and nothing else.
+ */
+export function flowBody(rawBody: string[], limit: number): string[] {
+  // A rule with nothing to divide is not a separator, it IS the content, and the two laws below would each undo it: the
+  // collapsing drops a rule for want of neighbours, and a width measured over the body has nothing to measure. So it
+  // takes the width it was HANDED, which is the only reading of "sizes to its content" left when the rule is all there
+  // is. This is what a lone `@rule` in a bare container draws, and it is the whole of views/hr.view.
+  const drawn = rawBody.filter((l) => isRule(l) || printedWidth(l) > 0);
+  if (drawn.length > 0 && drawn.every(isRule)) {
+    return drawn.map((l) => `${rulePrefix(l).text}${dashRun(limit - rulePrefix(l).width)}`);
+  }
+  const body = collapseBlanks(rawBody).flatMap((l) => (isRule(l) ? [l] : wrapLine(l, limit)));
+  const total = body.reduce(
+    (n, l) => Math.max(n, isRule(l) ? rulePrefix(l).width + MIN_FILL : printedWidth(l)),
+    0
+  );
+  return body.map((l) => (isRule(l) ? `${rulePrefix(l).text}${dashRun(total - rulePrefix(l).width)}` : l));
 }

@@ -13,6 +13,7 @@
 
 import {
   ASIDE,
+  BARE,
   BOX,
   BULLET,
   CAP,
@@ -32,7 +33,7 @@ import {
   declSource,
 } from "../data/language.js";
 import { composeAside, type AsideAlign } from "../layout/aside.js";
-import { BOX_CHROME, frameBox } from "../layout/box.js";
+import { BOX_CHROME, flowBody, frameBox } from "../layout/box.js";
 import { columnWidths, type PadCtx } from "../layout/columns.js";
 import { HANG_MARK, RULE_MARK } from "../layout/marks.js";
 import { printedWidth } from "../layout/measure.js";
@@ -50,6 +51,11 @@ const REST = String.raw`\s+(.*)$`;
 const NAME_THEN_REST = String.raw`[ \t]+(\S+)(.*)$`;
 
 const BOX_RE = re(`^${BOX}${ALONE}`);
+// @box's optional token, read in TWO steps like @aside's alignment: the name is matched, then compared. One regex
+// carrying an optional quantified group plus a trailing \s*$ nests its quantifiers and backtracks on a near-miss, and
+// a token this container does not know MUST be a near-miss. A silently framed box is the one outcome that would teach
+// an author their typo was fine. Requiring the space is what keeps "@boxbare" out of it too.
+const BOX_TOKEN_RE = re(`^${BOX}${NAME_THEN_REST}`);
 const ENDBOX_RE = re(`^${ENDBOX}${ALONE}`);
 const HEAD_RE = re(`^${HEAD}${REST}`);
 const RIGHT_RE = re(`^${RIGHT}${REST}`);
@@ -66,6 +72,14 @@ const END_RE = re(`^${END}${ALONE}`);
 // @rule matches by STRING, not by regex (the match site says why), so its spelling is a value shared by the matcher and
 // the slice that follows it.
 const RULE_PREFIX = `${RULE} `;
+
+// Matched by string rather than by regex: an optional trailing group around [\s\S]* is flagged as backtracking-prone,
+// and the shape is too simple to need it.
+const isRuleLine = (line: string): boolean => line === RULE || line.startsWith(RULE_PREFIX);
+
+/** The mark, then whatever prefix the rule carries, substituted like any other text. */
+const ruleLine = (line: string, scope: Scope, tables: Tables, pad?: PadCtx): string =>
+  RULE_MARK + subst(line.slice(RULE_PREFIX.length), scope, tables, pad);
 
 // One declaration each, from the language's own table. The matcher that READS a declaration and the strip that decides
 // whether anything is LEFT OVER are the same fact, which keeps a malformed cap="soon" a near-miss rather than a cap.
@@ -150,7 +164,9 @@ export function renderBody(
   for (let i = 0; i < body.length; i++) {
     // Deliberately NOT nestable: nothing needs it, and a depth counter would be untested surface. An unclosed @box
     // frames the rest of the template, visibly wrong rather than silently dropped.
-    if (BOX_RE.test(body[i])) {
+    const boxToken = body[i].match(BOX_TOKEN_RE);
+    const bare = boxToken != null && boxToken[1] === BARE && boxToken[2].trim() === "";
+    if (BOX_RE.test(body[i]) || bare) {
       let head = "";
       let right = "";
       let footField: string | null = null;
@@ -158,25 +174,23 @@ export function renderBody(
       const inner: string[] = [];
       i++;
       for (; i < body.length && !ENDBOX_RE.test(body[i]); i++) {
-        const hm = body[i].match(HEAD_RE);
-        const rm = body[i].match(RIGHT_RE);
-        const fm = body[i].match(FOOT_RE);
-        const cm = body[i].match(FRAME_RE);
+        // A bare container has no border to hang them on, so these four are not its words: they fall through to the
+        // body and print, which is already what they do outside any box at all.
+        const hm = bare ? null : body[i].match(HEAD_RE);
+        const rm = bare ? null : body[i].match(RIGHT_RE);
+        const fm = bare ? null : body[i].match(FOOT_RE);
+        const cm = bare ? null : body[i].match(FRAME_RE);
         if (hm) head = subst(hm[1], scope, tables);
         else if (rm) right = subst(rm[1], scope, tables);
         else if (fm) footField = fm[1];
         else if (cm) tone = frameTone(scope, cm[1], cm[2]);
         else inner.push(body[i]);
       }
+      const drawn = renderBody(inner, scope, tables, objectLists, limit, viewsPath);
       out.push(
-        ...frameBox(
-          head,
-          right,
-          renderBody(inner, scope, tables, objectLists, limit, viewsPath),
-          zoneLines(scope, footField),
-          tone,
-          limit
-        )
+        ...(bare
+          ? flowBody(drawn, limit)
+          : frameBox(head, right, drawn, zoneLines(scope, footField), tone, limit))
       );
       continue;
     }
@@ -201,10 +215,8 @@ export function renderBody(
       );
       continue;
     }
-    // Matched by string rather than by regex: an optional trailing group around [\s\S]* is flagged as
-    // backtracking-prone, and the shape is too simple to need it.
-    if (body[i] === RULE || body[i].startsWith(RULE_PREFIX)) {
-      out.push(RULE_MARK + subst(body[i].slice(RULE_PREFIX.length), scope, tables));
+    if (isRuleLine(body[i])) {
+      out.push(ruleLine(body[i], scope, tables));
       continue;
     }
     // A bullet is DECLARED and not inferred from the body line because the wrapper has to know where the marker ENDS,
@@ -266,7 +278,12 @@ export function renderBody(
         if (bullet != null) {
           itemScope.__bullet = subst(bullet, itemScope, tables) + HANG_MARK;
         }
-        for (const l of inner) out.push(subst(l, itemScope, tables, pad));
+        // A rule is the ONE directive an @each body honours. A divider BETWEEN items is a thing only the loop can
+        // place, and the collapsing in box.ts is what then drops the trailing one; everything else in there is a line
+        // of the item and belongs to substitution.
+        for (const l of inner) {
+          out.push(isRuleLine(l) ? ruleLine(l, itemScope, tables, pad) : subst(l, itemScope, tables, pad));
+        }
       });
     } else {
       out.push(subst(body[i], scope, tables));

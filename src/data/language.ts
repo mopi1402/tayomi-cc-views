@@ -1,5 +1,5 @@
 // The .view language's own vocabulary: every word an AUTHOR types in a template. Shared here because each has several
-// readers that must agree on its spelling (docs/architecture.md, "The layer chain"), so renaming one, a MAJOR version,
+// readers that must agree on its spelling (docs/architecture/architecture.md, "The layer chain"), so renaming one, a MAJOR version,
 // costs one edit.
 
 const AT = "@";
@@ -18,6 +18,12 @@ export const RULE = keyword("rule");
 export const EACH = keyword("each");
 export const ASIDE = keyword("aside");
 export const END = keyword("end");
+
+/**
+ * The token that turns @box into a container with NO outline: the body machinery, none of the chrome. A word rather
+ * than a second directive, because the two draw the same body and differ only in what they put around it.
+ */
+export const BARE = "bare";
 
 /** A closing keyword is its opener's name behind `@end`. */
 const closes = (open: string): string => END + open.slice(AT.length);

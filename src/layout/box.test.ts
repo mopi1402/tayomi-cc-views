@@ -8,7 +8,8 @@
 import { describe, it, expect } from "vitest";
 import { RESET_MARK, tagMark } from "../style.js";
 import { RULE_MARK } from "./marks.js";
-import { BOX_CHROME, collapseBlanks, frameBox } from "./box.js";
+import { BOX_CHROME, collapseBlanks, flowBody, frameBox } from "./box.js";
+import { HANG_MARK } from "./marks.js";
 import { printedWidth } from "./measure.js";
 
 const DASH = "─";
@@ -230,5 +231,91 @@ describe("the tone", () => {
 
   it("falls back to the neutral grey when no state picked one", () => {
     expect(frameBox("", "", ["body"], [], NO_TONE, LIMIT)[0]).toContain("{{dim}}");
+  });
+});
+
+// The same container with no outline. What it must prove is that the body machinery is the SAME machinery: a claim
+// about sharing is worth nothing asserted on the bare path alone, so the cases that can be are stated against a frame
+// drawn on the same body.
+describe("a bare container", () => {
+  const ruleOf = (prefix = ""): string => RULE_MARK + prefix;
+  const dashesIn = (row: string): number => [...row].filter((c) => c === DASH).length;
+
+  it("draws the body and nothing around it", () => {
+    const body = ["first", "second"];
+    expect(flowBody(body, LIMIT)).toEqual(body);
+  });
+
+  it("hands a body line back unpadded, having no border for a pad to meet", () => {
+    // The frame pads every row to one width; here a trailing run of blanks would be invisible and measurable, which is
+    // the worst pair for a value another layer may go on to wrap.
+    expect(flowBody(["short", "a longer line"], LIMIT)).toEqual(["short", "a longer line"]);
+  });
+
+  it("fills a rule to the widest line it divides, which is the box's own width law", () => {
+    const rows = flowBody(["ab", ruleOf(), "abcdefgh"], LIMIT);
+    expect(dashesIn(rows[1])).toBe(printedWidth("abcdefgh"));
+    expect(rows[1]).toContain(tagMark("box_rule"));
+  });
+
+  it("sizes to its CONTENT and never to the limit it was handed", () => {
+    const rows = flowBody(["ab", ruleOf(), "cd"], LIMIT);
+    expect(dashesIn(rows[1])).toBe(2);
+    expect(dashesIn(rows[1])).toBeLessThan(LIMIT);
+  });
+
+  it("keeps a rule's prefix and starts its dashes after it", () => {
+    const rows = flowBody(["a body line", ruleOf("LABEL"), "another"], LIMIT);
+    expect(rows[1].startsWith("LABEL ")).toBe(true);
+    expect(dashesIn(rows[1])).toBe(printedWidth("a body line") - printedWidth("LABEL "));
+  });
+
+  it("wraps a body line at the limit, with no chrome to subtract from it", () => {
+    // The one number that differs from the framed path, and the reason it differs: there is no border to fit inside.
+    const long = "x".repeat(LIMIT * 2);
+    const bare = flowBody([long], LIMIT);
+    expect(printedWidth(bare[0])).toBe(LIMIT);
+    // The same body inside a frame wraps NARROWER, by the chrome it has to fit inside, so it takes more rows to say
+    // the same thing. Stated as a comparison rather than as a row count: the claim is that one machine serves both.
+    const framed = frameBox("", "", [long], [], NO_TONE, LIMIT);
+    expect(framed.filter((r) => r.includes("x")).length).toBeGreaterThan(bare.length);
+    expect(oneWidth(framed)).toBe(LIMIT);
+  });
+
+  it("keeps the hanging boundary, so a folded line stays in its own column", () => {
+    const rows = flowBody([`lab  ${HANG_MARK}${"word ".repeat(12)}`], LIMIT);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows[1].startsWith(" ".repeat(printedWidth("lab  ")))).toBe(true);
+  });
+
+  it("drops the rule trailing the last element, the collapsing it shares with the frame", () => {
+    // What turns a divider drawn UNDER every item into one drawn BETWEEN them. The loop cannot count, so this does.
+    const rows = flowBody(["one", ruleOf(), "two", ruleOf()], LIMIT);
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((r) => r.includes(DASH))).toHaveLength(1);
+  });
+
+  it("fills a rule that is the WHOLE body to the limit, having no body to measure it against", () => {
+    // The degenerate case of the width law rather than an exception to it: a rule with nothing to divide is not a
+    // separator, it is the content. Both ordinary laws would undo it, the collapsing by dropping a rule with no
+    // neighbours and the measurement by finding nothing, so this is the one place a bare container reads its limit.
+    const rows = flowBody([ruleOf()], LIMIT);
+    expect(rows).toHaveLength(1);
+    expect(dashesIn(rows[0])).toBe(LIMIT);
+  });
+
+  it("still treats a rule beside content as the separator it is", () => {
+    // The near-miss of the case above: one line of body is enough to put the rule back under the ordinary laws, where
+    // it measures against that body and is dropped when it has nothing on one side.
+    expect(dashesIn(flowBody([ruleOf(), "ab"], LIMIT).join(""))).toBe(0);
+    expect(dashesIn(flowBody(["ab", ruleOf(), "cd"], LIMIT)[1])).toBe(2);
+  });
+
+  it("returns nothing at all for a body that produced nothing", () => {
+    // The frame still draws itself on an empty body; a container with no outline has nothing left to draw. A row of
+    // SPACES is not empty and is not tested here: collapseBlanks reads a blank as zero printed columns, so two spaces
+    // are two columns of content, in this container exactly as in the framed one.
+    expect(flowBody([], LIMIT)).toEqual([]);
+    expect(flowBody(["", ""], LIMIT)).toEqual([]);
   });
 });

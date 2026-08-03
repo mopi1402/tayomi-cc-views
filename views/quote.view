@@ -1,0 +1,35 @@
+# quote.view: a blockquote whose colour you choose. One bar down the left margin, the text
+# beside it, and nothing else. No frame, no title, no marker word.
+#
+# The way in is a decorator over a plain markdown quote, which is the whole point: where
+# this hook does not run, the reader still gets a real quote.
+#
+#   @{view:quote}
+#   > the line you would have written anyway
+#
+# The quote must be followed by a BLANK LINE or end the message: prose on the very next
+# line joins the zone, no parser claims the mixture, and the raw text shows instead.
+#
+# The bar spends the TONE SLOT, so ONE file dresses every colour and no second template
+# ever has to exist:
+#
+#   @{view:quote}                 the default below, dim
+#   @{view:quote, tone:gold}      a look with no semantics attached
+#   @{view:quote, type:warning}   yellow, and the message still says what it IS
+#
+# A marked quote picks the colour too and pays nothing for it: `[!WARNING]` alone on the
+# first line reaches this template as `type`, so the fallback is a native alert box and
+# the render is a yellow bar. The marker WORD is dropped on the way, deliberately: this
+# view draws a quote, not a band, and the word is banner.view's job.
+#
+# The glyph is U+258E, the one wrap.ts calls GUTTER_BAR, and that is not decoration: a
+# continuation row keeps that bar and keeps its colour with it. It only bites where
+# something WRAPS, and outside a box nothing does, so a quote wider than the terminal is
+# soft-wrapped by the terminal itself and its second row starts at the margin with no bar.
+# Same accepted trade as the band. Keep a quote to a sentence or two, or wrap the line in
+# an @box, where the bar is redrawn on every row.
+#
+# The content is emitted verbatim, so it carries whatever emphasis the message wrote. A
+# table handed to this view resolves nothing, and the raw markdown shows instead.
+@tone dim
+{{tone}}▎{{/}} ${content}

@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { transform } from "../../src/pipeline.js";
 import { ANSI_RE } from "../../src/style.js";
-import { BLOCK_HINT, DECORATOR_CLOSE, DECORATOR_HINT, FENCE } from "../../src/data/markup.js";
+import { BLOCK_HINT, FENCE } from "../../src/data/markup.js";
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const EXAMPLES = path.join(REPO, "examples");
@@ -53,29 +53,5 @@ describe("the demo view", () => {
     expect(rows[top]).toContain("staging");
     expect(rows[top + 1]).toContain("payments deploy");
     expect(rows.find((l) => l.startsWith("╰"))).toBeDefined();
-  });
-});
-
-describe("the decorator demo", () => {
-  const table = (deco: string): string =>
-    lines(deco, "| | |", "| --- | --- |", "| Status | all green |");
-  const MSG = table(`${DECORATOR_HINT}table${DECORATOR_CLOSE}`);
-
-  it("dresses the plain table, decorator line and furniture gone", () => {
-    const out = render(MSG);
-    expect(out).not.toContain(DECORATOR_HINT);
-    expect(out).not.toContain("|");
-    const plain = out.replace(ANSI_RE, "");
-    expect(plain).toContain("Status");
-    expect(plain).toContain("all green");
-    expect(out).not.toBe(MSG); // rendered, not fail-opened
-  });
-
-  it("changes colour on the type, the one demo file dressing every kind", () => {
-    const warned = render(table(`${DECORATOR_HINT}table, type:warning${DECORATOR_CLOSE}`));
-    expect(warned).toContain("\x1b[1;33m"); // yellow, spelled independently
-    expect(warned).not.toBe(render(MSG));
-    // Colour is the ONLY difference: no second template, no second wording.
-    expect(warned.replace(ANSI_RE, "")).toBe(render(MSG).replace(ANSI_RE, ""));
   });
 });

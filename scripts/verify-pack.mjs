@@ -27,7 +27,9 @@ try {
   if (!tgzName) fail("npm pack produced no tarball");
   const tgz = path.join(work, tgzName);
 
-  // 2. The files contract: the health check ships, the documentation does not.
+  // 2. The files contract: the health check ships, and so does the ONE doc with a
+  // runtime contract, the cheatsheet an agent reads from node_modules to write a
+  // template. The reference docs stay at documentation scope and must not leak.
   // The art the welcome's @aside names ships with it: the whitelist carries the
   // whole views/ directory, so what this really catches is an art file left
   // OUTSIDE it, which would leave the installed welcome with no second column.
@@ -41,6 +43,18 @@ try {
   if (!listing.includes("package/views/banner.view")) {
     fail("views/banner.view is not in the tarball");
   }
+  if (!listing.includes("package/views/columns.view")) {
+    fail("views/columns.view is not in the tarball");
+  }
+  if (!listing.includes("package/views/quote.view")) {
+    fail("views/quote.view is not in the tarball");
+  }
+  if (!listing.includes("package/views/lines.view")) {
+    fail("views/lines.view is not in the tarball");
+  }
+  if (!listing.includes("package/views/hr.view")) {
+    fail("views/hr.view is not in the tarball");
+  }
   // ONE file for every kind, which is what the marker and the @text table bought. A
   // banner.<kind>.view left behind is the design quietly coming undone, and the listing
   // is the only place that can see it: the engine would resolve such a file happily.
@@ -50,7 +64,24 @@ try {
   if (typedBanner.length > 0) {
     fail(`a typed banner shipped: ${typedBanner.join(", ")}`);
   }
-  for (const dir of ["package/docs/", "package/examples/", "package/src/"]) {
+  // The cheatsheet is the one doc an agent resolves through node_modules, so it falling
+  // out of the whitelist is silent: every render keeps working and only the writing of a
+  // NEW view degrades, in someone else's project.
+  const CHEATSHEET = "package/docs/CHEATSHEET.md";
+  if (!listing.includes(CHEATSHEET)) {
+    fail("docs/CHEATSHEET.md, the doc an agent reads to write a view, is not in the tarball");
+  }
+  // docs/ stays documentation scope and the cheatsheet is its ONE exception, so the ban is
+  // written per ENTRY rather than on the directory: banning the prefix is no longer possible
+  // now that something legitimate lives under it, and a reference doc added to the whitelist
+  // by accident would otherwise ride in unseen.
+  const strayDocs = listing
+    .split("\n")
+    .filter((f) => f.startsWith("package/docs/") && f !== CHEATSHEET && !f.endsWith("/"));
+  if (strayDocs.length > 0) {
+    fail(`documentation leaked into the tarball: ${strayDocs.join(", ")}`);
+  }
+  for (const dir of ["package/examples/", "package/src/"]) {
     if (listing.includes(dir)) fail(`${dir} leaked into the tarball`);
   }
 

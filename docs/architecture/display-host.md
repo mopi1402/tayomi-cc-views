@@ -41,7 +41,7 @@ The terminal size is invisible to a hook process (its stdout is a pipe), so the 
 
 The `{{tag}}` vocabulary is a PROCESS-GLOBAL registry, not a per-call option (the reason is in [architecture.md](architecture.md)). How a colour is spelled, and which spellings earn a chip and a cap for free, belong to [the language reference](view-language.md); what follows is what the CALL guarantees.
 
-`extendTags` is TOTAL and never throws: a styling call must never cost the screen. An earlier version threw on redefinition, and one host's startup registration killed its whole display, silently, the day the engine claimed a name the host already used. Registration then lives under the same law as the views, the LAST one winning: shadowing an engine name is deliberate, and the screen's owner has the last word.
+`extendTags` is TOTAL and never throws: a styling call must never cost the screen, so a startup registration cannot kill a host's whole display the day the engine claims a name that host already used. Registration lives under the same law as the views, the LAST one winning: shadowing an engine name is deliberate, and the screen's owner has the last word.
 
 What did NOT apply comes back in a `TagReport` instead of an exception:
 
@@ -54,7 +54,7 @@ The value is raw ANSI, and `ansi256(n)` and `rgb(r, g, b)` are exported to write
 
 **Where a registered tag resolves: in a view.** The engine runs no tag pass over the message, so your name is spent by a template file, and by your own `strict.failedLine` (the one host-authored string the engine inserts). A `{{brand}}` typed in the model's prose stays on screen as those nine characters.
 
-One name is spent in a third place, and only that one: `code`. It is what an inline backtick span opens on, in a view and in `renderCode` alike, so registering it recolours every code span the engine draws. Until 0.1.1 that registration was read everywhere except there. See "Only a template writes presentation" in `architecture.md` for why.
+One name is spent in a third place, and only that one: `code`. It is what an inline backtick span opens on, in a view and in `renderCode` alike, so registering it recolours every code span the engine draws. See "Only a template writes presentation" in `architecture.md` for why.
 
 One consequence to plan for: the engine's own vocabulary GROWS over versions (the tone-slot work added `warning`, `error`, `success`, `info` and their chips). A name you registered may BECOME a built-in later: your registration keeps winning, and the report starts saying `shadowed` where it used to say nothing. Prefix your tags (`t_info`) if you never want that ambiguity, and log the report (stderr shows under `claude --debug`) rather than letting it drop.
 
@@ -87,11 +87,11 @@ Mark the package EXTERNAL. With esbuild:
 
 The engine owns files it opens at RUNTIME (`views/`, and the art an `@aside` names). A bundler inlines a module; it cannot inline a file read later. This is the ordinary shape for a package with runtime assets, and it is the same instruction esbuild itself prints when you bundle IT.
 
-Nothing else is needed, and in particular **do NOT copy the views into your own directory**. A copy has to be refreshed by hand at every engine update, and it silently overwrites a view of your own that happens to share a name. Earlier releases of this document recommended exactly that, and it was wrong: shadowing is what `viewsPath` ORDER is for, and it costs nothing.
+Nothing else is needed, and in particular **do NOT copy the views into your own directory**. A copy has to be refreshed by hand at every engine update, and it silently overwrites a view of your own that happens to share a name. Shadowing is what `viewsPath` ORDER is for, and it costs nothing.
 
 An inlined engine still works, as long as the package remains installed: `bundledViewsDir()` asks Node where `@tayomi/cc-views` LIVES rather than where the calling code sits, and that question survives the move. External is the recommendation because the dependency is then honest, declared where a reader can see it, instead of a bundle that looks self-contained and is not.
 
-What an inlined engine will NOT do is fall back on YOUR `views/`. It sits one hop above the bundle, so the upward search walks straight into it; taking it would serve your templates as the engine's own, silently, and that is precisely how a copy became necessary in the first place. The engine checks the manifest beside a candidate directory and takes it only if it names this package. With the package gone entirely, the health check therefore shows its raw block rather than a wrong box.
+What an inlined engine will NOT do is fall back on YOUR `views/`. It sits one hop above the bundle, so the upward search walks straight into it; taking it would serve your templates as the engine's own, silently. The engine checks the manifest beside a candidate directory and takes it only if it names this package. With the package gone entirely, the health check therefore shows its raw block rather than a wrong box.
 
 ## Troubleshooting
 

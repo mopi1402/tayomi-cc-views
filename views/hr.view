@@ -1,0 +1,33 @@
+# hr.view: one horizontal rule, the width of the terminal. Nothing else.
+#
+# The whole way in, and there is no other:
+#
+#   @{view:hr}
+#
+# A decorator with NO payload, which is a shape this engine already knows: it is how
+# `@{view:welcome}` is asked for. PUT NOTHING UNDER IT, and the two ways that bites differ:
+#
+#   - a `---`, or any line that is not a table or a quote, is claimed by no parser, so the
+#     decorator engages nothing and BOTH lines print raw. Loud, and self-correcting.
+#   - a TABLE or a QUOTE is claimed, handed to this template, and this template reads no
+#     field at all, so it is consumed and never drawn. Your table disappears. Nothing here
+#     can catch that: "raw over hollow" refuses a render that resolved none of the data it
+#     spent substitutions on, and this one spends none.
+#
+# Hence the rule, and it is the whole contract of this file: the decorator line, alone, with
+# a blank line or the end of the message after it.
+#
+# The rule fills the width because it has nothing to divide. A bare container sizes to its
+# CONTENT, and when the rule IS the content there is no body to measure it against, so it
+# takes the width it was handed. That is also why the ordinary collapsing does not drop it
+# here: a rule alone is not a separator, and the rule that survives only between two lines
+# that printed is the one separating two halves of something.
+#
+# It is drawn in `box_rule`, the furniture grey a box paints its own divisions with, and it
+# does NOT spend the tone slot: `@{view:hr, type:warning}` draws exactly this. A rule is
+# furniture, it says nothing about the message around it, and a coloured one would claim to.
+# That is the same decision lines.view makes, where the kind recolours the labels and never
+# the rules between them.
+@box bare
+@rule
+@endbox

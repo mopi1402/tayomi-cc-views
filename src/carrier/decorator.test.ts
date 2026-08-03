@@ -524,9 +524,8 @@ describe("fail-open, decorator line included", () => {
   });
 
   it("shows the raw zone when the template exists but reads none of the rows", () => {
-    // The old two-cell table.view shape: it reads `left` and `right`, a table hands it `rows`, and nothing it draws can
-    // come from the payload. Caught on the NAMES, in render.ts, because a template with furniture would print
-    // regardless.
+    // A template reading `left` and `right` where a table hands it `rows`: nothing it draws can come from the payload.
+    // Caught on the NAMES, in render.ts, because a template with furniture would print regardless.
     write(second, viewFile(STALE), lines(`${FIELDS} left right`, "${left}  ${right}"));
     const msg = decorated(decorator(STALE), KV_ROW);
     expect(raw(msg)).toBe(msg);

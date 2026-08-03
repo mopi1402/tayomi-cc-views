@@ -5,8 +5,9 @@
 # indented directive is plain text), and body whitespace is content, it is
 # what keeps the columns below aligned.
 
-# A titled, framed box. @head is the left end of the top rule, @right the
-# right end. The box sizes itself to its widest line.
+# A titled, framed box. @right is a badge SET INTO the top rule, near its right
+# corner; @head is the title row, the first line inside the border, above the
+# full-width rule. The box sizes itself to its widest line.
 @box
 @head {{box_title}}Welcome!{{/}}
 @right @tayomi/cc-views
@@ -50,15 +51,16 @@ If you can read this with `style`, everything works! 🎉🎉
  {{gold}}       {{/}}  {{gold}}▎{{/}} and write {{code}}view:yours{{/}} blocks: same name
  {{gold}}       {{/}}  {{gold}}▎{{/}} shadows any view, even this one
 
- {{green}}ASK    {{/}}  {{green}}▎{{/}} your agent can read this file and the docs,
- {{green}}       {{/}}  {{green}}▎{{/}} then write your template for you
+ {{green}}ASK    {{/}}  {{green}}▎{{/}} your agent writes your template for you: point
+ {{green}}       {{/}}  {{green}}▎{{/}} it at {{code}}docs/CHEATSHEET.md{{/}} in this package
 
 # This box is deliberately static, but a real view is fed DATA. The worked
 # examples do not ship in the package (the tarball carries only dist/ and
 # views/), so this pointer goes to the repository instead.
  {{orange}}EXPLORE{{/}}  {{orange}}▎{{/}} this box is all static, but views carry data:
  {{orange}}       {{/}}  {{orange}}▎{{/}} fields, maps, chips, dressed by the template.
- {{orange}}       {{/}}  {{orange}}▎{{/}} worked examples: github.com/mopi1402/tayomi-cc-views
+ {{orange}}       {{/}}  {{orange}}▎{{/}} worked examples:
+ {{orange}}       {{/}}  {{orange}}▎{{/}} https://github.com/mopi1402/tayomi-cc-views
 @endaside
 
 # @foot names a FIELD, never text: the bottom zone exists only when the block

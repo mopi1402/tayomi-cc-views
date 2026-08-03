@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   ASIDE,
+  BARE,
   BULLET_REF,
   BOX,
   EACH,
@@ -202,6 +203,20 @@ describe("@rule", () => {
     const line = `${RULE}s are not directives`;
     expect(render([line])).toEqual([line]);
   });
+
+  it("is the ONE directive an @each body honours, once per item", () => {
+    // A divider BETWEEN items can only be placed by the loop, and the collapsing in the container is what then drops
+    // the one trailing the last. Everything else inside an @each is a line of the item and belongs to substitution.
+    const out = render([`${EACH} note`, ref(ITEM_REF), RULE, END], { note: ["a", "b"] });
+    expect(out).toEqual(["a", RULE_MARK, "b", RULE_MARK]);
+  });
+
+  it("takes its prefix from the ITEM's scope inside a loop, not from the block's", () => {
+    const out = render([`${EACH} note`, ref(ITEM_REF), `${RULE} ${ref(INDEX_REF)}`, END], {
+      note: ["a", "b"],
+    });
+    expect(out).toEqual(["a", RULE_MARK + "1", "b", RULE_MARK + "2"]);
+  });
 });
 
 describe("@box", () => {
@@ -248,6 +263,55 @@ describe("@box", () => {
     const out = text([BOX, `${EACH} note`, ref(ITEM_REF), END, ENDBOX], { note: ["a", "b"] });
     expect(out).toContain("a");
     expect(out).toContain("b");
+  });
+});
+
+describe(`@box ${BARE}`, () => {
+  const BARE_BOX = `${BOX} ${BARE}`;
+
+  it("runs the body and draws no outline at all", () => {
+    const out = render([BARE_BOX, "inside", ENDBOX, "outside"]);
+    expect(out).toEqual(["inside", "outside"]);
+    expect(out.join("\n")).not.toContain(TOP_LEFT);
+  });
+
+  it("wraps what it encloses, which is the whole reason it exists", () => {
+    // The claim that parts it from a plain body line: outside a container nothing wraps at all.
+    const long = "word ".repeat(40);
+    expect(render([BARE_BOX, long, ENDBOX]).length).toBeGreaterThan(1);
+    expect(render([long])).toHaveLength(1);
+  });
+
+  it("fills an @rule to the body it divides, where a bare line could only guess", () => {
+    const out = render([BARE_BOX, "a line", RULE, "another line", ENDBOX]);
+    expect(out[1]).toContain("─");
+    expect(out[1]).not.toContain(RULE_MARK);
+  });
+
+  it("does NOT read @head, @right, @foot or @frame, which print where the author can see them", () => {
+    // They have no border to hang on here, and this is already what they do outside any box: the failure mode being
+    // refused is the silent one, a title swallowed by a container that had nowhere to put it.
+    const chrome = [`${HEAD} a title`, `${RIGHT} badge`, `${FOOT} cause`, `${FRAME} state ok=success`];
+    const out = render([BARE_BOX, ...chrome, "body", ENDBOX], { cause: "the reason" });
+    expect(out).toEqual([...chrome, "body"]);
+  });
+
+  it("prints as text on a token it does not know, rather than quietly framing", () => {
+    // The near-miss that matters most: a typo must never render a box the author did not ask for.
+    const typo = `${BOX} bear`;
+    const out = render([typo, "inside", ENDBOX]);
+    expect(out[0]).toBe(typo);
+    expect(out.join("\n")).not.toContain(TOP_LEFT);
+  });
+
+  it("prints as text when the token is not set off by a space", () => {
+    const glued = `${BOX}${BARE}`;
+    expect(render([glued, "inside", ENDBOX])[0]).toBe(glued);
+  });
+
+  it("prints as text when anything trails the token", () => {
+    const trailed = `${BOX} ${BARE} and more`;
+    expect(render([trailed, "inside", ENDBOX])[0]).toBe(trailed);
   });
 });
 

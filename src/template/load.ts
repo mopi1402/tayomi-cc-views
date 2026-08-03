@@ -72,7 +72,7 @@ export function bundledViewsDir(): string {
   if (walked) return walked;
   // Nothing found. Name a path under THIS module, never one belonging to the host, so the read that follows fails with
   // something a human can act on. A host that bundles the engine and reaches here has not marked the package external:
-  // see docs/display-host.md.
+  // see docs/architecture/display-host.md.
   return path.join(here, VIEWS_DIR);
 }
 

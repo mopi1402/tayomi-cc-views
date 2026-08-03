@@ -9,7 +9,7 @@ Design prose, meant to be read with the code open. The normative references are 
 Under all of them sits `src/data/`, a leaf every layer may read and that reads nothing: the FORMS the engine recognises (`markup.ts`: the tag delimiters, the code tick, the two carrier tokens), the WORDS a template author types (`language.ts`: every `@directive`, the declarations their tails carry, and the pseudo-fields an `@each` puts in scope), and the control codes it reserves (`marks.ts`). They live there rather than in the module that spends each one because several modules must AGREE on them, and nothing else would make them agree: a directive is matched in `template/directives.ts`, declared in `template/parse.ts`, and typed out in the fixtures the tests write, so renaming one costs one edit here rather than a sweep. Forms only: what a tag NAME means stays private to `style.ts`.
 
 - `style.ts` is the leaf: the ANSI vocabulary, with no notion of geometry or data.
-- `layout/` measures and frames.
+- `layout/` measures and frames. Wrapping is a property of a CONTAINER and not of a line, so `box.ts` is where it happens (`aside.ts` reaching for it too, to fit a composed row): a body outside one is emitted whole and folded by the terminal. `box.ts` therefore exports two containers over one body machine, `frameBox` and the outline-less `flowBody`, which is what lets a frameless template wrap, keep a hanging indent and fill a rule it could not measure.
 - `template/` parses and substitutes.
 - `carrier/` recognises the zones of a message.
 - `pipeline.ts` is the only piece that sees everything, and composes in the only safe order.
@@ -20,7 +20,7 @@ Three rules complete the chain, enforced by a gate in the host repo: one `main()
 
 ## 2. Streaming as a pure slice
 
-MessageDisplay delivers a message flush by flush, and the flushes are CONCURRENT. `slice()` is a PURE function of the text accumulated before the flush and the flush's delta: it recomputes the transformation of the whole message, then emits only the newly revealed slice. No offset survives between two flushes. The previous version kept one, and three in-flight flushes lost updates on that shared state. Paying a second transformation per flush is the price of convergence: the concatenated slices equal the target, whatever the interleaving.
+MessageDisplay delivers a message flush by flush, and the flushes are CONCURRENT. `slice()` is a PURE function of the text accumulated before the flush and the flush's delta: it recomputes the transformation of the whole message, then emits only the newly revealed slice. No offset survives between two flushes, because three in-flight flushes sharing one lose updates on it. Paying a second transformation per flush is the price of convergence: the concatenated slices equal the target, whatever the interleaving.
 
 Retention follows the same logic. A zone still arriving (an open fence, a decorated zone whose end is unknown) is cut from the output before the carrier sees it, then revealed fully rendered on the final delta.
 
@@ -30,9 +30,7 @@ That constraint dictates the whole design, and it leaves an accepted residue: a 
 
 ## 3. The width polyfill
 
-The hook process cannot see the terminal: its stdout is a pipe, the environment carries no size, `/dev/tty` answers ENXIO. Yet the box must wrap its own content, otherwise the terminal folds long lines as it pleases and shreds the frame. The answer is an assumed polyfill: walk the ancestor chain with `ps`, open the tty of the `claude` process, read its columns, and cache the result (3 s TTL) because the probe costs ~25 ms and the hook runs on every delta.
-
-Every stage of that resolution is skippable, most deliberate first; the order itself is [display-host.md](display-host.md)'s. The reopening trigger is documented: the day the hook payload carries the terminal size, it becomes one more source, zero API change.
+The hook process cannot see the terminal: its stdout is a pipe, the environment carries no size, `/dev/tty` answers ENXIO. Yet the box must wrap its own content, otherwise the terminal folds long lines as it pleases and shreds the frame. The answer is an assumed polyfill: walk the ancestor chain with `ps`, open the tty of the `claude` process, read its columns, and cache the result (3 s TTL, because the probe costs ~25 ms and the hook runs on every delta). Every stage is skippable and the full order is [display-host.md](display-host.md)'s. The day the hook payload carries the terminal size, it becomes one more source, zero API change.
 
 ## 4. The decorator's trade
 
@@ -40,7 +38,7 @@ The fenced block has a structural flaw: reread from the transcript (where the ho
 
 Two principles follow.
 
-- **Commitment is on INTENT, never on shape**: an undecorated table, whatever it looks like, crosses the screen byte for byte (the lesson of the withdrawn POC, which captured tables by their shape).
+- **Commitment is on INTENT, never on shape**: an undecorated table, whatever it looks like, crosses the screen byte for byte.
 - **Fail-open is total**, decorator line included: the screen shows exactly what the transcript holds, even in the hollow-template case where no field is read (a blank where content should be would be worse than the raw text).
 
 ## 5. The process-global palette
@@ -49,10 +47,8 @@ The `{{tag}}` vocabulary is not a per-call option but a process-global registry 
 
 ### Only a template writes presentation
 
-Who may spend the vocabulary: a template, and the host. Not a message. A tag resolves at the end of a view's render (`template/render.ts`) and at the one point a host-authored string enters the output (`strict.failedLine`). The pipeline runs no tag pass, so `{{warn}}` typed in prose is eight characters of text like any other.
+Who may spend the vocabulary: a template, and the host. Not a message ([view-language.md](view-language.md) states the rule; this is how it holds). A tag resolves at the end of a view's render (`template/render.ts`) and at the one point a host-authored string enters the output (`strict.failedLine`). The pipeline runs no tag pass, so `{{warn}}` typed in prose is eight characters of text like any other, and the reason is not tidiness: text that can open a colour can close one a render meant to keep, which corrupts the model's OUTPUT and not merely its display.
 
-The reason is not tidiness. Text that can open a colour can close one a render meant to keep, and can paint a line in a tone that contradicts what the line says: the engine would then be corrupting the model's OUTPUT, not just its display. A message names a template and supplies its data. Presentation comes from a file on disk.
-
-Prose is covered by the absent pass alone. A block's DATA needs a second seam, because it is substituted INTO a template and would otherwise be indistinguishable from the template's own text by the time the tags resolve. So message text is neutralised where it becomes a scope value: `inert` (`style.ts`) follows every brace with an invisible C0 control, which breaks the tag shape while `width.ts` already counts a C0 as zero columns, so the value measures and wraps as the text it now is. `render.ts` drops the marks after the tag pass.
+Prose is covered by that absent pass alone. A block's DATA needs a second seam, because it is substituted INTO a template and would otherwise be indistinguishable from the template's own text by the time the tags resolve. So message text is neutralised where it becomes a scope value: `inert` (`style.ts`) follows every brace with an invisible C0 control, which breaks the tag shape while `width.ts` already counts a C0 as zero columns, so the value measures and wraps as the text it now is. `render.ts` drops the marks after the tag pass.
 
 Two callers neutralise, and only two: `render.ts` when a block's raw text is parsed into a scope, and `cell()` (`carrier/decorator.ts`) for a decorated table. `parseData` itself does NOT, because a host's gate reads the same parse to judge a block and must see the values as the block typed them. In `cell()` the ORDER carries the rule: neutralise the cell, then derive emphasis from `**`, or the carrier's own markup dies with the model's. Fields a host injects are never neutralised: a host is a program, on the same footing as `strict.failedLine`.

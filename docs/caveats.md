@@ -16,7 +16,7 @@ One residue survives: a flush ending inside the eight characters of the opening 
 
 One shape, and it is narrow: a tight Objective-C literal `@{view:x}` alone on its line, while a template of that name resolves *and* spends no substitution at all. A template that spends one is handed nothing and fails open, so it can no longer draw an empty skeleton where content stood. Fail-open bounds the rest to a mis-rendered zone, never lost text. See the collision catalogue below for why the surface is that narrow.
 
-A fenced code block no longer collides: the fences are read first and the outermost one decides, so a quoted example is text (["The carriers"](view-language.md)). What does NOT shield is an indented four-space code block; fenced blocks are what agents and hooks emit, and nobody has produced the other.
+A fenced code block no longer collides: the fences are read first and the outermost one decides, so a quoted example is text (["The carriers"](architecture/view-language.md)). What does NOT shield is an indented four-space code block; fenced blocks are what agents and hooks emit, and nobody has produced the other.
 
 > **Boundary:** the token's surface is a tested trade; the indented block is a gap left open on purpose.
 

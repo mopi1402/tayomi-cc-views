@@ -59,8 +59,7 @@ Two lookup tables, one substitution. Both declare an enum, both are spent by `${
 
 - `@map`'s pairs split on whitespace, because a tag name has none. `@text`'s pairs are QUOTED, because a text value has spaces by definition; an unquoted pair is simply not one and is skipped.
 - A name declared by BOTH directives is a template error, not a merge: one `${field:name}` asks them both, and a merge would leave the winner to the order the lines happen to sit in. The view fails open, and the raw block shows.
-- Three outcomes serve one slot, and they have to be three. An entry the table DECLARES renders verbatim, the author's glyph and casing byte for byte. A value ABSENT or whitespace-only takes the reserved entry `*`. A value present but OFF the table echoes UPPERCASED, which shows the unknown word rather than swallowing it.
-- The echo is uppercase where `@map`'s off-map value is verbatim, and the asymmetry is narrow and deliberate: on the marker path (below) the shape forced uppercase and the carrier lowercased it, so the echo is a restoration. Everywhere else, a mapped slot showing an uppercase word is the same rule `@map` already follows when it uppercases a chip's label.
+- Three outcomes serve one slot, and they have to be three. An entry the table DECLARES renders verbatim, the author's glyph and casing byte for byte. A value ABSENT or whitespace-only takes the reserved entry `*`. A value present but OFF the table echoes UPPERCASED (where `@map`'s off-map value stays verbatim), which shows the unknown word rather than swallowing it.
 - Padding is `@map`'s existing rule and is not re-decided: padded to the cell when the substitution sits in a padded column, bare outside one. A band is not a column, so a banner never pads; a text table spent inside an `@each` still aligns, and it is measured on the WORD that comes out, never on the key that chose it.
 - `@text` carries the WORD and never a colour. A kind's look comes from the tone slot, so it has one place to be declared, not two that can contradict each other.
 
@@ -72,7 +71,19 @@ Two lookup tables, one substitution. Both declare an enum, both are spent by `${
 - `@right <text>`: a badge set into the TOP border (substitutions allowed).
 - `@foot <field>`: names a FIELD (it does not carry text); its items render in a zone under a full-width rule at the bottom, blank items dropped.
 - `@frame <field> <key>=<tone> ...`: the border's colour follows a field's value, so the state that picks a badge picks the border too. An unlisted value keeps the default grey.
-- `@rule [prefix]`: an inner division, drawn to the border; the prefix takes substitutions, and the rule survives only between two lines that actually printed.
+- `@rule [prefix]`: an inner division, drawn to the border; the prefix takes substitutions, and the rule survives only between two lines that actually printed. It is also the one directive an `@each` BODY honours, so a loop can put a divider between its items; the survival rule above is then what drops the one trailing the last.
+
+### `@box bare ... @endbox`
+
+The same container with no outline: the body machinery, and none of the chrome. It is what a FRAMELESS template needs, because outside a container nothing wraps at all: a long line is left to the terminal, which folds it at column zero rather than under the column it belongs to.
+
+A bare container therefore buys three things a plain body cannot have. Lines WRAP, at the full width since there is no border to fit inside, and a fold keeps the hanging boundary a declared `bullet=` sets up (`bullet=""` buys the indent and prints nothing). An `@rule` is FILLED, to the width of the widest line it divides, so a template stops having to guess a number it cannot measure. And blank runs collapse, which is what turns a divider drawn under every item into one drawn between them.
+
+`@head`, `@right`, `@foot` and `@frame` are not its words: with no border to hang on, they fall through to the body and print, exactly as they already do outside any box. A token this container does not know makes the line ordinary text too, so a typo can never render a frame you did not ask for.
+
+It keeps the box's width law and sizes to its CONTENT, never to the terminal: a rule divides the body it sits in rather than running out to a margin nothing else reaches. `views/lines.view` is written on it.
+
+One case reads the terminal instead, and it is the degenerate form of the same law: a bare container holding NOTHING BUT a rule has no body to measure it against, so the rule fills the width it was handed, and the collapsing does not drop it for want of neighbours. A rule with nothing to divide is not a separator, it is the content. `views/hr.view` is exactly that, three lines, and it is how a decorator draws a horizontal rule on its own.
 
 ### `@aside <view> [top|bottom] ... @endaside`
 
@@ -93,7 +104,7 @@ The health check, at the full content width.
 - Below **40 printed columns of box content** for the main flow (the box's width ceiling less its 4 columns of border, not the terminal's width), the aside and its separator are DROPPED whole and the flow takes the full width. A picture is decoration; prose squeezed beside one is not readable.
 - The two columns CENTRE against each other, and an odd padding row goes below. `@aside <view> top` and `@aside <view> bottom` pin the shorter column to that edge instead. Anything else after the name makes the line plain text.
 - A view that resolves NOWHERE degrades to the full-width main flow: a decoration never takes its box down.
-- An aside row is emitted verbatim, never wrapped, split or restyled: every composed line is built to fit the box already, which is what keeps the wrapper from breaking a picture on the spaces its transparent pixels are made of.
+- An aside row is emitted verbatim, never wrapped, split or restyled: every composed line is built to fit the box already, so the wrapper never breaks a picture on the spaces its transparent pixels are made of.
 - A BLANK main-flow line survives inside a region (the composed line still carries the separator, so the box has no blank run to collapse). Outside a region, blank collapsing is unchanged.
 - Regions do not nest, they carry no `@rule` (an inner rule is filled to the border, which means nothing across two columns), and the column is always on the left.
 
@@ -116,7 +127,7 @@ A span the ENGINE inserts inside your line (an inline code span, a `@map` chip, 
 
 What resumes is the style that stood OUTSIDE the span, whatever the span's own text did in between. A tag you write between backticks paints the rest of that span and stops there, and spans nest: a chip whose label carries a code span hands the chip back at the tick, and the line back at the chip's edge.
 
-This is the VIEW language, and it is spoken in a `.view` file only. A tag written in a MESSAGE is inert, in its prose and inside a block's data alike: `{{warn}}` typed by the model prints as those eight characters, and it is measured as eight columns because that is what it costs. Only the template you wrote opens a style. That is what keeps presentation on disk, where you can read it and change it, instead of in whatever a model happened to emit.
+This is the VIEW language, and it is spoken in a `.view` file only. A tag written in a MESSAGE is inert, in its prose and inside a block's data alike: `{{warn}}` typed by the model prints as those eight characters, and it is measured as eight columns because that is what it costs. Only the template you wrote opens a style, which is what keeps presentation on disk where you can read it and change it.
 
 The one thing a message still influences is the tone SLOT (below), which names a class the template chose to spend. It cannot invent a style the template did not ask for.
 
@@ -143,7 +154,7 @@ extendTags({ brand: ansi256(75) });     // or rgb(95, 175, 255), the same blue
 // {{brand_cap}}  the blue again, for a glyph drawn against the chip
 ```
 
-`ansi256` and `rgb` are the two spellings the engine can MEASURE, which is why they are the two it exports: they name pixels, so a chip and a cap follow. Both are total like `extendTags` itself, a value outside `0..255` clamping and a fraction rounding, so a startup registration cannot cost the screen. Raw ANSI still works and is what you write for anything else, a background of your own included.
+`ansi256` and `rgb` are the two spellings the engine can MEASURE, which is why they are the two it exports: they name pixels, so a chip and a cap follow. Both clamp an out-of-range value and round a fraction rather than throw. Raw ANSI still works and is what you write for anything else, a background of your own included.
 
 One value in, three names out, none able to drift, and `tone:brand` dresses any view that spends the slot. Shadowing a built-in colour carries its chip along: register your own `info` and a band under `tone:info` fills with YOUR blue, not the engine's cyan.
 
@@ -174,9 +185,9 @@ Every candidate is checked against the palette and an unknown name falls THROUGH
 
 `{{tone_cap}}` is the foreground painting the fill of `{{tone_bg}}`, for the characters a template draws AGAINST the chip rather than inside it: the rounded caps that turn a band into a pill, an arrow between two zones, any glyph that must read as an extension of the coloured surface next to it.
 
-Spending `{{tone}}` there is the trap, and it looks right until it does not. A class's foreground and its chip name the same palette entry, but the foreground carries bold, and a terminal promotes a bold base-sixteen foreground to the BRIGHT slot while nothing promotes a background. `cyan` (`1;36`) against an `info_bg` fill (`46`) is one shade off, in every theme that separates the two. `{{tone_cap}}` is derived from the chip itself, so the two cannot drift and a theme cannot separate them.
+Spending `{{tone}}` there is the trap. A class's foreground and its chip name the same palette entry, but the foreground carries bold, and a terminal promotes a bold base-sixteen foreground to the BRIGHT slot while nothing promotes a background: `cyan` (`1;36`) against an `info_bg` fill (`46`) is one shade off in every theme that separates the two. `{{tone_cap}}` is derived from the chip itself, so the two cannot drift.
 
-A class with no chip has no cap either, and the slot falls back to that class's foreground, so caps and text still land on one colour. Every COLOUR carries a chip precisely so a band never reaches that path: a cap is half a pill, and with no fill to extend it, two solid glyphs sit around bare text and read as broken. Furniture naming its pixels fills like any other colour, `tone:code` and `tone:box_rule` both included; the two names that land there are the ones carrying no colour at all, `tone:b` and `tone:box_title`. The same rule holds outside the slot: any `<name>_cap` resolves as long as `<name>_bg` does, a host's own registered chip included.
+A class with no chip has no cap either, and the slot falls back to that class's foreground, so caps and text still land on one colour. Every COLOUR carries a chip precisely so a band never reaches that path: only the two names carrying no colour at all do, `tone:b` and `tone:box_title`, furniture naming its pixels filling like any other colour (`tone:code` and `tone:box_rule` included). The same rule holds outside the slot: any `<name>_cap` resolves as long as `<name>_bg` does, a host's own registered chip included.
 
 ## The carriers
 
@@ -220,17 +231,17 @@ Alone on its line (surrounding whitespace allowed), directly above its payload. 
 - No space, no glyph, no lowercase, no second word. `[!📦 VERSION]`, `[! WARNING]`, `[!warning]` and `[!TWO WORDS]` are NOT markers: each stays the first line of the content and prints inside the band, where the author sees it. The narrowness is the point, because once a space is legal the marker has become the label slot the `@text` table exists to remove.
 - The marker BEATS a `type:` attribute, and that is not a branch anywhere: when the payload names a kind the carrier leaves the dressing's kind unset, and the template's field is what reaches the render. It follows that a marker never selects a typed FILE either. With no marker, `type:` behaves exactly as it does over a table.
 - The quote must be followed by a BLANK LINE or end the message. Its zone is the run of contiguous non-blank lines, so prose written on the very next line JOINS the zone, no parser claims the mixture, and the whole thing fails open with every line intact.
-- The band is emitted on ONE line and nothing measures it: see [caveats](caveats.md).
+- The band is emitted on ONE line and nothing measures it: see [caveats](../caveats.md).
 
 **The fallback gradient.** A marked quote is what survives where this engine does not run, and it degrades in three steps. Re-rendered as plain markdown, exactly five tokens become native alert boxes: `NOTE`, `TIP`, `IMPORTANT`, `WARNING` and `CAUTION` (verified against GitHub's writing-and-formatting docs, 2026-08-02). Any other token falls back to an ordinary quote whose first line reads `[!VERSION]` literally, which is still visible and still self-describing. Read raw in a transcript, it is still a quote. One boundary worth knowing: an alert cannot be NESTED, so a banner's quote has to sit at the top level of the message. One written inside a list item or another quote keeps rendering here and loses its native fallback there.
 
 A decorator has NO payload when the line under it is blank or absent, and only then. That is how a static view is asked for: `@{view:welcome}` alone, ending the message or with a blank line under it, is the whole health check. Prose on the very next line IS a payload, no parser claims it, and the zone fails open.
 
-Whether a payload exists and how far it reaches are two questions, deliberately kept apart. Existence is decided by that blank line, the one boundary every markdown block agrees on. Extent belongs to the payload's own SHAPE, and the two shapes answer differently: a table ends at the first line that no longer starts with a pipe, which is markdown's rule, so a table followed straight by prose is still a table; a quote ends at the first blank line, so a quote followed straight by prose is neither, and fails open. Asking the table scanner where the zone ended made everything it could not read look like nothing at all, which is how a quoted example became a view summoned with no data.
+Whether a payload exists and how far it reaches are two questions, deliberately kept apart. Existence is decided by that blank line, the one boundary every markdown block agrees on. Extent belongs to the payload's own SHAPE, and the two shapes answer differently: a table ends at the first line that no longer starts with a pipe, which is markdown's rule, so a table followed straight by prose is still a table; a quote ends at the first blank line, so a quote followed straight by prose is neither, and fails open.
 
 A payload that exists but is not a shape a parser here claims fails open, and so does a hollow render, under any of three readings: no data reached a template that spends a substitution; data reached one that read none of the fields it got; or every field it did read arrived blank. The middle one is decided on the fields the render ACTUALLY resolved, never on what it printed, because a template drawing literal furniture puts ink on screen whatever it was handed. That is what makes a view refuse a payload SHAPE by not reading it: `banner.view` reads `content`, a table hands it `rows`, and the raw table shows.
 
-"Actually resolved" is meant literally: the reads are recorded by the accessor every field resolution goes through, so the answer covers whatever a template really spent, and a field mentioned on a line the render never reached does not count. A `${field}` inside a loop over an absent list is not read, and neither is the tag an `@tone` names or the view an `@aside` names, neither of which is a field at all.
+"Actually resolved" is meant literally, so a field mentioned on a line the render never reached does not count: a `${field}` inside a loop over an absent list is not read, and neither is the tag an `@tone` names or the view an `@aside` names, neither of which is a field at all.
 
 - The payload stays plain markdown, so the FALLBACK is native: wherever the hook does not run, the reader gets an ordinary table, or an alert quote, under one extra line.
 - A table reaches the template as `rows`, a list of `{ label, content }`. An empty label cell continues the label above (one row per item). A quote reaches it as `content`, plus the `type` field its marker named.
