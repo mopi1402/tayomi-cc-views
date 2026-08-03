@@ -1,0 +1,15 @@
+{
+  "name": "tayomi-cc-views",
+  "owner": {
+    "name": "mopi",
+    "url": "https://github.com/mopi1402"
+  },
+  "plugins": [
+    {
+      "name": "cc-views",
+      "source": "./",
+      "description": "The skill that writes a .view template for this engine.",
+      "version": "0.1.1-rc.21"
+    }
+  ]
+}

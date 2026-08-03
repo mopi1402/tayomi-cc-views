@@ -166,8 +166,30 @@ await runMessageDisplayHook(undefined, {
 
 `viewsPath` order is your policy: list the consumer's directory first and your users can shadow any of your views by simply naming a file the same. Append `bundledViewsDir()` last to keep `view:welcome` (the health check) resolvable through your hook too. For tests, `handleMessageDisplay(payload, host?, options?)` takes a parsed payload and returns the output string (or `null`) with no stdin/stdout anywhere. Width, state dir and the rest of `RenderOptions` are covered in the [integration reference](docs/architecture/display-host.md).
 
+## Let your agent write the templates
+
+The engine ships a skill, `write-view`, so the agent already knows the procedure: ask `cc-views dict`
+what this install resolves, prefer a bundled view to a new file, read the cheatsheet rather than guess
+a directive, and verify with `cc-views check` before handing anything back.
+
+It installs from this repo, not from the npm package, since a skill is discovered by convention and
+never found inside `node_modules`:
+
+```bash
+# as a plugin
+/plugin marketplace add mopi1402/tayomi-cc-views
+/plugin install cc-views@tayomi-cc-views
+
+# or straight into .claude/skills/
+npx skills add https://github.com/mopi1402/tayomi-cc-views
+```
+
+Without it, the one line in your `CLAUDE.md` above does most of the same work: the skill adds the
+"check before you answer" step, which is the one an agent skips.
+
 ## Documentation
 
+- [The `write-view` skill](skills/write-view/SKILL.md): the procedure an agent follows to pick, write and verify a view. Installed from this repo (see above), gated against the generated catalogue so it cannot name a directive the engine dropped.
 - [Cheatsheet](docs/CHEATSHEET.md): **start here to write your first view.** One worked example, the three rules that break a first attempt, and every directive, substitution and tag on one page. It is the only doc that SHIPS in the package, so your agent can read it from `node_modules/@tayomi/cc-views/docs/CHEATSHEET.md` and write your template for you.
 - [Caveats](docs/caveats.md): **read this one before you wire it in.** A view announces its start and its end is found; code can be mistaken for a view; a long band is broken by the terminal; a resized terminal breaks the print; reopening a session shows plain data, not views; two engines can draw the same message. Each entry ends on the one line that names its boundary (Claude Code, a deliberate trade, or a bug to fix here), and the `@` collision catalogue is there too.
 - [The `.view` language reference](docs/architecture/view-language.md): the language's full boundary, every form the engine accepts, when the cheatsheet is not enough.

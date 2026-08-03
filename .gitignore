@@ -23,3 +23,8 @@ sandbox/views/*
 # session goes. Tracked, every line taken out of it became a commit of its own,
 # and the file's whole history is a record of what was pending on a Sunday.
 **/.tayomi/reminders.md
+
+# A scratch clone lands here (prior art to read, a sample to compare against) and
+# is no part of this package: untracked, and out of the suite by vitest.config.ts,
+# which scopes `pnpm test` to src/ and tests/ rather than to whatever the tree holds.
+tmp/

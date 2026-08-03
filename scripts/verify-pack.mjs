@@ -84,6 +84,14 @@ try {
   for (const dir of ["package/examples/", "package/src/"]) {
     if (listing.includes(dir)) fail(`${dir} leaked into the tarball`);
   }
+  // The skill is the near-miss of the cheatsheet, and the two are told apart by HOW they are
+  // reached. The cheatsheet ships because an agent resolves it BY PATH through node_modules; a
+  // skill is discovered by convention, under .claude/skills/ or through the plugin manifest, so a
+  // copy in node_modules is found by nobody. It would be weight with no reader, and worse, a second
+  // copy free to drift from the one the marketplace actually installs.
+  if (listing.includes("package/skills/")) {
+    fail("skills/ leaked into the tarball, where nothing discovers it: it installs from the repo");
+  }
 
   // 3. A throwaway project installs the tarball, the way an adopter would.
   const proj = path.join(work, "project");

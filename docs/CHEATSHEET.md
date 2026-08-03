@@ -4,6 +4,9 @@ Everything here is stable across installs. What is NOT here, because it depends 
 stale in a file: the tags a host added with `extendTags`, and which views your `viewsPath` already
 resolves. Run `cc-views dict` for those, which prints THIS install's own answer as JSON.
 
+Working through an agent? The `write-view` skill carries this procedure, installed from the repo with
+`/plugin marketplace add mopi1402/tayomi-cc-views` or `npx skills add`. It points back here.
+
 Written one and it draws nothing? Run `cc-views check <view> '<block>'`, which renders it against a
 sample block and answers with the reason, naming the template line. It is silent when there is none,
 non-zero on an error, and zero on a warning. The block also reads from a pipe.

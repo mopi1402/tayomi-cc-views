@@ -2,11 +2,7 @@
 
 Intentions, not commitments. Each entry states what it would bring and what is still under study.
 
-## A skill that generates `.view` templates (expected)
-
-Writing a `.view` by hand is the adoption wall: the language is small, but you have to learn it before your first box shows up, and it is strict by design in ways a human trips on (directives at column 0, no indentation; body whitespace is significant content, it is how columns align). A skill would take "I want a deploy report with a title and status chips" and produce the template, the carrier line the agent writes, and the file where the resolution order will find it.
-
-The reference half is done and is no longer part of this entry: `agent/catalogue.json` holds the language generated from the tables the engine executes, and `cc-views dict` prints the same thing for THIS install, with the tags `extendTags` added and the views the search path resolves in their resolution order. What is left here is the SKILL: turning a sentence into a template, choosing the carrier, and putting the file where the resolution order will find it.
+The adoption wall this file opened on, writing a `.view` by hand, is no longer an intention: the reference is `agent/catalogue.json` and `cc-views dict`, the verdict is `cc-views check`, and the procedure is the `write-view` skill. See [the README](README.md#let-your-agent-write-the-templates).
 
 ## A standalone examples project (idea)
 
