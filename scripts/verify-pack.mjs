@@ -66,20 +66,23 @@ try {
   if (typedBanner.length > 0) {
     fail(`a typed banner shipped: ${typedBanner.join(", ")}`);
   }
-  // The GRAMMAR, read by the write-view skill at its step 2. That skill travels by the marketplace
-  // and never inside this tarball, so the only copy it can open in someone else's project is the one
-  // installed there. It does not double the catalogue asserted just below: `dict` answers what THIS
-  // install resolves, this page answers how to write it. Falling out of the whitelist is silent:
-  // every render keeps working and only the writing of a NEW view degrades, in someone else's project.
+  // The HUMAN page, and the worked example the generated grammar below has no room for. The
+  // write-view skill names it beside that grammar at its step 2, and the skill travels by the
+  // marketplace and never inside this tarball, so the only copy it can open in someone else's
+  // project is the one installed there. Falling out of the whitelist is silent: every render keeps
+  // working and only the writing of a NEW view degrades, in someone else's project.
   const CHEATSHEET = "package/docs/CHEATSHEET.md";
   if (!listing.includes(CHEATSHEET)) {
-    fail("docs/CHEATSHEET.md, the grammar the write-view skill reads, is not in the tarball");
+    fail("docs/CHEATSHEET.md, the worked example the write-view skill names, is not in the tarball");
   }
-  // The cheatsheet's machine half, and it falls out of the whitelist just as silently: every render
-  // keeps working, and only an agent trying to LEARN the language in someone else's project comes up
+  // The GRAMMAR itself, and the file the skill opens FIRST: a machine reading the page above is sent
+  // here by that page's own header. Three references and no two of them answer the same question:
+  // this file states the language, `dict` states what THIS install resolves, `check` states whether
+  // what was written draws. It falls out of the whitelist just as silently: every render keeps
+  // working, and only an agent trying to LEARN the language in someone else's project comes up
   // empty. Asserted positively here because `files` is what decides it, and nothing else would say.
   if (!listing.includes("package/agent/catalogue.json")) {
-    fail("agent/catalogue.json, the language an agent reads, is not in the tarball");
+    fail("agent/catalogue.json, the grammar the write-view skill reads, is not in the tarball");
   }
   // docs/ stays documentation scope and the cheatsheet is its ONE exception, so the ban is
   // written per ENTRY rather than on the directory: banning the prefix is no longer possible

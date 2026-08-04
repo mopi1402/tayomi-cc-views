@@ -30,6 +30,11 @@ const FENCE = "---";
 
 /** The pointers that keep the skill spending the LIVE reference instead of a copy of it. */
 const LIVE_REFERENCE = ["cc-views dict", "cc-views check"];
+// The GENERATED grammar, spelled from the file this gate already reads so the two cannot drift. It is
+// checked because losing it is silent and was already lost once: the skill sent a reader to
+// docs/CHEATSHEET.md, the HUMAN page, which answers a machine by naming this file. That is one hop,
+// taken only by a reader who gets as far as the line that says so.
+const GENERATED_REFERENCE = CATALOGUE.split(path.sep).join("/");
 /** The two routes that carry a skill from a git repo to where an agent discovers it. */
 const INSTALL_ROUTES = ["/plugin marketplace add", "npx skills add"];
 
@@ -120,8 +125,9 @@ for (const rel of plugin.skills ?? []) {
     }
   });
 
-  // 4. It still points at the live reference rather than having become a copy of it.
-  for (const pointer of LIVE_REFERENCE) {
+  // 4. It still points at the live reference and at the generated grammar, rather than having become
+  // a copy of either.
+  for (const pointer of [...LIVE_REFERENCE, GENERATED_REFERENCE]) {
     if (!text.includes(pointer)) fail(`${file} no longer names \`${pointer}\``);
   }
 }

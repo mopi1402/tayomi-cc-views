@@ -54,8 +54,8 @@ If you can read this with `style`, everything works! 🎉🎉
  {{gold}}       {{/}}  {{gold}}▎{{/}} and write {{code}}view:yours{{/}} blocks: same name
  {{gold}}       {{/}}  {{gold}}▎{{/}} shadows any view, even this one
 
- {{green}}ASK    {{/}}  {{green}}▎{{/}} your agent writes your template for you: point
- {{green}}       {{/}}  {{green}}▎{{/}} it at {{code}}docs/CHEATSHEET.md{{/}} in this package
+ {{green}}ASK    {{/}}  {{green}}▎{{/}} your agent writes your template for you: the
+ {{green}}       {{/}}  {{green}}▎{{/}} {{code}}write-view{{/}} skill ships in the repo below
 
 # This box is deliberately static, but a real view is fed DATA. The worked
 # examples do not ship in the package (the tarball carries only dist/ and

@@ -26,15 +26,21 @@ markdown table, `hr` on its own line. If one fits, go straight to step 4 and wri
 
 ## 2. Read the language, never infer it
 
-The reference ships inside the package:
+The generated reference ships inside the package, dumped from the tables the engine executes:
 
 ```
-node_modules/@tayomi/cc-views/docs/CHEATSHEET.md
+node_modules/@tayomi/cc-views/agent/catalogue.json
 ```
 
-One page: a worked example, the data block's four line shapes, every directive, every substitution,
-every tag, and the two carriers. Read it rather than guessing a directive that reads plausibly, and
-read it rather than trusting this file, which teaches the PROCEDURE and not the grammar.
+Every directive with what it takes, what it opens and what closes it, the containers each is read
+in, the two carriers and the data block's line forms, every tag name with the suffixes a colour
+derives, and every view this package ships. It cannot drift from the engine: a word taken out of the
+table stops being read, and the render changes with it.
+
+Beside it, `docs/CHEATSHEET.md` is the same language written for a human, and carries the worked
+example the JSON has no room for. Read one of the two rather than guessing a directive that reads
+plausibly, and read one of the two rather than trusting this file, which teaches the PROCEDURE and
+not the grammar.
 
 Three rules break most first attempts, and none of them announces itself:
 

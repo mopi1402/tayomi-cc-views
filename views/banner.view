@@ -39,11 +39,11 @@
 # which the engine DERIVES from the chip filling the band, so they match it exactly
 # whatever the class and whatever the theme. Spending {{tone}} there is off by one shade
 # and was the bug: bold promotes a base-sixteen foreground to the bright slot, nothing
-# promotes a background. Every COLOUR fills a band: the severities (warning, error,
-# success, info, warn, fail, pass, high, med, low) and the plain names alike (red, green,
-# yellow, cyan, orange, gold, key, dim). What has no chip is furniture (`code`, `box_rule`)
-# and a host's own foreground tag: name one and the band vanishes, leaving two solid caps
-# around bare text. Do not.
+# promotes a background. EVERY tag name fills a band: the severities (warning, error,
+# success, info, warn, fail, pass, high, med, low), the plain names (red, green, yellow,
+# cyan, orange, gold, key, dim), and the furniture alike (`code`, `box_rule`). The fill and
+# the readable foreground over it are both DERIVED from the colour, so a host's own tag
+# bands the day it is registered, and nothing here has to be kept in step with the palette.
 #
 # The band is emitted on ONE line and nothing measures it: a body wider than the terminal
 # is soft-wrapped by the terminal itself, the colour continues on the next row and the
