@@ -18,16 +18,27 @@
 # and `content` last WHATEVER the arity, and `mid1` then `mid2` fill in between. The
 # header of the table decides, and every row below must hold that same count.
 #
-# The label column spends the TONE SLOT, so ONE file dresses every kind and no second
-# template ever has to exist:
+# The HEADER row spends the TONE SLOT, so ONE file dresses every kind and no second template
+# ever has to exist:
 #
-#   @{view:columns}                 the default below, key
+#   @{view:columns}                 the default below, teal
 #   @{view:columns, type:warning}   yellow, and the message still says what it IS
 #   @{view:columns, tone:dim}       grey, a look with no semantics attached
 #
-# A view only answers a kind if it SPENDS the slot, which is why this line does. Paint the
-# label with a colour of your own instead and `type:` stops changing anything, by design:
-# only a template writes presentation.
+# The ink is on the header and NOT on the label column, which is the whole difference with
+# lines.view, and it follows the direction the eye reads in: a bar runs down the page, so a
+# column is read DOWNWARDS from the word that names it, and that word is its header. Where
+# lines.view rules ACROSS, an element is read along its row and what names it is the label
+# at the head of that row. Same table, same two roles, and each view inks the axis it built.
+#
+# The tone is an INDEXED colour on purpose. Every base-sixteen name in this palette is
+# written `1;3x` (style.ts), and that weight is not decoration: it promotes the colour to
+# its bright slot. So "coloured but not bold" cannot be had by dropping the `1`, which would
+# change the hue, and is bought from the index side of the palette instead.
+#
+# A view only answers a kind if it SPENDS the slot, which is why the head line does. The
+# cost, pinned in the suite: a table wanting NO header (`| | |`) has nowhere to carry the
+# ink, so `type:` changes nothing at all there.
 #
 # The bar is the glyph the box draws its sides with, in the same dim grey, and it is the
 # only furniture here. Each separator is written as a CLOSED span, `{{dim}}  │  {{/}}`,
@@ -41,14 +52,18 @@
 # line says something: `| | |` is what markdown forces on a table wanting no header, so an
 # all-blank one draws nothing here and the list starts at the first row, exactly as before.
 # A header word longer than every value under it still widens its column, because the head
-# row joins the MEASUREMENT even when it is not iterated.
+# row joins the MEASUREMENT even when it is not iterated. Its ink is re-opened on EVERY cell
+# and that repetition is not idle: the bar's own closer is a full reset, so an ink opened
+# once at the head of the line dies on the first separator and every cell after it reads
+# plain. An opener is also what a hollow column can take away safely, having no closer
+# to leave orphaned behind it.
 #
 # The fenced form works too, for a message with no table to give: a `rows:` list whose
 # every item is `- <label> <the rest of the line>`. There every declared field is assigned,
 # so nothing is hollow and all four columns draw.
-@tone key
+@tone teal
 @fields rows label mid1 mid2 content
 @each rows cap="1/3"
-@head {{b}}${label}{{/}}{{dim}}  │  {{/}}${mid1}{{dim}}  │  {{/}}${mid2}{{dim}}  │  {{/}}${content}
-{{tone}}${label}{{/}}{{dim}}  │  {{/}}${mid1}{{dim}}  │  {{/}}${mid2}{{dim}}  │  {{/}}${content}
+@head {{b}}{{tone}}${label}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid1}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid2}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${content}{{/}}
+${label}{{dim}}  │  {{/}}${mid1}{{dim}}  │  {{/}}${mid2}{{dim}}  │  {{/}}${content}
 @end

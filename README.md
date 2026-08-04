@@ -127,37 +127,9 @@ Then ask for what you want drawn, in plain words. The agent does the rest.
 
 A fenced block's fallback is a code wall. The decorator flips the trade: **the payload is markdown that stands on its own**, so anywhere the hook does not run, the reader still gets a real block.
 
-Five views ship for it. Put this in your system prompt or `CLAUDE.md` and your agent has them all:
+Five views ship for it, and your agent needs to be told they exist. **Installed as a plugin, it already is**: a `SessionStart` hook puts [`agent/steering.md`](agent/steering.md) into the session on every start, clear, compact and resume, so there is nothing to paste and nothing that goes stale in a file of yours.
 
-```
-Draw what must not be missed, never ordinary prose. Put the decorator line
-IMMEDIATELY above ordinary markdown, with no blank line between them.
-
-Rows split into columns, two to four:
-@{view:columns}
-| Item | Info |
-| --- | --- |
-| Status | all green |
-
-The same table under @{view:lines} is ruled under each entry instead of split.
-
-One alert band:
-@{view:banner}
-> [!WARNING]
-> two flaky suites, publication is blocked
-
-One sentence set apart, colour only:
-@{view:quote, tone:gold}
-> the line you would have written anyway
-
-A rule on its own:
-@{view:hr}
-
-These five are the only view names. type: and tone: take any word, and an unknown
-one simply falls back: tone:gold, tone:dim, type:warning. In a banner prefer
-[!NOTE], [!TIP], [!IMPORTANT], [!WARNING] or [!CAUTION]: those five are the ones
-markdown itself draws as an alert box where this hook does not run.
-```
+Using the package alone, with a hook of your own, there is no `SessionStart` to carry it. Paste [`agent/steering.md`](agent/steering.md) into your system prompt or `CLAUDE.md` then: it is that same text, kept honest by a gate that reads every view name in it back against what this package actually ships.
 
 On screen the decorator line disappears, and the same markdown has two readings: the name you write is what picks one. The marker, `@text`, `type:`, `tone:` and the typed forms are specified in [the language reference](docs/architecture/view-language.md).
 

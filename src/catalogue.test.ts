@@ -139,7 +139,7 @@ describe("the views it ships", () => {
     expect(view("columns").lists).toEqual({
       rows: [LANG.FIELD_LABEL, ...LANG.MIDDLE_FIELDS, LANG.FIELD_CONTENT],
     });
-    expect(view("columns").tone).toBe("key");
+    expect(view("columns").tone).toBe("teal");
     expect(view("banner").lists).toEqual({});
   });
 });

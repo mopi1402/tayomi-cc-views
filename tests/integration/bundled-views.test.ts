@@ -231,10 +231,10 @@ describe("the columns view the package ships", () => {
   /** The glyph `box.ts` draws its sides with, and the dim it wears, both spelled here on purpose. */
   const BAR = "│";
   const DIM = "2";
-  const KEY = "1;36"; // what the template's own @tone resolves to
+  const TEAL = "38;5;37"; // what the template's own @tone resolves to, an INDEXED colour and so free of the weight
   const YELLOW = "1;33";
   const RESET = "0";
-  const BOLD = "1"; // the weight @head draws in, so a header never reads as a row
+  const BOLD = "1"; // the weight the header carries BESIDE its ink, an index taking none of its own
 
   const table = (deco: string, ...rows: string[]): string =>
     lines(deco, "| | |", "| --- | --- |", ...rows, "");
@@ -247,7 +247,9 @@ describe("the columns view the package ships", () => {
     expect(plain).toBe(`Status  ${BAR}  all green`);
     // Every glyph the box would add, absent: this view draws furniture and nothing else.
     for (const frame of ["╭", "╰", "─"]) expect(plain).not.toContain(frame);
-    expect(seqs(out)).toEqual([KEY, RESET, DIM, RESET]);
+    // The bar and nothing else. Where a column is read DOWNWARDS, what names it is its header, so the ink sits there
+    // and a body row carries none of its own.
+    expect(seqs(out)).toEqual([DIM, RESET]);
   });
 
   it("pads the label column so the bars line up, and continues an empty label", () => {
@@ -275,23 +277,61 @@ describe("the columns view the package ships", () => {
     }
   });
 
-  it("wears the same colours at every width: the tone once, then one dim bar per gap", () => {
-    // The furniture is the label's tone and nothing else. A width that opened a second
-    // colour, or left one hanging, would show here as an extra sequence.
+  it("wears one dim bar per gap at every width, and no ink of its own on a body", () => {
+    // The furniture is the bars and nothing else. A width that opened a colour, or left one hanging, would show here
+    // as an extra sequence.
     for (let n = MIN_COLUMNS; n <= MAX_COLUMNS; n++) {
       const gaps = Array.from({ length: n - 1 }, () => [DIM, RESET]).flat();
-      expect(seqs(render(wide(n)))).toEqual([KEY, RESET, ...gaps]);
+      expect(seqs(render(wide(n)))).toEqual(gaps);
     }
   });
 
   it("draws the table's own HEADER above the rows when it says something", () => {
     // What used to be lost: the header line was read for its column count and thrown away, so an author who titled
-    // their columns saw those words nowhere. Bold and untoned, so it never reads as one more entry of the list.
+    // their columns saw those words nowhere. Toned, because a column is read DOWNWARDS from the word that names it.
     const msg = lines("@{view:columns}", "| Largeur | Verdict |", "| --- | --- |", "| 4 | tient |", "");
     const drawn = plainly(render(msg)).split("\n");
     expect(drawn[0]).toBe(`Largeur  ${BAR}  Verdict`);
     expect(drawn[1]).toBe(`4        ${BAR}  tient`);
-    expect(seqs(render(msg))[0]).toBe(BOLD);
+    expect(seqs(render(msg)).slice(0, 2)).toEqual([BOLD, TEAL]);
+  });
+
+  /** `wide`, with its header cells NAMED, so the ink the head row draws in is readable. */
+  const titled = (n: number): string =>
+    lines(
+      "@{view:columns}",
+      ...[(i: number) => `h${i + 1}`, () => "---", (i: number) => `c${i + 1}`].map(
+        (fill) => `|${Array.from({ length: n }, (_, i) => ` ${fill(i)} |`).join("")}`
+      ),
+      ""
+    );
+
+  it("carries the ink AND the weight across the WHOLE header row, never its first cell alone", () => {
+    // The ink is RE-OPENED after every bar, and that is not belt-and-braces: the bar's own closer is a full reset, so
+    // an ink opened once at the head of the line dies on the first separator and every cell after it reads plain.
+    //
+    // Counted rather than compared whole, and that is deliberate: a cell CLOSES its own ink so the bar after it cannot
+    // inherit, which puts that closer at the head of the next cell's lead, and a hollow column keeps the closer while
+    // dropping the lead around it (substitute.ts). A narrow table therefore carries redundant resets, inert on screen.
+    // Pinning the byte stream would pin that artefact; what is pinned here is the contract it must not break.
+    for (let n = MIN_COLUMNS; n <= MAX_COLUMNS; n++) {
+      const s = seqs(render(titled(n)).split("\n")[0]);
+      expect(s.filter((code) => code === TEAL)).toHaveLength(n); // one per cell, never the first alone
+      expect(s.filter((code) => code === BOLD)).toHaveLength(n); // the weight rides along, cell for cell
+      expect(s.filter((code) => code === DIM)).toHaveLength(n - 1); // one bar per gap
+      expect(s.slice(0, 2)).toEqual([BOLD, TEAL]);
+    }
+  });
+
+  it("closes the ink BEFORE each bar, so a separator is never painted in the header's colour", () => {
+    // The defect this pins: `{{dim}}` opened while the ink is still open draws the bar dimmed in THAT colour instead
+    // of the grey the box draws its sides with, and the furniture then reads as loud as the words it separates.
+    for (let n = MIN_COLUMNS; n <= MAX_COLUMNS; n++) {
+      const s = seqs(render(titled(n)).split("\n")[0]);
+      s.forEach((code, i) => {
+        if (code === DIM) expect(s[i - 1]).toBe(RESET);
+      });
+    }
   });
 
   it("draws no header at all for the blank one markdown forces on a table wanting none", () => {
@@ -305,9 +345,22 @@ describe("the columns view the package ships", () => {
   });
 
   it("answers the kind, because it SPENDS the tone slot, and changes nothing else", () => {
+    // The slot moved WITH the ink: the header is what spends it now, so the kind is answered on a table that has one.
+    const headed = (deco: string): string =>
+      lines(deco, "| Etat | Detail |", "| --- | --- |", ROW, "");
+    const warned = render(headed("@{view:columns, type:warning}"));
+    expect(seqs(warned).filter((code) => code === YELLOW)).toHaveLength(2); // both header cells, and nothing else
+    expect(seqs(warned)).not.toContain(TEAL); // the kind REPLACES the default, never joins it
+    expect(plainly(warned)).toBe(plainly(render(headed("@{view:columns}")))); // colour is the ONLY difference
+  });
+
+  it("says NOTHING of its kind on a table with no header, which is what moving the ink there costs", () => {
+    // Written down rather than discovered: the ink names the columns, and a table wanting no header (`| | |`) has
+    // nowhere to carry it. `type:` then changes not one sequence, where the label column used to answer for it. Flip
+    // this case the day the body is given a fallback; until then it is the honest price of the rule.
     const warned = render(table("@{view:columns, type:warning}", ROW));
-    expect(seqs(warned)).toEqual([YELLOW, RESET, DIM, RESET]);
-    expect(plainly(warned)).toBe(plainly(render(MSG))); // colour is the ONLY difference
+    expect(seqs(warned)).toEqual([DIM, RESET]);
+    expect(warned).toBe(render(MSG)); // not merely the same words: the very same bytes
   });
 
   it("refuses a QUOTE payload outright, the mirror of the banner refusing a table", () => {
@@ -327,9 +380,10 @@ describe("the lines view the package ships", () => {
   const DASH = "─";
   const RULE_TAG = "38;5;238"; // {{box_rule}}
   const BAR = "│"; // what this view must never draw
-  const KEY = "1;36"; // what the template's own @tone resolves to
+  const TEAL = "38;5;37"; // what the template's own @tone resolves to, an INDEXED colour and so free of the weight
   const YELLOW = "1;33";
   const RESET = "0";
+  const BOLD = "1"; // the weight @head draws in, so a header never reads as a row
 
   const table = (deco: string, ...rows: string[]): string =>
     lines(deco, "| | |", "| --- | --- |", ...rows, "");
@@ -377,6 +431,21 @@ describe("the lines view the package ships", () => {
     expect(drawn[2]).toBe("Status  all green");
   });
 
+  it("carries the weight across the WHOLE header row, never its first cell alone", () => {
+    // One span PER CELL and not one across the line, though this view separates its columns with blanks and a single
+    // span would cover them all. The reason is the screen rather than the bytes: a weight spanning the padding between
+    // cells reached the reader on its first cell only, where a cell that opens its own is drawn for every one of them.
+    for (let n = MIN_COLUMNS; n <= MAX_COLUMNS; n++) {
+      const cells = Array.from({ length: n }, (_, i) => `h${i + 1}`);
+      const row = `|${cells.map((_, i) => ` c${i + 1} |`).join("")}`;
+      const head = `|${cells.map((c) => ` ${c} |`).join("")}`;
+      const delim = `|${cells.map(() => " --- |").join("")}`;
+      const drawn = render(lines("@{view:lines}", head, delim, row, "")).split("\n")[0];
+      expect(seqs(drawn).filter((code) => code === BOLD)).toHaveLength(n);
+      for (const c of cells) expect(drawn).toContain(`\x1b[${BOLD}m${c}`); // every cell, its own opener
+    }
+  });
+
   it("fills the rule to the body it divides, never to the terminal", () => {
     // The bare container keeps the box's own width law. A rule running past its body would be furniture louder than
     // what it separates, and a rule that ignored the body would be the fixed run this view shipped before.
@@ -400,9 +469,10 @@ describe("the lines view the package ships", () => {
 
   it("recolours the labels on a kind and leaves the rules alone", () => {
     const warned = render(table("@{view:lines, type:warning}", ...ROWS));
-    // The rule is furniture and never spends the slot: only the label answers the kind.
-    expect(seqs(warned)).toEqual([YELLOW, RESET, RULE_TAG, RESET, YELLOW, RESET]);
-    expect(seqs(render(MSG))[0]).toBe(KEY);
+    // The rule is furniture and never spends the slot: only the label answers the kind. The weight rides in FRONT of
+    // the ink on every label, so the kind changes the colour and leaves that weight where it was.
+    expect(seqs(warned)).toEqual([BOLD, YELLOW, RESET, RULE_TAG, RESET, BOLD, YELLOW, RESET]);
+    expect(seqs(render(MSG)).slice(0, 2)).toEqual([BOLD, TEAL]);
     expect(plainly(warned)).toBe(plainly(render(MSG))); // colour is the ONLY difference
   });
 
