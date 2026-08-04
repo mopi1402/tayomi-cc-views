@@ -29,6 +29,28 @@ import { longestKey, printedWidth } from "./measure.js";
 export interface PadCtx {
   widths: Record<string, number>;
   tail?: string;
+  /** The declared fields NO item of this list carries. See hollowFields. */
+  hollow?: ReadonlySet<string>;
+}
+
+/**
+ * The declared fields NOT ONE item carries, whose column is drawn nowhere and whose separator would therefore be
+ * furniture around nothing.
+ *
+ * Measured over the WHOLE list and never per item, and that is the guarantee: a field one row happens to omit keeps its
+ * cell on every row, so ragged data still lines up. Only a column the data never had at all disappears, which is how one
+ * template draws a table of two, three or four columns without a conditional in the language.
+ */
+export function hollowFields(items: unknown[], fields: string[] | undefined): ReadonlySet<string> {
+  const hollow = new Set<string>();
+  if (!fields) return hollow;
+  for (const field of fields) {
+    const carried = items.some(
+      (item) => item != null && typeof item === "object" && field in item
+    );
+    if (!carried) hollow.add(field);
+  }
+  return hollow;
 }
 
 // The table a field is rendered through, read from the template line that substitutes it (`${field:tablename}`);

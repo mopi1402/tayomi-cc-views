@@ -133,7 +133,7 @@ Five views ship for it. Put this in your system prompt or `CLAUDE.md` and your a
 Draw what must not be missed, never ordinary prose. Put the decorator line
 IMMEDIATELY above ordinary markdown, with no blank line between them.
 
-Rows split into two columns:
+Rows split into columns, two to four:
 @{view:columns}
 | Item | Info |
 | --- | --- |

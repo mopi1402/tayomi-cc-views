@@ -39,7 +39,11 @@ The terminal size is invisible to a hook process (its stdout is a pipe), so the 
 
 ### Theme resolution order
 
-One colour depends on the theme Claude Code is drawing in: an inline code span. The host has no colour of its own for one, it spends its `permission` palette slot on it, and that slot holds a different value under each of its six themes. A pinned value is right in one of them, and on a light terminal the dark theme's periwinkle is barely legible.
+Two things depend on the theme Claude Code is drawing in.
+
+An inline code span: the host has no colour of its own for one, it spends its `permission` palette slot on it, and that slot holds a different value under each of its six themes. A pinned value is right in one of them, and on a light terminal the dark theme's periwinkle is barely legible.
+
+And the neutral pill, which is a SURFACE rather than a hue. Near-white reads as a bright band on a dark screen and as nothing at all on a light one, so it is the one fill in the palette that turns over with the terminal, carrying its ink across with it.
 
 The host answers this itself with the terminal background it read over OSC 11 at startup, and that answer never leaves its memory. Re-asking the terminal from a hook is not an option either: the query would have to go onto the tty the host is reading in raw mode, where the reply lands in whichever of the two reads first. So what resolves here is the DELIBERATE half, most deliberate first:
 
@@ -51,6 +55,14 @@ The host answers this itself with the terminal background it read over OSC 11 at
 Resolved once per process, since the theme cannot change under a hook that lives the length of one message.
 
 A session left on `theme: auto` in a terminal that sets no `COLORFGBG` therefore resolves to `dark` whatever the terminal looks like, because nothing is left to read. Pinning the host's theme, or setting `CC_VIEWS_THEME`, is what makes a light terminal legible.
+
+### The theme names the terminal, and a band overrules it
+
+The theme is not what a code span is coloured against: it is only how the engine learns what the TERMINAL looks like. A span drawn inside a filled band stands on that band, not on the terminal, and the band is the surface that decides.
+
+So the ink is resolved where the span is written, against the innermost open tag that fills. Measured on the neutral pill, the terminal's own value scored a contrast of 1.62 against it, which is a colour no reader can find; the value for the other side scores 3.80. A band on the opposite side from the terminal therefore takes the COUNTERPART theme's value, its variant kept, so an `ansi` or daltonized reader is never handed the palette they went out of their way not to be shown.
+
+Nothing here is a second palette. The two values are the host's own, for the two surfaces, and a host that registers `code` through `extendTags` owns the name outright and is asked nothing.
 
 ## `extendTags`: the palette
 
@@ -113,7 +125,7 @@ What an inlined engine will NOT do is fall back on YOUR `views/`. It sits one ho
 The engine is fail-open EVERYWHERE: a failure never crashes and never blanks the screen, it shows the original text. The raw block on screen IS the error report. Walk the causes:
 
 - **A fenced block shows raw, fences and all.** The view's name resolved to no file on `viewsPath` (check the name and the dirs, remembering the LAST dir is read unconditionally); or the body parsed to ZERO fields ("raw over hollow": a non-empty block the parser cannot read at all is shown, not rendered empty); or the template resolved none of the block's fields, so nothing it drew could have come from them (a field named only inside a loop over an absent list counts as unread, since the render never reached it); or the template threw mid-render.
-- **A decorated zone shows raw, decorator line included.** The token is malformed (an unknown attribute, anything not `@{view:` at line start); or the payload is neither of the two shapes (a two-column table with header, delimiter and at least one data row; or a blockquote followed by a blank line); or the named template names none of the fields the payload carries, which is how a view refuses a payload shape by not reading it; or every field it does name arrived blank; or the template is unknown. The separator between the view name and its attributes is NOT a cause: a comma, whitespace, or both all parse.
+- **A decorated zone shows raw, decorator line included.** The token is malformed (an unknown attribute, anything not `@{view:` at line start); or the payload is neither of the two shapes (a table of two to four columns with header, delimiter and at least one data row, every row the width the header set; or a blockquote followed by a blank line); or the named template names none of the fields the payload carries, which is how a view refuses a payload shape by not reading it; or every field it does name arrived blank; or the template is unknown. The separator between the view name and its attributes is NOT a cause: a comma, whitespace, or both all parse.
 - **Nothing renders at all, and the hook may never have run.** Check the hook's command path FIRST: a bare relative path (`./node_modules/.bin/...`) is not resolved for a hook command, so the hook never runs and nothing on screen says so. Use the placeholder Claude Code substitutes, `${CLAUDE_PROJECT_DIR}/...` in a project's settings, `${CLAUDE_PLUGIN_ROOT}/...` in a plugin's. `/hooks` lists what is registered, and `claude --debug` shows a hook firing and what it returned. (Confirmed here on 2026-07-31, Claude Code 2.1.220, by an A/B in a throwaway project: identical fresh sessions, the relative form rendered nothing, the placeholder form rendered.)
 - **Nothing renders, but the hook did run.** The message carries none of the engagement markers (` ```view: `, `@{view:`), so the engine returns `null` and the host's own rendering stands. That is by design: returning text would flatten the host's markdown.
 - **The box wraps at a surprising column.** Walk the width resolution order above: a number in options wins over the env var, which wins over any probe.

@@ -3,7 +3,7 @@
 
 import { CODE_TICK, TAG_CLOSE, TAG_OPEN } from "./data/markup.js";
 import { INERT_MARK, RESUME_MARK, SPAN_MARK, dropControl } from "./data/marks.js";
-import { activeTheme, type Theme } from "./platform/theme.js";
+import { activeTheme, counterpart, isLight, slotIsDark, type Theme } from "./platform/theme.js";
 
 export { CODE_TICK, RESUME_MARK, SPAN_MARK };
 
@@ -30,6 +30,18 @@ const RGB_SEL = "2";
 const EXT_SPAN: Record<string, number> = { [INDEX_SEL]: 3, [RGB_SEL]: 5 };
 const SGR = /^\x1b\[([0-9;]*)m$/;
 const PARAM = ";";
+const BOLD = "1";
+// A base-sixteen FOREGROUND, and the slot each parameter names. The bright run continues the same sixteen, which is why
+// it starts eight in.
+const FG_FIRST = 30;
+const FG_LAST = 37;
+const FG_BRIGHT_FIRST = 90;
+const FG_BRIGHT_LAST = 97;
+const BRIGHT_TO_SLOT = 8;
+
+/** The terminal this process draws into, asked ONCE: a hook lives the length of one message and the answer costs disk. */
+const THEME = activeTheme();
+const TERMINAL_IS_LIGHT = isLight(THEME);
 
 /** Rounded, then clamped. A NaN would spell the word into the sequence, so it takes the floor. */
 const BYTE_LAST = 255;
@@ -46,6 +58,16 @@ export const ansi256 = (n: number): string =>
 /** A colour named by its PIXELS. */
 export const rgb = (r: number, g: number, b: number): string =>
   `${ESC}[${EXT_FG}${PARAM}${RGB_SEL}${PARAM}${byte(r)}${PARAM}${byte(g)}${PARAM}${byte(b)}m`;
+
+// The two ends of the 256-colour cube, which the theme does not repaint: whatever palette the terminal was handed, these
+// two are still the darkest and the lightest thing it can draw.
+const CUBE_BLACK = 16;
+const CUBE_WHITE = 231;
+
+/** A filled pill: ink and fill in one sequence, so the pair can only ever be swapped together. */
+const pill = (ink: number, fill: number): string =>
+  `${ESC}[${BOLD}${PARAM}${EXT_FG}${PARAM}${INDEX_SEL}${PARAM}${byte(ink)}` +
+  `${PARAM}${EXT_BG}${PARAM}${INDEX_SEL}${PARAM}${byte(fill)}m`;
 
 // Every raw sequence written ONCE; the semantic tags below ALIAS these.
 const BASE: Record<string, string> = {
@@ -71,7 +93,11 @@ const BASE: Record<string, string> = {
   navy: ansi256(25),
   salmon: ansi256(209),
   mint: ansi256(121),
-  chip: `${ESC}[1;38;5;16;48;5;231m`,
+  // The one fill in this table that TURNS OVER with the terminal. Every other colour here is a hue, visible on either
+  // background; this one is the neutral pill, and a neutral is only neutral against something. Near-white reads as a
+  // bright band on a dark screen and as nothing at all on a light one, where the ink is all that survives. Swapping the
+  // pair keeps the band at the same contrast and carries its ink across with it.
+  chip: TERMINAL_IS_LIGHT ? pill(CUBE_WHITE, CUBE_BLACK) : pill(CUBE_BLACK, CUBE_WHITE),
 };
 
 // EVERY colour a tone may name must have a chip: a template may spend it as a SURFACE (banner.view fills a band with
@@ -106,6 +132,16 @@ const CODE_INK: Record<Theme, string> = {
   "dark-daltonized": rgb(153, 204, 255),
 };
 
+// A span's ink is chosen against the FILL UNDER IT, never against the theme, and the theme's only job is to say what
+// that fill is when nothing is open, namely the terminal itself. A code span inside the neutral pill used to take the
+// terminal's value and land at a contrast of 1.62 against it, which is a colour no reader can find.
+//
+// The counterpart is what a fill on the other side asks for: the value the host would have used had the terminal been
+// that way round. Keeping the VARIANT is the point of pairing rather than picking two fixed colours, or an `ansi` or
+// daltonized reader would get, inside a band, the one palette they went out of their way not to be shown.
+const CODE_ON_LIGHT = CODE_INK[TERMINAL_IS_LIGHT ? THEME : counterpart(THEME)];
+const CODE_ON_DARK = CODE_INK[TERMINAL_IS_LIGHT ? counterpart(THEME) : THEME];
+
 const BG = "_bg";
 const CAP = "_cap";
 const TONE = "tone";
@@ -127,12 +163,20 @@ const TAGS: Record<string, string> = {
   error: BASE.red,
   success: BASE.green,
   info: NEUTRAL,
-  // Resolved ONCE, here: the theme cannot change under a hook, which lives the length of one message, and a host
-  // embedding the engine already holds this palette process-wide.
-  [CODE]: CODE_INK[activeTheme()],
+  // The value for a span sitting on the TERMINAL, which is the only fill this table can know about. A span inside a
+  // band is resolved by renderTags, the one storey that holds the stack of what is open under it.
+  [CODE]: TERMINAL_IS_LIGHT ? CODE_ON_LIGHT : CODE_ON_DARK,
   title: BASE.chip,
   box_rule: `${ESC}[38;5;238m`,
-  box_title: `${ESC}[1;97m`,
+  // The other name in this palette with no colour of its own to fall back on, and the second thing a light terminal
+  // swallowed. Bright white is a SLOT, so on a light screen it is roughly the background and the title goes with it.
+  //
+  // Its replacement is the WEIGHT alone, which is the smallest thing that answers and the only one that stays true: the
+  // title then takes the terminal's own foreground, whatever the reader chose it to be. Two candidates were worse. The
+  // black slot cannot carry the bold, since bold promotes a base-sixteen foreground to its bright slot and `1;30` comes
+  // out grey on white, the defect the caps already paid for. The cube's black survives that, but it names PIXELS, so it
+  // would derive a chip and `box_title` would fill on one terminal and not the other.
+  box_title: TERMINAL_IS_LIGHT ? BASE.b : `${ESC}[1;97m`,
   // semantic filled-background chips
   pass_bg: GREEN_CHIP,
   warn_bg: YELLOW_CHIP,
@@ -310,7 +354,6 @@ const CONTRAST_FLOOR = 0.05;
 const WHITE_LUMINANCE = 1;
 const INK_DARK = "30";
 const INK_LIGHT = "97";
-const BOLD = "1";
 
 /** The ink that contrasts MORE against a colour, which is the only choice a chip makes. */
 function inkOn(rgb: number[]): string {
@@ -322,6 +365,46 @@ function inkOn(rgb: number[]): string {
   const onDark = (l + CONTRAST_FLOOR) / CONTRAST_FLOOR;
   const onLight = (WHITE_LUMINANCE + CONTRAST_FLOOR) / (l + CONTRAST_FLOOR);
   return onDark > onLight ? INK_DARK : INK_LIGHT;
+}
+
+/** Which side of the palette a MEASURABLE colour sits on, asked of inkOn so no second threshold can disagree with it. */
+const colourIsLight = (rgb: number[]): boolean => inkOn(rgb) === INK_DARK;
+
+/**
+ * Which side the fill of a chip sits on, or undefined for a sequence that names no foreground.
+ *
+ * Read off the INK rather than the fill, and that is the whole trick: half the chips here fill with a base-sixteen slot,
+ * whose pixels belong to the theme and can never be measured. The ink beside it is the verdict already reached about
+ * that fill, by hand for the six declared chips and by inkOn for every derived one, so reading it asks a question that
+ * has an answer in both cases instead of one that only works for pixels.
+ */
+function fillIsLight(seq: string): boolean | undefined {
+  const m = SGR.exec(seq);
+  if (m == null) return undefined;
+  const p = m[1].split(PARAM);
+  for (let i = 0; i < p.length; ) {
+    const n = Number(p[i]);
+    if (n === EXT_FG || n === EXT_BG) {
+      const span = EXT_SPAN[p[i + 1]] ?? 0;
+      if (span === 0 || i + span > p.length) return undefined;
+      if (n === EXT_FG) {
+        const body = p.slice(i + 1, i + span);
+        const ink = body[0] === INDEX_SEL ? indexRgb(Number(body[1])) : body.slice(1).map(Number);
+        if (ink == null || ink.some((c) => !Number.isInteger(c))) return undefined;
+        // The INK's side, so the fill under it is the other one.
+        return !colourIsLight(ink);
+      }
+      i += span;
+      continue;
+    }
+    const base = n >= FG_FIRST && n <= FG_LAST;
+    const bright = n >= FG_BRIGHT_FIRST && n <= FG_BRIGHT_LAST;
+    if (base || bright) {
+      return slotIsDark(bright ? n - FG_BRIGHT_FIRST + BRIGHT_TO_SLOT : n - FG_FIRST);
+    }
+    i += 1;
+  }
+  return undefined;
 }
 
 /**
@@ -469,9 +552,37 @@ export function popSpan(open: string[]): void {
  * Nothing open resolves to a PLAIN RESET, which is what makes a span outside any styled region render as it did before
  * these marks existed.
  */
+/**
+ * The side of the surface a span is drawn ON: the innermost open tag that FILLS, or undefined where the line stands on
+ * the terminal itself. Innermost first, because a band inside a band is the one the reader actually sees.
+ */
+function surfaceIsLight(open: readonly string[]): boolean | undefined {
+  for (let i = open.length - 1; i >= 0; i--) {
+    const name = open[i];
+    if (name === SPAN_MARK) continue;
+    const seq = resolveTag(name);
+    // capOf is what "this sequence fills" MEANS here, and asking it is what keeps a foreground from being read as one.
+    if (seq === undefined || capOf(seq) === undefined) continue;
+    return fillIsLight(seq);
+  }
+  return undefined;
+}
+
+/**
+ * A tag resolved WHERE it is written, which for every name but one is the same as resolving it anywhere.
+ *
+ * `code` is the exception because it names a colour that has to be legible, never a colour that is a choice: it is the
+ * host's own value for the surface underneath, and the surface is only knowable from the stack. A host that shadowed the
+ * name owns it outright and is asked nothing.
+ */
+function resolveOpen(name: string, open: readonly string[]): string | undefined {
+  if (name !== CODE || Object.prototype.hasOwnProperty.call(EXTENDED, CODE)) return resolveTag(name);
+  return (surfaceIsLight(open) ?? TERMINAL_IS_LIGHT) ? CODE_ON_LIGHT : CODE_ON_DARK;
+}
+
 function resumeTags(open: string[]): string {
   popSpan(open);
-  return open.reduce((seq, name) => seq + (resolveTag(name) ?? ""), R);
+  return open.reduce((seq, name) => seq + (resolveOpen(name, open) ?? ""), R);
 }
 
 /**
@@ -505,7 +616,7 @@ export function renderTags(s: string): string {
     }
     // The alternation's discriminator: only the tag branch captures a name.
     if (name === undefined) return resumeTags(open);
-    const seq = resolveTag(name);
+    const seq = resolveOpen(name, open);
     if (seq === undefined) return m; // unknown, so it reaches the screen as text and opens nothing
     trackTag(open, name);
     return seq;

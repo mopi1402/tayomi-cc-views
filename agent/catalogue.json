@@ -233,6 +233,8 @@
       "fields": [
         "rows",
         "label",
+        "mid1",
+        "mid2",
         "content"
       ],
       "selectedBy": "a first line starting with |",
@@ -337,6 +339,8 @@
       "spends": [
         "content",
         "label",
+        "mid1",
+        "mid2",
         "rows"
       ],
       "tone": "key",
@@ -344,6 +348,8 @@
       "lists": {
         "rows": [
           "label",
+          "mid1",
+          "mid2",
           "content"
         ]
       }
@@ -366,6 +372,8 @@
       "spends": [
         "content",
         "label",
+        "mid1",
+        "mid2",
         "rows"
       ],
       "tone": "key",
@@ -373,6 +381,8 @@
       "lists": {
         "rows": [
           "label",
+          "mid1",
+          "mid2",
           "content"
         ]
       }

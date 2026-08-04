@@ -13,7 +13,16 @@ import { cutStreamingDecorated, DECORATOR_HINT } from "./decorator.js";
 import { VIEW_EXT } from "../template/load.js";
 import { ANSI_RE, tagMark } from "../style.js";
 import { hasControlMark } from "../data/marks.js";
-import { EACH, END, FIELDS, TEXT, TONE } from "../data/language.js";
+import {
+  EACH,
+  END,
+  FIELDS,
+  MAX_COLUMNS,
+  MIDDLE_FIELDS,
+  MIN_COLUMNS,
+  TEXT,
+  TONE,
+} from "../data/language.js";
 import { SCRATCH_DIR } from "../data/markup.js";
 
 const ESC = "\x1b";
@@ -48,8 +57,19 @@ const FENCE = "```";
 const EMPTY_HEADER = "| | |";
 const DELIM = "| --- | --- |";
 const KV_ROW = "| k | v |";
-// A table too wide for the carrier, spelled once for both tests that need one.
-const THREE_COLS = ["| a | b | c |", "| --- | --- | --- |", "| 1 | 2 | 3 |"];
+
+/** A pipe row of `n` cells, each filled by its index, so a table of any width is one call. */
+const pipeRow = (n: number, fill: (i: number) => string): string =>
+  `|${Array.from({ length: n }, (_, i) => ` ${fill(i)} |`).join("")}`;
+/** Header, delimiter and one data row, at the width asked for. */
+const wideTable = (n: number): string[] => [
+  pipeRow(n, (i) => `h${i + 1}`),
+  pipeRow(n, () => "---"),
+  pipeRow(n, (i) => String(i + 1)),
+];
+// One column PAST the ceiling, derived from it: raising the ceiling moves this fixture with it instead of leaving a
+// literal behind that no longer names anything too wide.
+const TOO_WIDE = wideTable(MAX_COLUMNS + 1);
 
 // The fixture names, written once: every write() below must agree with every decorator() call in the tests.
 const ITEM = "item";
@@ -84,6 +104,20 @@ const write = (dir: string, name: string, body: string): void =>
   fs.writeFileSync(path.join(dir, name), body);
 
 write(second, viewFile(ITEM), rowsView("{{cyan}}${label}{{/}}" + SEP + "${content}", ' cap="1/3"'));
+// A view declaring the WIDEST row: the two anchors with every middle name between them, which is what one file has to
+// declare to draw two, three or four columns.
+const WIDE = "wide";
+const WIDE_FIELDS = [...MIDDLE_FIELDS, "content"];
+write(
+  second,
+  viewFile(WIDE),
+  lines(
+    `${FIELDS} rows label ${WIDE_FIELDS.join(" ")}`,
+    `${EACH} rows`,
+    "{{cyan}}${label}{{/}}" + WIDE_FIELDS.map((f) => `${SEP}\${${f}}`).join(""),
+    END
+  )
+);
 // A STATIC view, reading no field at all: what a payload-less decorator summons.
 const STATIC = "static";
 write(second, viewFile(STATIC), "the box is the template\n");
@@ -273,6 +307,71 @@ describe("a decorated payload", () => {
     expect(out).toContain(`${RESET}${CYAN}${BOLD} here`);
     // The label is capped, so what follows is the cut and not the rest of the word.
     expect(out).toContain(`here${RESET}${CYAN} b`);
+  });
+});
+
+describe("a table wider than two columns", () => {
+  const plainly = (...rows: string[]): string =>
+    transform(lines(decorator(WIDE), ...rows), undefined, true, undefined, options).replace(
+      ANSI_RE,
+      ""
+    );
+  /** Header, delimiter and one data row of `n` cells, the payload as an author types it. */
+  const table = (n: number): string[] => [
+    pipeRow(n, () => ""),
+    pipeRow(n, () => "---"),
+    pipeRow(n, (i) => `c${i + 1}`),
+  ];
+  /** The cells of that row as they read once drawn, side by side. */
+  const shown = (n: number): string =>
+    Array.from({ length: n }, (_, i) => `c${i + 1}`).join(SEP);
+
+  it("hands every arity from two to four to the template, in the order the row wrote them", () => {
+    for (let n = MIN_COLUMNS; n <= MAX_COLUMNS; n++) {
+      expect(plainly(...table(n))).toContain(shown(n));
+    }
+  });
+
+  it("anchors the two ENDS, so a wider table renames no column a narrow template reads", () => {
+    // The first cell is `label` and the last is `content` at every width: the fixture's own line is written against
+    // those two names, and a three-column row still lands the LAST cell in the last slot rather than in a middle one.
+    expect(plainly(...table(MIN_COLUMNS + 1))).toContain(`c1${SEP}c2${SEP}c3`);
+    expect(plainly(...table(MIN_COLUMNS + 1))).not.toContain(`c1${SEP}c3`);
+  });
+
+  it("drops a column NO row carries, and the separator written just before it", () => {
+    // The narrow table under the widest template: two of its four slots are hollow, so what is left is exactly the
+    // two-column render, with no orphaned bar and no blank cell held open.
+    expect(plainly(...table(MIN_COLUMNS))).toContain(`c1${SEP}c2\n`);
+  });
+
+  it("keeps the label's own colour closed when the column after it is hollow", () => {
+    // The closer sits at the head of the dropped run, and it belongs to the column BEFORE: dropping it with the rest
+    // would paint the whole line in the label's tone.
+    const out = transform(
+      lines(decorator(WIDE), ...table(MIN_COLUMNS)),
+      undefined,
+      true,
+      undefined,
+      options
+    );
+    expect(out).toContain(`${CYAN}c1${RESET}`);
+  });
+
+  it("refuses a RAGGED table whole, rather than guessing which column a cell lost", () => {
+    const ragged = [...table(MIN_COLUMNS + 1), pipeRow(MIN_COLUMNS, (i) => `d${i + 1}`)];
+    const msg = lines(decorator(WIDE), ...ragged);
+    expect(transform(msg, undefined, true, undefined, options)).toBe(msg);
+  });
+
+  it("refuses a delimiter of a different width than the header it sits under", () => {
+    const msg = lines(
+      decorator(WIDE),
+      pipeRow(MIN_COLUMNS + 1, () => ""),
+      pipeRow(MIN_COLUMNS, () => "---"),
+      pipeRow(MIN_COLUMNS + 1, (i) => `c${i + 1}`)
+    );
+    expect(transform(msg, undefined, true, undefined, options)).toBe(msg);
   });
 });
 
@@ -498,7 +597,7 @@ describe("what the carrier must NOT touch", () => {
   it("leaves an undecorated table byte-identical, whatever its rows or columns", () => {
     for (const table of [
       lines("| left | right |", DELIM, "| value | **bold** |"),
-      lines(...THREE_COLS),
+      lines(...TOO_WIDE),
       lines("| l | r |", DELIM, "| 1 | 2 |", "| 3 | 4 |"),
     ]) {
       expect(transform(table, undefined, true, undefined, options)).toBe(table);
@@ -542,7 +641,7 @@ describe("fail-open, decorator line included", () => {
 
   it("shows the raw zone on a malformed payload", () => {
     for (const msg of [
-      lines(decorator(ITEM), ...THREE_COLS), // three columns
+      lines(decorator(ITEM), ...TOO_WIDE), // one column past the ceiling
       lines(decorator(ITEM), EMPTY_HEADER, DELIM), // no data row
       lines(decorator(ITEM), "no table at all"), // a payload no parser here claims
     ]) {

@@ -34,7 +34,7 @@ The hook process cannot see the terminal: its stdout is a pipe, the environment 
 
 ## 4. The decorator's trade
 
-The fenced block has a structural flaw: reread from the transcript (where the hook does not run), it turns back into a wall of code. The decorator flips the deal. The payload IS ordinary markdown (a two-column table), and a single line above it names the template and the semantic type. Fallback becomes native by construction: at worst, the reader sees a normal table under one extra line.
+The fenced block has a structural flaw: reread from the transcript (where the hook does not run), it turns back into a wall of code. The decorator flips the deal. The payload IS ordinary markdown (a table of two to four columns), and a single line above it names the template and the semantic type. Fallback becomes native by construction: at worst, the reader sees a normal table under one extra line.
 
 Two principles follow.
 

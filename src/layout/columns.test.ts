@@ -11,7 +11,7 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_KEY } from "../data/language.js";
 import { CHIP_CHROME } from "../style.js";
-import { columnWidths } from "./columns.js";
+import { columnWidths, hollowFields } from "./columns.js";
 import { STYLE_TABLE, TEXT_TABLE, type Tables } from "./../scope.js";
 import { printedWidth } from "./measure.js";
 
@@ -117,5 +117,32 @@ describe("what is never measured", () => {
   it("skips an item that is not an object, rather than counting its text", () => {
     const widths = columnWidths(["a very long plain string"], FIELDS, UNMAPPED, MAPS);
     expect(widths).toEqual({ state: 0 });
+  });
+});
+
+describe("the columns the data never had", () => {
+  const WIDE = ["state", "extra", "text"];
+
+  it("names the field NOT ONE item carries", () => {
+    expect([...hollowFields([item("ok")], WIDE)]).toEqual(["extra"]);
+  });
+
+  it("keeps a field ONE item carries, so ragged data still lines up", () => {
+    // The measure is over the whole list on purpose: a column a single row fills is a column every row must hold open,
+    // or that row's cells slide left past the ones above it.
+    const items = [item("ok"), { ...item("failing"), extra: "here" }];
+    expect(hollowFields(items, WIDE).has("extra")).toBe(false);
+  });
+
+  it("counts a field carried EMPTY as carried: absent and blank are not the same answer", () => {
+    expect(hollowFields([{ ...item("ok"), extra: "" }], WIDE).size).toBe(0);
+  });
+
+  it("names nothing for a list that declares no fields at all", () => {
+    expect(hollowFields(["a string item"], undefined).size).toBe(0);
+  });
+
+  it("skips an item that is not an object, rather than reading a field off it", () => {
+    expect([...hollowFields(["a string item"], WIDE)]).toEqual(WIDE);
   });
 });

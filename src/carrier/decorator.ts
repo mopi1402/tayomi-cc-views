@@ -21,6 +21,9 @@ import {
   FIELD_TONE,
   FIELD_TYPE,
   MARKER_SOURCE,
+  MAX_COLUMNS,
+  MIN_COLUMNS,
+  middleField,
 } from "../data/language.js";
 import {
   DECORATOR_CLOSE,
@@ -104,15 +107,45 @@ function lineStarts(lines: string[]): number[] {
   return starts;
 }
 
-// A two-column row. Each cell accepts an escaped pipe (`\|`), which markdown renders correctly: the POC's cell pattern
-// rejected it and silently fell back.
-const ROW_RE = /^[ \t]*\|((?:\\\||[^|\n])*)\|((?:\\\||[^|\n])*)\|[ \t]*$/;
-const DELIM_RE = /^[ \t]*\|[ \t]*:?-+:?[ \t]*\|[ \t]*:?-+:?[ \t]*\|[ \t]*$/;
+// One cell, which accepts an escaped pipe (`\|`), since markdown renders that correctly: the POC's cell pattern rejected
+// it and silently fell back. A cell holds no bare pipe, so the arities below cannot overlap and a row matches exactly
+// one of them.
+const CELL = String.raw`((?:\\${TABLE_SOURCE}|[^${TABLE_SOURCE}\n])*)`;
+const DELIM_CELL = String.raw`[ \t]*:?-+:?[ \t]*`;
+
+/** A row of `n` cells, and the delimiter under it. One source, so the two can never disagree on what a column is. */
+const rowSource = (n: number, cell: string): string =>
+  `^[ \t]*${TABLE_SOURCE}${Array.from({ length: n }, () => cell).join(TABLE_SOURCE)}${TABLE_SOURCE}[ \t]*$`;
+
+/** Every arity a table payload may have, narrowest first. The order is what makes the search below deterministic. */
+const ARITIES: readonly number[] = Array.from(
+  { length: MAX_COLUMNS - MIN_COLUMNS + 1 },
+  (_, i) => MIN_COLUMNS + i
+);
+const ROW_RES = new Map(ARITIES.map((n) => [n, re(rowSource(n, CELL))]));
+const DELIM_RES = new Map(ARITIES.map((n) => [n, re(rowSource(n, DELIM_CELL))]));
+
 /** That escape, unwritten: inside a cell the pipe is content, not a column boundary. */
 const ESCAPED_PIPE_RE = /\\\|/g;
 
 /** One payload row as the template receives it. Keyed from the language, so a rename is one edit there. */
-type DecoratedRow = Record<typeof FIELD_LABEL | typeof FIELD_CONTENT, string>;
+type DecoratedRow = Record<string, string>;
+
+/**
+ * The cells of one row under the field names a template spends. The two ENDS are anchored, first cell to `label` and
+ * last to `content`, so widening a table never renames the columns a two-column template was written against; whatever
+ * sits between them takes the numbered middle names.
+ */
+function rowFields(cells: string[]): DecoratedRow {
+  const row: DecoratedRow = {
+    [FIELD_LABEL]: cell(cells[0]),
+    [FIELD_CONTENT]: cell(cells[cells.length - 1]),
+  };
+  cells.slice(1, -1).forEach((raw, i) => {
+    row[middleField(i + 1)] = cell(raw);
+  });
+  return row;
+}
 
 // PER SPAN, so the emphasis survives every re-render from the transcript and nothing is added the message did not
 // carry. Whole-cell bolding is what buried the POC.
@@ -140,19 +173,25 @@ function cell(raw: string): string {
 }
 
 /**
- * The payload parsed as rows, or null when it is not the shape v1 supports: a two-column pipe table, header row
- * MANDATORY (its cells may be empty), delimiter row, at least one data row. An empty label cell continues the label
+ * The payload parsed as rows, or null when it is not a shape this supports: a pipe table of two to four columns, header
+ * row MANDATORY (its cells may be empty), delimiter row, at least one data row. An empty label cell continues the label
  * above and stays empty here: how a continuation looks is the template's business.
+ *
+ * The HEADER fixes the arity and every line below must hold it, markdown's own rule. A ragged table is refused whole
+ * rather than padded, because guessing which column a missing cell belonged to is exactly the invention the fail-open
+ * exists to avoid: the author then reads their table as markdown wrote it.
  */
 function parseRows(lines: string[]): DecoratedRow[] | null {
   if (lines.length < 3) return null;
-  if (!ROW_RE.test(lines[0])) return null;
-  if (!DELIM_RE.test(lines[1])) return null;
+  const arity = ARITIES.find((n) => ROW_RES.get(n)!.test(lines[0]));
+  if (arity === undefined) return null;
+  if (!DELIM_RES.get(arity)!.test(lines[1])) return null;
+  const rowRe = ROW_RES.get(arity)!;
   const rows: DecoratedRow[] = [];
   for (const line of lines.slice(2)) {
-    const m = line.match(ROW_RE);
+    const m = line.match(rowRe);
     if (!m) return null;
-    rows.push({ [FIELD_LABEL]: cell(m[1]), [FIELD_CONTENT]: cell(m[2]) });
+    rows.push(rowFields(m.slice(1, arity + 1)));
   }
   return rows;
 }

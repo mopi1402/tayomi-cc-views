@@ -154,3 +154,45 @@ describe("a capped column", () => {
     expect(padded("${s}", { s: "abcdef" }, pad)).toBe("abcdef");
   });
 });
+
+describe("a hollow column", () => {
+  // The rule that lets ONE template draw a variable number of columns: a field the list never carried takes down the
+  // text leading up to it, which is exactly where a separator is written.
+  const SEP = "  |  ";
+  const LINE = `\${a}${SEP}\${b}${SEP}\${c}`;
+  const ctx = (...hollow: string[]): PadCtx => ({ tail: "c", widths: {}, hollow: new Set(hollow) });
+
+  it("takes the separator written just before it down with it", () => {
+    expect(padded(LINE, { a: "1", c: "3" }, ctx("b"))).toBe(`1${SEP}3`);
+  });
+
+  it("leaves the line whole when nothing is hollow", () => {
+    expect(padded(LINE, { a: "1", b: "2", c: "3" }, ctx())).toBe(`1${SEP}2${SEP}3`);
+  });
+
+  it("takes several in a row, and the trailing text still lands", () => {
+    expect(padded(LINE + " END", { a: "1", c: "3" }, ctx("b", "c"))).toBe("1 END");
+  });
+
+  it("is nothing without a hollow set: an absent field pads its cell as it always did", () => {
+    expect(padded(LINE, { a: "1", c: "3" }, { tail: "c", widths: { b: 4 } })).toBe(
+      `1${SEP}    ${SEP}3`
+    );
+  });
+
+  it("never reaches a line outside a list, which has no pad context at all", () => {
+    expect(plain(LINE, { a: "1", c: "3" })).toBe(`1${SEP}${SEP}3`);
+  });
+
+  it("keeps a closer the dropped run does not open, which belongs to the column before", () => {
+    // `{{tone}}${a}{{/}}` puts that closer at the head of the NEXT column's lead. Dropping it with the rest would leave
+    // the tone open across the whole line, the one way this rule could repaint a row.
+    const line = `{{c}}\${a}{{/}}{{dim}}${SEP}{{/}}\${b}{{dim}}${SEP}{{/}}\${c}`;
+    expect(padded(line, { a: "1", c: "3" }, ctx("b"))).toBe(`{{c}}1{{/}}{{dim}}${SEP}{{/}}3`);
+  });
+
+  it("drops a separator it DOES open and close, leaving no stray closer behind", () => {
+    const line = `\${a}{{dim}}${SEP}{{/}}\${b}`;
+    expect(padded(line, { a: "1" }, { tail: "b", widths: {}, hollow: new Set(["b"]) })).toBe("1");
+  });
+});

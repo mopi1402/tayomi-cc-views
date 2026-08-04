@@ -1,9 +1,14 @@
 // Which theme Claude Code is drawing in, which this process cannot see.
 //
-// It matters to exactly one colour: an inline code span. Claude Code resolves one through its `permission` palette slot
-// (`case"codespan":return no("permission",t)` in the 2.1.x bundle), and that slot holds a different value in each of the
-// six themes. A view pinning one of them is right in one theme and wrong in five, and on a light terminal the dark
-// theme's periwinkle is barely legible.
+// It matters to the two things this engine draws that have no colour of their own to fall back on.
+//
+// An inline code span: Claude Code resolves one through its `permission` palette slot (`case"codespan":return
+// no("permission",t)` in the 2.1.x bundle), and that slot holds a different value in each of the six themes. A view
+// pinning one of them is right in one theme and wrong in five, and on a light terminal the dark theme's periwinkle is
+// barely legible.
+//
+// And the neutral pill, which is a SURFACE: near-white reads as a bright band on a dark screen and as nothing at all on
+// a light one, so it is the one fill in the palette that has to turn over with the terminal.
 //
 // Claude Code itself answers `kln ?? COLORFGBG ?? "dark"`, where `kln` is the terminal background it read over OSC 11 at
 // startup. That first source is out of reach: it lives in the host's memory, never on disk (probed 2026-08-04, nothing
@@ -26,8 +31,35 @@ export type Theme = (typeof THEMES)[number];
 /** What the host itself falls back to, so an engine that knows nothing draws what the host draws. */
 export const DEFAULT_THEME: Theme = "dark";
 
+// Every name the host ships is a SIDE, then a variant. The side is the only part of a name this engine reasons about,
+// and deriving it rather than listing the light ones is what keeps a seventh theme from needing an edit here.
+const LIGHT_SIDE = "light";
+const DARK_SIDE = "dark";
+const SIDE_SEP = "-";
+
 /** The two themes a background LUMINANCE can name: it separates light from dark and says nothing finer. */
-const BY_BACKGROUND: Record<string, Theme> = { light: "light", dark: "dark" };
+const BY_BACKGROUND: Record<string, Theme> = { [LIGHT_SIDE]: LIGHT_SIDE, [DARK_SIDE]: DARK_SIDE };
+
+/** Whether a theme paints on a LIGHT background. */
+export const isLight = (theme: Theme): boolean => theme.split(SIDE_SEP)[0] === LIGHT_SIDE;
+
+/**
+ * The same theme on the OTHER side, its variant kept.
+ *
+ * What it is FOR: a colour drawn on a fill that opposes the terminal (light ink inside a dark band) needs the value the
+ * host would have used had the terminal been that way round. Tabled rather than spelled from the name, so the type
+ * proves the pairing is total and a seventh theme cannot be added without one.
+ */
+const COUNTERPART: Record<Theme, Theme> = {
+  light: "dark",
+  "light-ansi": "dark-ansi",
+  "light-daltonized": "dark-daltonized",
+  dark: "light",
+  "dark-ansi": "light-ansi",
+  "dark-daltonized": "light-daltonized",
+};
+
+export const counterpart = (theme: Theme): Theme => COUNTERPART[theme];
 
 // The host's own config, under the host's own names. Read and never written, and only for this one key.
 const CONFIG_DIR_ENV = "CLAUDE_CONFIG_DIR";
@@ -43,6 +75,13 @@ const SLOT_FIRST = 0;
 const SLOT_LAST = 15;
 const DARK_SLOT_LAST = 6;
 const DARK_SLOT_GREY = 8;
+
+/**
+ * Whether a base-sixteen SLOT is on the dark side, read exactly as the host reads it: the palette's own dark half plus
+ * its grey. Exported because the same question is asked of an ink written as a slot, whose pixels belong to the theme
+ * and can never be measured.
+ */
+export const slotIsDark = (slot: number): boolean => slot <= DARK_SLOT_LAST || slot === DARK_SLOT_GREY;
 
 const isTheme = (v: unknown): v is Theme => THEMES.includes(v as Theme);
 
@@ -75,7 +114,7 @@ function fromBackground(env: NodeJS.ProcessEnv): Theme | undefined {
   if (field === undefined || field === "") return undefined;
   const slot = Number(field);
   if (!Number.isInteger(slot) || slot < SLOT_FIRST || slot > SLOT_LAST) return undefined;
-  return BY_BACKGROUND[slot <= DARK_SLOT_LAST || slot === DARK_SLOT_GREY ? "dark" : "light"];
+  return BY_BACKGROUND[slotIsDark(slot) ? DARK_SIDE : LIGHT_SIDE];
 }
 
 /**

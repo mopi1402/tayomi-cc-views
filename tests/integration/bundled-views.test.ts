@@ -21,6 +21,7 @@ import { transform } from "../../src/pipeline.js";
 import { ANSI_RE } from "../../src/style.js";
 import { printedWidth } from "../../src/layout/measure.js";
 import { BLOCK_HINT, FENCE, VIEW_EXT } from "../../src/data/markup.js";
+import { MAX_COLUMNS, MIN_COLUMNS } from "../../src/data/language.js";
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BUNDLED = path.join(REPO, "views");
@@ -86,7 +87,6 @@ describe("the banner the package ships", () => {
     dim: { cap: "38;5;250", fill: "30;48;5;250" },
     blue: { cap: "34", fill: "1;97;44" },
     magenta: { cap: "35", fill: "1;97;45" },
-    chip: { cap: "38;5;231", fill: "1;38;5;16;48;5;231" },
     // Named indices, whose chip and cap BOTH derive from the index: one line each in the
     // palette, and the ink measured rather than picked. Light fills take black, dark
     // ones white, which is the only decision a derived chip makes.
@@ -104,6 +104,23 @@ describe("the banner the package ships", () => {
         seqs: [cap, RESET, fill, RESET, cap, RESET],
       });
     }
+  });
+
+  it("caps the NEUTRAL band with its own fill, whichever way round the terminal put it", () => {
+    // Out of the table above, and the only class that has to be: every other entry there is a HUE, the same band on
+    // either screen, where the neutral turns over with the terminal (a near-white pill is a bright band on a dark
+    // screen and nothing at all on a light one). Naming its sequences here would be a copy of a value style.ts owns.
+    // The template's contract survives as a relation, and it is the whole of what this case is for: the cap names an
+    // index, and the band FILLS with that same index.
+    const CAP_INDEX = "38;5;";
+    const FILL_INDEX = "48;5;";
+    const PARAM = ";";
+    const [cap, , fill] = seqs(render(band("chip")));
+    expect(cap.startsWith(CAP_INDEX)).toBe(true);
+    const index = cap.slice(CAP_INDEX.length);
+    expect(fill.endsWith(FILL_INDEX + index)).toBe(true);
+    // And the ink is the OTHER end, or the pill is a band written in the colour it is filled with.
+    expect(fill).not.toContain(`${CAP_INDEX}${index}${PARAM}`);
   });
 
   it("dresses an undecorated band as chip, the documented default", () => {
@@ -240,6 +257,38 @@ describe("the columns view the package ships", () => {
     expect(plain.split("\n")[2].trimStart().startsWith(BAR)).toBe(true); // no label on the third row
   });
 
+  /** A payload of `n` columns, its cells numbered so the ORDER they land in is readable. */
+  const wide = (n: number): string =>
+    lines(
+      "@{view:columns}",
+      ...[() => "", () => "---", (i: number) => `c${i + 1}`].map(
+        (fill) => `|${Array.from({ length: n }, (_, i) => ` ${fill(i)} |`).join("")}`
+      ),
+      ""
+    );
+
+  it("draws every width from two to four columns, one bar between each pair", () => {
+    for (let n = MIN_COLUMNS; n <= MAX_COLUMNS; n++) {
+      const cells = Array.from({ length: n }, (_, i) => `c${i + 1}`);
+      expect(plainly(render(wide(n)))).toBe(cells.join(`  ${BAR}  `));
+    }
+  });
+
+  it("wears the same colours at every width: the tone once, then one dim bar per gap", () => {
+    // The furniture is the label's tone and nothing else. A width that opened a second
+    // colour, or left one hanging, would show here as an extra sequence.
+    for (let n = MIN_COLUMNS; n <= MAX_COLUMNS; n++) {
+      const gaps = Array.from({ length: n - 1 }, () => [DIM, RESET]).flat();
+      expect(seqs(render(wide(n)))).toEqual([KEY, RESET, ...gaps]);
+    }
+  });
+
+  it("hands back the raw markdown one column past the ceiling", () => {
+    // The fail-open the whole carrier is built on: too wide to draw is still a valid
+    // table, and the reader gets the one markdown already renders.
+    expect(render(wide(MAX_COLUMNS + 1))).toBe(wide(MAX_COLUMNS + 1));
+  });
+
   it("answers the kind, because it SPENDS the tone slot, and changes nothing else", () => {
     const warned = render(table("@{view:columns, type:warning}", ROW));
     expect(seqs(warned)).toEqual([YELLOW, RESET, DIM, RESET]);
@@ -287,6 +336,20 @@ describe("the lines view the package ships", () => {
     ]);
     expect(plain).not.toContain(BAR);
     for (const frame of ["╭", "╰", "│"]) expect(plain).not.toContain(frame);
+  });
+
+  it("takes every width the carrier hands it, separated by blanks and never by a bar", () => {
+    // Widened for the same reason columns.view was: the carrier now claims up to four
+    // columns, and a middle one this view did not declare would be dropped in silence.
+    for (let n = MIN_COLUMNS; n <= MAX_COLUMNS; n++) {
+      const cells = Array.from({ length: n }, (_, i) => `c${i + 1}`);
+      const row = `|${cells.map((c) => ` ${c} |`).join("")}`;
+      const head = `|${cells.map(() => " |").join("")}`;
+      const delim = `|${cells.map(() => " --- |").join("")}`;
+      const plain = plainly(render(lines("@{view:lines}", head, delim, row, "")));
+      expect(plain).toBe(cells.join("  "));
+      expect(plain).not.toContain(BAR);
+    }
   });
 
   it("fills the rule to the body it divides, never to the terminal", () => {

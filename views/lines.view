@@ -41,14 +41,20 @@
 # An empty label does NOT continue the element above, the way it does in columns.view: a
 # rule lands between the two. Write the long content on one row instead, and let it wrap.
 #
+# Two to four columns, like columns.view and for the same reason: the carrier hands this
+# view whatever the table had, and a middle column it did not declare would be dropped in
+# silence. They are separated by BLANKS and not by a bar, which is this view's whole
+# contract, and a column no row carries takes its own blanks down with it (the hollow rule,
+# src/layout/columns.ts), so a two-column table draws exactly what it always drew.
+#
 # The content column is the LAST field, emitted verbatim, so it carries whatever emphasis
 # the message wrote. A quote handed to this view resolves nothing, and the raw markdown
 # shows instead.
 @tone key
-@fields rows label content
+@fields rows label mid1 mid2 content
 @box bare
 @each rows cap="1/3" bullet=""
-{{tone}}${label}{{/}}  ${#bullet}${content}
+{{tone}}${label}{{/}}  ${mid1}  ${mid2}  ${#bullet}${content}
 @rule
 @end
 @endbox

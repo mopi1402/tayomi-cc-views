@@ -7,7 +7,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { THEME_ENV } from "../data/markup.js";
-import { DEFAULT_THEME, THEMES, activeTheme, type Theme } from "./theme.js";
+import {
+  DEFAULT_THEME,
+  THEMES,
+  activeTheme,
+  counterpart,
+  isLight,
+  slotIsDark,
+  type Theme,
+} from "./theme.js";
 
 const CONFIG_DIR_ENV = "CLAUDE_CONFIG_DIR";
 const SETTINGS_FILE = "settings.json";
@@ -112,5 +120,38 @@ describe("a source that declines rather than guesses", () => {
     for (let slot = 0; slot <= 15; slot++) {
       expect(activeTheme(env({ [BACKGROUND_ENV]: `15;${slot}` }))).toBe(dark.includes(slot) ? "dark" : "light");
     }
+  });
+});
+
+// What a colour drawn on a surface has to ask, once it stops asking about the terminal. The sweeps read THEMES rather
+// than a list of their own: a seventh theme must fail here, not pass by being unmentioned.
+describe("the side a theme is on, and the theme on the other side", () => {
+  it("puts every theme on exactly one side", () => {
+    const light = THEMES.filter(isLight);
+    expect(light.length + THEMES.filter((t) => !isLight(t)).length).toBe(THEMES.length);
+    // Both sides are populated, or a "side" is a word for nothing and every pairing below is trivially satisfied.
+    expect(light.length).toBeGreaterThan(0);
+    expect(light.length).toBeLessThan(THEMES.length);
+  });
+
+  it("crosses the side and comes back, whatever it was handed", () => {
+    for (const theme of THEMES) {
+      expect(isLight(counterpart(theme))).toBe(!isLight(theme));
+      expect(counterpart(counterpart(theme))).toBe(theme);
+    }
+  });
+
+  it("keeps the VARIANT, which is the whole reason it is a pairing and not two fixed names", () => {
+    // An ansi or daltonized reader went out of their way not to be shown the other palette, and a band is no place to
+    // hand it to them anyway.
+    expect(counterpart("light")).toBe("dark");
+    expect(counterpart("light-ansi")).toBe("dark-ansi");
+    expect(counterpart("light-daltonized")).toBe("dark-daltonized");
+  });
+
+  it("reads a base-sixteen slot the way the host reads it, grey and boundary included", () => {
+    // The sweep above proves the WHOLE range through COLORFGBG; what this pins is the exported predicate's own edges,
+    // now that a chip's ink is read through it and never reaches that path.
+    expect([slotIsDark(6), slotIsDark(7), slotIsDark(8), slotIsDark(9)]).toEqual([true, false, true, false]);
   });
 });

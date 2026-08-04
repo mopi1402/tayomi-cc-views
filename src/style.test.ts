@@ -51,9 +51,11 @@ const FURNITURE = "b";
 const COLOURS = [
   "red", "green", "yellow", "blue", "magenta", "cyan", "orange", "gold", "dim", "key",
   "purple", "violet", "pink", "teal", "aqua", "lime", "brown", "navy", "salmon", "mint",
-  // Furniture fills too, now that a chip derives: only `box_title` stays out, being a base-sixteen slot (bright white)
-  // rather than a colour this process can measure.
-  "chip", "title", "code", "box_rule",
+  // Furniture fills too, now that a chip derives. Two names stay out, for ONE reason: a chip is derived by measuring a
+  // colour, and neither of them names pixels in every theme. `box_title` is a weight or a slot and never a colour at
+  // all. `code` is the host's own value for a code span, which two of the six themes spell as a base-sixteen slot
+  // (`ansi` names the reader's palette on purpose, and that is exactly what cannot be measured).
+  "chip", "title", "box_rule",
   "pass", "warn", "fail", "high", "med", "low",
   "warning", "error", "success", "info",
 ];
@@ -281,6 +283,64 @@ describe("a span the ENGINE inserted", () => {
   });
 });
 
+// The one colour in the palette that is not a CHOICE: a code span has to stay legible, and legibility is a fact about
+// the surface under it. Every case here is written as a RELATION, never as a sequence: the value depends on the theme
+// the suite happens to run in, and a fixture naming one would go red the day a developer switches theme.
+describe("the ink of a code span, chosen against the surface under it", () => {
+  /** A body no escape sequence can contain, so the ink is everything written before it. */
+  const BODY = "BODY";
+  /** A fill whose ink is dark, hence a LIGHT surface. */
+  const LIGHT_FILL = "warn_bg";
+  /** A fill whose ink is white, hence a DARK surface. */
+  const DARK_FILL = "fail_bg";
+  /** The neutral pill, whose whole job is to turn over with the terminal. */
+  const PILL = "chip";
+  /** A tag that colours a FOREGROUND and fills nothing, so a walk must step over it. */
+  const NO_FILL = "dim";
+
+  const seq = (name: string): string => renderTags(tagMark(name));
+
+  /** The sequence a code span OPENS with, drawn under the tags `over` (outermost first). */
+  const inkUnder = (...over: string[]): string => {
+    const prefix = over.map(tagMark).join("");
+    const drawn = renderTags(markCode(`${prefix}\`${BODY}\``));
+    return drawn.slice(over.map(seq).join("").length, drawn.indexOf(BODY));
+  };
+
+  it("gives a light surface and a dark one two different inks", () => {
+    expect(inkUnder(LIGHT_FILL)).not.toBe(inkUnder(DARK_FILL));
+  });
+
+  it("spends the TERMINAL's own ink on whichever of the two the terminal is", () => {
+    // Which one that is depends on the theme, and the suite must not care: what it pins is that the terminal is one of
+    // the two surfaces and never a third value of its own.
+    expect([inkUnder(LIGHT_FILL), inkUnder(DARK_FILL)]).toContain(inkUnder());
+  });
+
+  it("draws the neutral pill on the side OPPOSITE the terminal, so the band is a band on either screen", () => {
+    // The pill is the reason this whole rule exists: filled near-white and read with the terminal's own ink, a span
+    // inside it measured 1.62 against its own background.
+    expect(inkUnder(PILL)).not.toBe(inkUnder());
+  });
+
+  it("reads the INNERMOST surface, which is the one a reader actually sees", () => {
+    expect(inkUnder(LIGHT_FILL, DARK_FILL)).toBe(inkUnder(DARK_FILL));
+    expect(inkUnder(DARK_FILL, LIGHT_FILL)).toBe(inkUnder(LIGHT_FILL));
+  });
+
+  it("steps over a tag that colours a foreground and fills NOTHING", () => {
+    // The near-miss that decides the walk: read as a surface, `dim` would answer for a band that was never opened.
+    expect(inkUnder(NO_FILL)).toBe(inkUnder());
+    expect(inkUnder(DARK_FILL, NO_FILL)).toBe(inkUnder(DARK_FILL));
+  });
+
+  it("hands the surface back after the span, not the terminal's version of it", () => {
+    const drawn = renderTags(markCode(`${tagMark(DARK_FILL)}a \`${BODY}\` b`));
+    expect(drawn.endsWith(` b`)).toBe(true);
+    expect(drawn).toContain(`${BODY}${renderTags(RESET_MARK)}${seq(DARK_FILL)} b`);
+  });
+});
+
 describe("the tone slot", () => {
   it("picks the first name of the chain the palette knows", () => {
     expect(toneClass(undefined, KNOWN, "fail")).toBe(KNOWN);
@@ -360,14 +420,29 @@ describe("a cap, the foreground painting a chip's own fill", () => {
     gold: `${ESC}[38;5;220m`,
     blue: `${ESC}[34m`,
     magenta: `${ESC}[35m`,
-    // The white chip: its cap is the WHITE it fills with, never the black it writes in.
-    chip: `${ESC}[38;5;231m`,
   };
 
   it("matches the fill of every class a band can wear, none of them bold", () => {
     for (const [cls, expected] of Object.entries(FILLED)) {
       expect(renderTags(tagMark(cls + CAP))).toBe(expected);
     }
+  });
+
+  /** The two ends of the 256 cube, which is what the neutral pill is made of: one of them on the other. */
+  const CUBE_ENDS = [16, 231];
+  const FILLS = ";48;5;";
+
+  it("paints the neutral pill's cap with the pill's FILL, whichever way round the terminal put it", () => {
+    // Out of the table above, and it is the only class that has to be: every other entry there is a HUE, the same
+    // sequence on either screen, where the pill turns over with the terminal. Naming its two sequences would be a copy
+    // of a value style.ts owns, going red the day a developer switches theme rather than the day a cap breaks. What
+    // holds in every theme is the RELATION, which is also the defect this describe exists for: the cap is the colour
+    // the pill fills with, never the one it writes in.
+    const pill = renderTags(tagMark("chip"));
+    const fill = CUBE_ENDS.find((n) => pill.endsWith(`${FILLS}${n}m`));
+    expect(fill).toBeDefined();
+    expect(renderTags(tagMark("chip" + CAP))).toBe(ansi256(fill as number));
+    expect(renderTags(tagMark("chip" + CAP))).not.toBe(ansi256(CUBE_ENDS.find((n) => n !== fill) as number));
   });
 
   it("carries a BRIGHT background over to the bright foreground, ten below", () => {
@@ -623,6 +698,9 @@ describe("extendTags", () => {
     expect(extendTags({ [CODE]: MAGENTA }).shadowed).toEqual([CODE]);
     expect(renderCode("a `b`")).toBe(`a ${MAGENTA}b${renderTags(RESET_MARK)}`);
     expect(renderTags(markCode("a `b`"))).toBe(renderCode("a `b`"));
+    // Inside a band too: the surface is what the ENGINE's own value is chosen against, and a name the engine no longer
+    // owns is spent as written, wherever it is written.
+    expect(renderTags(markCode(`${tagMark("warn_bg")}\`b\``))).toContain(MAGENTA);
   });
 });
 

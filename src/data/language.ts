@@ -62,6 +62,28 @@ export const FIELD_LABEL = "label";
 export const FIELD_CONTENT = "content";
 export const FIELD_TYPE = "type";
 
+/**
+ * How many columns a table payload may carry. Two is markdown's smallest real table and the shape every view here was
+ * written against; four is where a terminal line stops being readable, and a wider table fails open as the markdown it
+ * already is.
+ */
+export const MIN_COLUMNS = 2;
+export const MAX_COLUMNS = 4;
+
+/**
+ * The cells BETWEEN the first and the last, which keep their own names because the two ends are anchored: the first cell
+ * is always `label` and the last always `content`, whatever the arity, so a template written for two columns keeps
+ * meaning what it meant. Numbered from one, `mid1` then `mid2`.
+ */
+const MIDDLE_STEM = "mid";
+export const middleField = (n: number): string => MIDDLE_STEM + String(n);
+
+/** Every middle name the widest table can spend, so a reader never has to count them out. */
+export const MIDDLE_FIELDS: readonly string[] = Array.from(
+  { length: MAX_COLUMNS - MIN_COLUMNS },
+  (_, i) => middleField(i + 1)
+);
+
 /** The field a block names a tone CLASS with, outranking its kind. Read with FIELD_TYPE wherever a tone is resolved. */
 export const FIELD_TONE = "tone";
 
@@ -71,7 +93,7 @@ export const PAYLOAD_QUOTE = "quote";
 
 /** Which shape yields which fields. Spending one of them is what says a view expects that payload. */
 export const PAYLOAD_FIELDS: Record<string, readonly string[]> = {
-  [PAYLOAD_TABLE]: [FIELD_ROWS, FIELD_LABEL, FIELD_CONTENT],
+  [PAYLOAD_TABLE]: [FIELD_ROWS, FIELD_LABEL, ...MIDDLE_FIELDS, FIELD_CONTENT],
   [PAYLOAD_QUOTE]: [FIELD_CONTENT, FIELD_TYPE],
 };
 

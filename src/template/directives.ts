@@ -41,7 +41,7 @@ import {
 import { IN_BOX, IN_BOX_BARE, IN_EACH, TOP, readsHere } from "../data/grammar.js";
 import { asideMainWidth, composeAside, type AsideAlign } from "../layout/aside.js";
 import { BOX_CHROME, flowBody, frameBox } from "../layout/box.js";
-import { columnWidths, type PadCtx } from "../layout/columns.js";
+import { columnWidths, hollowFields, type PadCtx } from "../layout/columns.js";
 import { HANG_MARK, RULE_MARK } from "../layout/marks.js";
 import { printedWidth } from "../layout/measure.js";
 import { lookup, nameField, peek, stringify, type Tables, type Scope } from "../scope.js";
@@ -309,6 +309,7 @@ export function renderBody(
       const fields = objectLists[eachField];
       const pad: PadCtx = {
         widths: columnWidths(items, fields, inner, tables),
+        hollow: hollowFields(items, fields),
         tail: fields && fields.length > 0 ? fields[fields.length - 1] : undefined,
       };
       if (capDecl) {

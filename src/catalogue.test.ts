@@ -134,7 +134,11 @@ describe("the views it ships", () => {
 
   it("carries what a view declares, under the names a template reaches them by", () => {
     expect(view("banner").tables).toEqual({ kinds: TEXT_TABLE });
-    expect(view("columns").lists).toEqual({ rows: ["label", "content"] });
+    // The two ANCHORS with every middle name between them: one file draws two to four columns, so the declaration a
+    // catalogue publishes is the widest one, whatever a given table happens to fill.
+    expect(view("columns").lists).toEqual({
+      rows: [LANG.FIELD_LABEL, ...LANG.MIDDLE_FIELDS, LANG.FIELD_CONTENT],
+    });
     expect(view("columns").tone).toBe("key");
     expect(view("banner").lists).toEqual({});
   });
