@@ -37,6 +37,21 @@ The terminal size is invisible to a hook process (its stdout is a pipe), so the 
 3. `width` as a function, else a `ps`-probe of the ancestor terminal (cached in `stateDir` with a 3-second TTL). Probed or sourced columns lose a 4-column margin and clamp to 40..180 (readability, not safety).
 4. No terminal found: 100.
 
+### Theme resolution order
+
+One colour depends on the theme Claude Code is drawing in: an inline code span. The host has no colour of its own for one, it spends its `permission` palette slot on it, and that slot holds a different value under each of its six themes. A pinned value is right in one of them, and on a light terminal the dark theme's periwinkle is barely legible.
+
+The host answers this itself with the terminal background it read over OSC 11 at startup, and that answer never leaves its memory. Re-asking the terminal from a hook is not an option either: the query would have to go onto the tty the host is reading in raw mode, where the reply lands in whichever of the two reads first. So what resolves here is the DELIBERATE half, most deliberate first:
+
+1. `CC_VIEWS_THEME`: one of `light`, `light-ansi`, `light-daltonized`, `dark`, `dark-ansi`, `dark-daltonized`. Any other word falls through rather than naming a guess.
+2. The `theme` key of the host's `settings.json`, under `CLAUDE_CONFIG_DIR` or `~/.claude`, when it NAMES one of those six. `auto` is not a theme name, so it falls through with no case of its own.
+3. `COLORFGBG`, read as the host reads it: the last field as a base-sixteen slot, `0..6` and `8` meaning a dark background. Most terminals never set it (Ghostty does not).
+4. `dark`, which is what the host itself falls back to.
+
+Resolved once per process, since the theme cannot change under a hook that lives the length of one message.
+
+A session left on `theme: auto` in a terminal that sets no `COLORFGBG` therefore resolves to `dark` whatever the terminal looks like, because nothing is left to read. Pinning the host's theme, or setting `CC_VIEWS_THEME`, is what makes a light terminal legible.
+
 ## `extendTags`: the palette
 
 The `{{tag}}` vocabulary is a PROCESS-GLOBAL registry, not a per-call option (the reason is in [architecture.md](architecture.md)). How a colour is spelled, and which spellings earn a chip and a cap for free, belong to [the language reference](view-language.md); what follows is what the CALL guarantees.

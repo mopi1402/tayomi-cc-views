@@ -55,4 +55,5 @@ export const VIEWS_DIR = VIEWS;
 const ENV_PREFIX = `CC_${VIEWS.toUpperCase()}_`;
 export const VIEWS_PATH_ENV = `${ENV_PREFIX}PATH`;
 export const WIDTH_ENV = `${ENV_PREFIX}WIDTH`;
+export const THEME_ENV = `${ENV_PREFIX}THEME`;
 export const SCRATCH_DIR = `cc-${VIEWS}`;

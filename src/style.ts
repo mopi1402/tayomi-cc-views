@@ -3,6 +3,7 @@
 
 import { CODE_TICK, TAG_CLOSE, TAG_OPEN } from "./data/markup.js";
 import { INERT_MARK, RESUME_MARK, SPAN_MARK, dropControl } from "./data/marks.js";
+import { activeTheme, type Theme } from "./platform/theme.js";
 
 export { CODE_TICK, RESUME_MARK, SPAN_MARK };
 
@@ -87,6 +88,24 @@ const GREY_CHIP = `${ESC}[30;48;5;250m`;
 
 const NEUTRAL = BASE.cyan;
 
+// Claude Code has no code-span colour of its own: it spends its `permission` slot on one
+// (`case"codespan":return no("permission",t)` in the 2.1.x bundle), and that slot holds a different value under each of
+// its six themes. Read slot by slot from the same bundle, so a view's code span matches the host's own line beside it.
+//
+// Two of the six name a base-sixteen SLOT rather than pixels, and neither is the palette's own `blue`: that one is bold,
+// and bold promotes a base-sixteen foreground to the bright slot, which would draw `light-ansi` in the colour that
+// `dark-ansi` asked for.
+const ANSI_BLUE = `${ESC}[34m`;
+const ANSI_BLUE_BRIGHT = `${ESC}[94m`;
+const CODE_INK: Record<Theme, string> = {
+  light: rgb(87, 105, 247),
+  "light-ansi": ANSI_BLUE,
+  "light-daltonized": rgb(51, 102, 255),
+  dark: rgb(177, 185, 249),
+  "dark-ansi": ANSI_BLUE_BRIGHT,
+  "dark-daltonized": rgb(153, 204, 255),
+};
+
 const BG = "_bg";
 const CAP = "_cap";
 const TONE = "tone";
@@ -108,9 +127,9 @@ const TAGS: Record<string, string> = {
   error: BASE.red,
   success: BASE.green,
   info: NEUTRAL,
-  // Claude Code uses no palette slot for code spans but the fixed periwinkle rgb(177,185,249), verified against the
-  // 2.1.x bundle. Truecolor, so a view's code span matches CC's own under every theme.
-  [CODE]: `${ESC}[38;2;177;185;249m`,
+  // Resolved ONCE, here: the theme cannot change under a hook, which lives the length of one message, and a host
+  // embedding the engine already holds this palette process-wide.
+  [CODE]: CODE_INK[activeTheme()],
   title: BASE.chip,
   box_rule: `${ESC}[38;5;238m`,
   box_title: `${ESC}[1;97m`,
