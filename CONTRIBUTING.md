@@ -12,6 +12,7 @@ Take the cheapest one that answers your question.
 | engine code, judged by a rule | `pnpm test` | seconds |
 | engine code, judged by the screen | `sandbox/` linked | `pnpm build` |
 | `files`, exports, bin | `pnpm verify:pack` | one pack |
+| `skills/write-view` | a marketplace on this directory, [target 3](docs/contributing/manual-checks.md) | add, install, restart |
 | the real TAYOMI plugin | Verdaccio, then the 4 steps below | slow, do it once |
 
 ## Setup
@@ -110,7 +111,8 @@ Then, from this repo:
 # 1. bump to a prerelease so nothing real is ever shadowed. The registry
 #    REFUSES a version it already holds, so this is once per ITERATION:
 #    `prerelease` walks rc.N to rc.N+1 on its own. The `version` hook writes
-#    the number into the two .claude-plugin/ manifests, which cannot import it.
+#    the number into the three files that cannot import it: the two
+#    .claude-plugin/ manifests and the welcome box's badge.
 #    A bare `pnpm version` commits and tags, which is what carries them;
 #    --no-git-tag-version leaves them staged for you to commit.
 pnpm version prerelease

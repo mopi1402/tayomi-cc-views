@@ -8,34 +8,38 @@
 
 *A production view from TAYOMI's own turn reports, drawn by this engine. Write your own `.view` and the quickstart below gets you there.*
 
-> The model never draws any of it. The agent writes a compact block of plain data, and a MessageDisplay hook dresses it on screen through a `.view` template you own. Presentation costs the model zero tokens, and the transcript keeps plain text.
+> The model never draws any of it.  
+> The agent writes a compact block of plain data.  
+> A MessageDisplay hook dresses it through a `.view` template you own.  
+> Presentation costs the model zero tokens, and the transcript keeps plain text.
 
 ## Features
 
-**✨ Boxes, columns, chips.**  
-Titled and badged boxes, aligned columns, coloured status chips, all from plain data.
+**✨ What matters gets seen.**  
+Titled frames, aligned rows, coloured chips: the answer stops looking like the scroll.
 
 **✨ Zero tokens on presentation** (minus one decorator line).  
-Only a template writes it: a tag resolves inside a view, never in a message, so the model names a template and hands it data, and can open no colour of its own.
+Not one extra token for the model: nothing that is drawn ever enters its context window.
 
-**✨ Templates you own.**  
-`.view` files resolved through ordered directories: name a file the same and you shadow any view, a plugin's included.
-
-**✨ Two carriers.**  
-A fenced `view:` block, or ONE DECORATOR LINE OVER MARKDOWN THAT STANDS ON ITS OWN: a table, or an alert quote. Where the hook does not run, each stays what it was.
-
-**✨ One template, any tone.**  
-`type:warning` or `tone:dim` recolours a view that spends the tone slot, where it stands, like sticking a class on it. No second file.
-
-**✨ Your palette.**  
-`extendTags` adds your own `{{tags}}` process-wide, measured and rendered alike, and yours shadow the built-ins.
+**✨ Nothing to write to start.**  
+Columns, ruled rows, bands, quotes and rules ship with the package. Yours come later.
 
 **✨ Fail-open.**  
-A failing view shows its original text in place, the rest of the message still renders. Never a blank.
+A failing view shows its original text in place, the rest still renders. Never a blank.
 
-## Use it in your project
+**✨ Block or markdown.**  
+A fenced `view:` block, or a decorator over markdown that survives without any hook.
 
-### Minimal setup
+**✨ Yours always wins.**  
+Ordered directories resolve `.view` files: name one the same and yours beats a plugin's.
+
+**✨ One template, any tone.**  
+`type:warning` or `tone:dim` recolours a view where it stands, like a class. No second file.
+
+**✨ Your palette.**  
+`extendTags` adds your own `{{tags}}` process-wide, and yours shadow the built-ins.
+
+## Minimal installation
 
 1. **Install:**
 
@@ -43,40 +47,48 @@ A failing view shows its original text in place, the rest of the message still r
    npm install -D @tayomi/cc-views
    ```
 
-2. **Wire the hook.** In your project's `.claude/settings.json` (or your plugin's `hooks/hooks.json`, same shape), then restart Claude Code:
+2. **Wire the hook** in your project's `.claude/settings.json` (or your plugin's `hooks/hooks.json`, same shape), then restart Claude Code:
 
    ```json
    {
      "hooks": {
        "MessageDisplay": [
-         {
-           "hooks": [
-             {
-               "type": "command",
-               "command": "${CLAUDE_PROJECT_DIR}/node_modules/.bin/cc-views-messagedisplay"
-             }
-           ]
-         }
+         { "hooks": [
+            { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/node_modules/.bin/cc-views-messagedisplay" }
+         ] }
        ]
      }
    }
    ```
 
-The `${CLAUDE_PROJECT_DIR}` placeholder is not decoration: a BARE relative path (`./node_modules/...`) is not resolved for a hook command, and the hook then never runs, silently, with nothing on screen to say so.
-
 3. **Copy/paste this prompt:**
 
-> Answer me "@{view:welcome}", nothing else.
+   ```
+   Answer me "@{view:welcome}", nothing else.
+   ```
 
-A coloured, titled box on screen closes the setup: it works. The welcome text lives in the template, so there is nothing to improvise wrong.
+   A coloured, titled box closes the setup. Press `Ctrl+O` (`Cmd+O` on macOS) to see the raw transcript: the model wrote one plain line. Ask for it again after any Claude Code update, and it says whether the hook is still alive.
 
-Then press `Ctrl+O` (`Cmd+O` on macOS) to see the raw transcript: the model actually wrote a single plain line. The dressing is display-only; the conversation the model sees carries no colours, no layout, no extra tokens.
+## Write your own view
 
-The `welcome` view ships inside the package and closes the search path, so it is always available (and yours to shadow like any view). Keep it around: after any Claude Code update, asking for `view:welcome` again tells you instantly whether the hook is still alive.
+### Use the skill
 
-### Customize your own
+The `write-view` skill is the **fastest** way: it teaches your agent the whole procedure, and it installs from this repo, not from npm:
 
-1. **Write a template.** A `.view` file in your project's `views/` directory, for example `views/demo.view` (this exact demo lives in [`examples/`](examples/demo.view)). Any other location works through `CC_VIEWS_PATH` (ordered dirs, PATH-like), and an earlier dir overrides a later one's view of the same name:
+```bash
+# as a plugin
+/plugin marketplace add mopi1402/tayomi-cc-views
+/plugin install cc-views@tayomi-cc-views
+
+# or straight into .claude/skills/
+npx skills add https://github.com/mopi1402/tayomi-cc-views
+```
+
+Then ask for what you want drawn, in plain words. The agent does the rest.
+
+### Or write it yourself
+
+1. **Write a template**, a `.view` file in your project's `views/` directory (this one is [`examples/demo.view`](examples/demo.view)):
 
    ```
    @map verdicts ok=pass warn=warn fail=fail
@@ -90,9 +102,9 @@ The `welcome` view ships inside the package and closes the search path, so it is
    @endbox
    ```
 
-2. **Teach the agent.** The engine renders nothing until the model writes its half of the contract. Put an instruction like this in your system prompt or skill:
+2. **Teach the agent.** Nothing draws until the model writes its half. Put this in your system prompt or `CLAUDE.md`:
 
-> When you report structured results, emit a fenced block whose language is `view:<name>` (for example ` ```view:demo `), carrying `key: value` lines and `key:` + `- item` lists. Write plain data, never colours or alignment. These views need no template of yours: `banner` and `quote` over a markdown quote, `columns` and `lines` over a markdown table, `hr` on its own line. The language itself is `node_modules/@tayomi/cc-views/docs/CHEATSHEET.md`, to read before writing a new `.view`. Asked for the welcome or health check view, reply with the single line `@{view:welcome}`.
+   > For a deploy check, emit a fenced block whose language is `view:demo`, carrying plain `key: value` lines and `key:` + `- item` lists.
 
 3. **Ask for a report.** The agent then writes:
 
@@ -107,45 +119,47 @@ The `welcome` view ships inside the package and closes the search path, so it is
    ```
    ````
 
-and the screen shows a bordered box titled `payments deploy` with a `staging` badge, one aligned row per check, each verdict as a coloured chip (`OK`, `WARN`, `FAIL`).
+   and the screen draws a box titled `payments deploy`, badged `staging`, one aligned row per check, each verdict a coloured chip. To learn the language by example, read [`views/welcome.view`](views/welcome.view): it is commented line by line, and your agent can read it too.
 
-To learn the language by example, read [`views/welcome.view`](views/welcome.view): it is commented line by line, and your agent can read it too before writing a view of its own.
+**Nothing here decides WHEN.** The instruction asks, it does not guarantee. For a view that must appear at a fixed moment, a turn's closing summary for instance, pair it with a Stop hook that refuses to end the turn while the block is missing. TAYOMI's own tl;dr is gated that way, and gives up after three attempts.
 
 ## Prefer plain markdown? Use the decorator
 
-A fenced block's fallback is a code wall. The decorator flips the trade: **the payload is markdown that stands on its own**, so anywhere the hook does not run, the reader still gets a real block. One line above it names the template (and optionally a semantic type).
+A fenced block's fallback is a code wall. The decorator flips the trade: **the payload is markdown that stands on its own**, so anywhere the hook does not run, the reader still gets a real block.
 
-A **table**, for rows, split by one vertical bar (`columns`) or ruled under each entry (`lines`):
+Five views ship for it. Put this in your system prompt or `CLAUDE.md` and your agent has them all:
 
 ```
-@{view:columns, type:warning}
+Draw what must not be missed, never ordinary prose. Put the decorator line
+IMMEDIATELY above ordinary markdown, with no blank line between them.
+
+Rows split into two columns:
+@{view:columns}
 | Item | Info |
 | --- | --- |
 | Status | all green |
-```
 
-An **alert quote**, for one band:
+The same table under @{view:lines} is ruled under each entry instead of split.
 
-```
+One alert band:
 @{view:banner}
 > [!WARNING]
 > two flaky suites, publication is blocked
-```
 
-A **plain quote**, when you want the quote itself and only its colour:
-
-```
+One sentence set apart, colour only:
 @{view:quote, tone:gold}
 > the line you would have written anyway
-```
 
-And a **rule on its own**, from a decorator line with no payload at all:
-
-```
+A rule on its own:
 @{view:hr}
+
+These five are the only view names. type: and tone: take any word, and an unknown
+one simply falls back: tone:gold, tone:dim, type:warning. In a banner prefer
+[!NOTE], [!TIP], [!IMPORTANT], [!WARNING] or [!CAUTION]: those five are the ones
+markdown itself draws as an alert box where this hook does not run.
 ```
 
-All five templates ship with the package, so none has to be created, and the four carrying data cover both payload shapes twice over. On screen the decorator line disappears: the table renders through `columns.view` as two columns split by the box's own grey bar and nothing else around them, or through `lines.view` as the same rows aligned the same way with a rule under each entry and no vertical anything; the marked quote renders through `banner.view` as a full-width coloured band whose word (`⚠ WARNING`) comes from that template's own table, or through `quote.view` as the same sentence behind one coloured bar, no word and no frame. Each shape therefore has two readings, and the name you write is what picks one. A kind recolours only a template that SPENDS the tone slot, which both of these do; a view naming its own colours instead ignores `type:` by design, because only a template writes presentation. The marker is one uppercase token and there is no other way to name a kind in a quote, which is what keeps it from becoming a label the model writes prose into.
+On screen the decorator line disappears, and the same markdown has two readings: the name you write is what picks one. The marker, `@text`, `type:`, `tone:` and the typed forms are specified in [the language reference](docs/architecture/view-language.md).
 
 What each degrades to, where the hook is absent:
 
@@ -154,8 +168,6 @@ What each degrades to, where the hook is absent:
 | Fenced `view:` block | a code wall | a code wall |
 | Table under a decorator | a native table, one stray line above it | a table, one stray line above it |
 | Alert quote under a decorator | a native alert box for `NOTE`, `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`; an ordinary quote otherwise | a quote whose first line names its kind |
-
-The marker, `@text`, `type:`, `tone:` and the typed forms are specified in [the language reference](docs/architecture/view-language.md).
 
 ## Use it in your plugin or framework
 
@@ -173,37 +185,15 @@ await runMessageDisplayHook(undefined, {
 
 `viewsPath` order is your policy: list the consumer's directory first and your users can shadow any of your views by simply naming a file the same. Append `bundledViewsDir()` last to keep `view:welcome` (the health check) resolvable through your hook too. For tests, `handleMessageDisplay(payload, host?, options?)` takes a parsed payload and returns the output string (or `null`) with no stdin/stdout anywhere. Width, state dir and the rest of `RenderOptions` are covered in the [integration reference](docs/architecture/display-host.md).
 
-## Let your agent write the templates
-
-The engine ships a skill, `write-view`, so the agent already knows the procedure: ask `cc-views dict`
-what this install resolves, prefer a bundled view to a new file, read the cheatsheet rather than guess
-a directive, and verify with `cc-views check` before handing anything back.
-
-It installs from this repo, not from the npm package, since a skill is discovered by convention and
-never found inside `node_modules`:
-
-```bash
-# as a plugin
-/plugin marketplace add mopi1402/tayomi-cc-views
-/plugin install cc-views@tayomi-cc-views
-
-# or straight into .claude/skills/
-npx skills add https://github.com/mopi1402/tayomi-cc-views
-```
-
-Without it, the one line in your `CLAUDE.md` above does most of the same work: the skill adds the
-"check before you answer" step, which is the one an agent skips.
-
 ## Documentation
 
-- [The `write-view` skill](skills/write-view/SKILL.md): the procedure an agent follows to pick, write and verify a view. Installed from this repo (see above), gated against the generated catalogue so it cannot name a directive the engine dropped.
-- [Cheatsheet](docs/CHEATSHEET.md): **start here to write your first view.** One worked example, the three rules that break a first attempt, and every directive, substitution and tag on one page. It is the only doc that SHIPS in the package, so your agent can read it from `node_modules/@tayomi/cc-views/docs/CHEATSHEET.md` and write your template for you.
-- [Caveats](docs/caveats.md): **read this one before you wire it in.** A view announces its start and its end is found; code can be mistaken for a view; a long band is broken by the terminal; a resized terminal breaks the print; reopening a session shows plain data, not views; two engines can draw the same message. Each entry ends on the one line that names its boundary (Claude Code, a deliberate trade, or a bug to fix here), and the `@` collision catalogue is there too.
-- [The `.view` language reference](docs/architecture/view-language.md): the language's full boundary, every form the engine accepts, when the cheatsheet is not enough.
-- [Integration reference](docs/architecture/display-host.md): `DisplayHost`, `RenderOptions`, the hook runner's two storeys, every public export, troubleshooting.
-- [Architecture](docs/architecture/architecture.md): the deep dive on the layer chain, streaming, width, the decorator trade and the palette.
-- [Contributing](CONTRIBUTING.md): the verification ladder, from the render one-liner to the pack gate, the sandbox eye test and the local-registry dress rehearsal.
-- [Manual checks](docs/contributing/manual-checks.md): for contributors, the pre-publish checks no script can run, judged on a real screen.
+- [Cheatsheet](docs/CHEATSHEET.md): **start here.** Every directive, substitution and tag on one page, with a worked example. The only doc that ships in the package.
+- [Caveats](docs/caveats.md): **read this before you wire it in.** Every known boundary, each ending on the line that names whose it is.
+- [The `.view` language reference](docs/architecture/view-language.md): every form the engine accepts, for when the cheatsheet is not enough.
+- [Integration reference](docs/architecture/display-host.md): `DisplayHost`, `RenderOptions`, every public export, troubleshooting.
+- [Architecture](docs/architecture/architecture.md): the layer chain, streaming, width, the decorator trade and the palette.
+- [The `write-view` skill](skills/write-view/SKILL.md): the procedure the agent follows, gated against the generated catalogue.
+- [Contributing](CONTRIBUTING.md) and [manual checks](docs/contributing/manual-checks.md): the verification ladder, and the pre-publish checks no script can run.
 
 ---
 

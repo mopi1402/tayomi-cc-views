@@ -2,7 +2,7 @@
 
 Intentions, not commitments. Each entry states what it would bring and what is still under study.
 
-The adoption wall this file opened on, writing a `.view` by hand, is no longer an intention: the reference is `agent/catalogue.json` and `cc-views dict`, the verdict is `cc-views check`, and the procedure is the `write-view` skill. See [the README](README.md#let-your-agent-write-the-templates).
+The adoption wall this file opened on, writing a `.view` by hand, is no longer an intention: the reference is `agent/catalogue.json` and `cc-views dict`, the verdict is `cc-views check`, and the procedure is the `write-view` skill. See [the README](README.md#write-your-own-view).
 
 ## A standalone examples project (idea)
 
@@ -33,3 +33,11 @@ Let each level of the stack disable views it does not want, without forking anyt
 Disabling is the missing sibling of shadowing, which ordered resolution already provides: a resolution outcome that says "do not engage" instead of "engage with my template". It would give [docs/caveats.md](docs/caveats.md)'s mis-render caveat an immediate workaround, at the price of the whole message losing its dressing, which is the user's trade to make view by view.
 
 The hard question is the boundary of what a USER may disable: a plugin relying on cc-views for a load-bearing display (a strict view reporting its render outcome to a gate) would break if the user could switch that view off. The likely shape is a distinction the plugin declares, between views required by its contract and views that are cosmetic, with only the latter open to project-level opt-out.
+
+## Reminding an agent to draw at all (not here, and the reason)
+
+The shape, if anyone builds it: the MessageDisplay edge already knows whether a view drew, since `handleMessageDisplay` returns an envelope or `null`, so it leaves a marker; a `Stop` hook clears the marker or moves a counter; a `UserPromptSubmit` hook injects one line once the counter passes a threshold. Nothing in the engine would change, because `HostSource` is already a factory over the payload meta for exactly this kind of per-turn bookkeeping.
+
+What made it look necessary, and then made it unnecessary, is the same measurement. An instruction teaching the decorator sits in the primacy zone whether it arrives through `CLAUDE.md` or through a `SessionStart` hook: both land as conversation-level context after the system prompt, and neither reaches the recency zone. Observed live, across one session and with the instruction unchanged: the agent decorated nothing while the conversation was about something else, and decorated every turn once the SUBJECT itself sat in the prompt. So the trigger is recency, and re-injection is the only mechanism that buys any, at a cost per turn that turns the instruction into background noise.
+
+It is not this package's decision to take. An engine renders; WHEN to render is the consumer's policy, and the consumer already owns that seam: TAYOMI gates its own tl;dr with a `Stop` hook of its own, in its own repo, with no public API to hold still. What would reopen the question here is a fact rather than an intuition: someone installs the package, wires the instruction, and reports it never fires.

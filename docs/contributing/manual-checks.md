@@ -64,16 +64,6 @@ A second, complementary ask is `@{view:welcome}`: that view ships INSIDE the tar
 
 Everything else there is disposable: `node_modules/`, the `.tgz`, any lockfile, any `*.ansi` dump.
 
-## The release: one command
-
-The version lives in three files: `package.json` and the two `.claude-plugin/` manifests, which Claude Code reads before our code runs and so cannot import it. One command writes all three.
-
-```bash
-pnpm version prerelease   # rc.21 -> rc.22, manifests staged, commit and tag made
-```
-
-`--no-git-tag-version` skips the commit and tag, but the hook fires anyway: you get aligned manifests staged beside an unstaged `package.json`. Then publish with pnpm and not npm, for the `publishConfig` reason in [CONTRIBUTING.md](../../CONTRIBUTING.md).
-
 ## Target 2: your own project or plugin
 
 The sandbox judges a tarball in a folder built for the occasion. This judges the engine inside the consumer you actually work in, installed from a registry the way a real release would be. Publish a prerelease to Verdaccio from the repo root (see [CONTRIBUTING.md](../../CONTRIBUTING.md)), then, in your consumer:
@@ -128,7 +118,8 @@ Nothing here proves the RESTART, and no check should: a session already running 
 `skills/write-view` is out of the tarball on purpose, so nothing above tests it. No publish needed: a marketplace source can be a directory.
 
 ```bash
-claude plugin marketplace add /path/to/tayomi-cc-views
+# from the repo root. The slash is load-bearing: a bare "." is refused.
+claude plugin marketplace add ./
 claude plugin install cc-views@tayomi-cc-views
 # restart Claude Code
 ```
