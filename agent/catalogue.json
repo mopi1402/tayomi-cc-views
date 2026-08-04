@@ -52,7 +52,8 @@
       "opens": [],
       "closedBy": null,
       "readIn": [
-        "box"
+        "box",
+        "each"
       ]
     },
     {
@@ -172,7 +173,8 @@
     "box-bare": [],
     "aside": [],
     "each": [
-      "@rule"
+      "@rule",
+      "@head"
     ]
   },
   "block": {
@@ -232,6 +234,7 @@
     "table": {
       "fields": [
         "rows",
+        "head",
         "label",
         "mid1",
         "mid2",

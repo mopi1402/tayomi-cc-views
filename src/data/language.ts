@@ -10,7 +10,10 @@ export const TEXT = keyword("text");
 export const FIELDS = keyword("fields");
 export const TONE = keyword("tone");
 export const BOX = keyword("box");
-export const HEAD = keyword("head");
+// The ONE word, spelled once: `@head` is the directive, `head` is the field it draws from inside a loop. Two readers
+// that must agree, and deriving both is what stops one being renamed without the other.
+const HEAD_WORD = "head";
+export const HEAD = keyword(HEAD_WORD);
 export const RIGHT = keyword("right");
 export const FOOT = keyword("foot");
 export const FRAME = keyword("frame");
@@ -63,6 +66,16 @@ export const FIELD_CONTENT = "content";
 export const FIELD_TYPE = "type";
 
 /**
+ * The row a table payload HEADS its list with, carrying the same field names as any other row and reaching the template
+ * through `@head` inside the loop.
+ *
+ * Absent when the header's cells are all blank, which is the form markdown forces on a table that wants no header at
+ * all (`| | |`), and a template's `@head` line then draws nothing. Present the moment the author wrote a word in it,
+ * because a cell that reached the message and not the screen is the one outcome this carrier must never produce.
+ */
+export const FIELD_HEAD = HEAD_WORD;
+
+/**
  * How many columns a table payload may carry. Two is markdown's smallest real table and the shape every view here was
  * written against; four is where a terminal line stops being readable, and a wider table fails open as the markdown it
  * already is.
@@ -93,7 +106,7 @@ export const PAYLOAD_QUOTE = "quote";
 
 /** Which shape yields which fields. Spending one of them is what says a view expects that payload. */
 export const PAYLOAD_FIELDS: Record<string, readonly string[]> = {
-  [PAYLOAD_TABLE]: [FIELD_ROWS, FIELD_LABEL, ...MIDDLE_FIELDS, FIELD_CONTENT],
+  [PAYLOAD_TABLE]: [FIELD_ROWS, FIELD_HEAD, FIELD_LABEL, ...MIDDLE_FIELDS, FIELD_CONTENT],
   [PAYLOAD_QUOTE]: [FIELD_CONTENT, FIELD_TYPE],
 };
 

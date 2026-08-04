@@ -127,6 +127,55 @@ describe("@each", () => {
   });
 });
 
+describe(`${HEAD} inside a loop`, () => {
+  // Its own container, its own meaning: the line that HEADS the list, drawn once and spending the loop's own column
+  // widths, which is the only reason it cannot be written above the loop instead.
+  const FIELDS = ["k", "v"];
+  const LISTS = { rows: FIELDS };
+  const LINE = `${ref("k")}|${ref("v")}`;
+  const LOOP = [`${EACH} rows`, `${HEAD} ${LINE}`, LINE, END];
+  const ROWS = [{ k: "a", v: "1" }, { k: "b", v: "2" }];
+
+  it("draws ONCE above the items, never as a line of one", () => {
+    const out = render(LOOP, { rows: ROWS, head: { k: "K", v: "V" } }, NO_TABLES, LISTS);
+    expect(out).toEqual(["K|V", "a|1", "b|2"]);
+  });
+
+  it("draws NOTHING when the scope carries no head, and the items are untouched", () => {
+    // What makes one template answer both: a payload that headed nothing leaves the list starting at its first row.
+    expect(render(LOOP, { rows: ROWS }, NO_TABLES, LISTS)).toEqual(["a|1", "b|2"]);
+  });
+
+  it("joins the MEASUREMENT even though it is not iterated, so a long header still fits", () => {
+    // The head's own cell is what sets the column here: measured over the items alone, the header would overflow into
+    // the column beside it and every row below would be one width, the header another.
+    const LONG = "a header longer than any value";
+    const out = render(LOOP, { rows: ROWS, head: { k: LONG, v: "V" } }, NO_TABLES, LISTS);
+    for (const line of out) expect(line.indexOf("|")).toBe(LONG.length);
+  });
+
+  it("honours a rule among its lines, which the loop's own rule cannot place", () => {
+    // A loop's @rule falls BETWEEN items, so nothing there can draw under the header itself.
+    const out = render(
+      [`${EACH} rows`, `${HEAD} ${LINE}`, `${HEAD} ${RULE}`, LINE, END],
+      { rows: ROWS, head: { k: "K", v: "V" } },
+      NO_TABLES,
+      LISTS
+    );
+    expect(out).toEqual(["K|V", RULE_MARK, "a|1", "b|2"]);
+  });
+
+  it("refuses a head that is a LIST, rather than spreading its indices as field names", () => {
+    expect(render(LOOP, { rows: ROWS, head: ["K", "V"] }, NO_TABLES, LISTS)).toEqual(["a|1", "b|2"]);
+  });
+
+  it("prints a near-miss as a line of the item, the way every other matcher here does", () => {
+    // No space after the word, so it is not the directive: the author sees it repeated per row and fixes it.
+    const out = render([`${EACH} rows`, `${HEAD}${LINE}`, END], { rows: ROWS, head: { k: "K", v: "V" } }, NO_TABLES, LISTS);
+    expect(out).toEqual([`${HEAD}a|1`, `${HEAD}b|2`]);
+  });
+});
+
 describe("an @each declaration", () => {
   const SCOPE = { note: ["one", "two"] };
   const ITEM = ref(ITEM_REF);

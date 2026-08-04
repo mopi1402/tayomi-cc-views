@@ -234,6 +234,7 @@ describe("the columns view the package ships", () => {
   const KEY = "1;36"; // what the template's own @tone resolves to
   const YELLOW = "1;33";
   const RESET = "0";
+  const BOLD = "1"; // the weight @head draws in, so a header never reads as a row
 
   const table = (deco: string, ...rows: string[]): string =>
     lines(deco, "| | |", "| --- | --- |", ...rows, "");
@@ -281,6 +282,20 @@ describe("the columns view the package ships", () => {
       const gaps = Array.from({ length: n - 1 }, () => [DIM, RESET]).flat();
       expect(seqs(render(wide(n)))).toEqual([KEY, RESET, ...gaps]);
     }
+  });
+
+  it("draws the table's own HEADER above the rows when it says something", () => {
+    // What used to be lost: the header line was read for its column count and thrown away, so an author who titled
+    // their columns saw those words nowhere. Bold and untoned, so it never reads as one more entry of the list.
+    const msg = lines("@{view:columns}", "| Largeur | Verdict |", "| --- | --- |", "| 4 | tient |", "");
+    const drawn = plainly(render(msg)).split("\n");
+    expect(drawn[0]).toBe(`Largeur  ${BAR}  Verdict`);
+    expect(drawn[1]).toBe(`4        ${BAR}  tient`);
+    expect(seqs(render(msg))[0]).toBe(BOLD);
+  });
+
+  it("draws no header at all for the blank one markdown forces on a table wanting none", () => {
+    expect(plainly(render(MSG)).split("\n")[0]).toBe(`Status  ${BAR}  all green`);
   });
 
   it("hands back the raw markdown one column past the ceiling", () => {
@@ -350,6 +365,16 @@ describe("the lines view the package ships", () => {
       expect(plain).toBe(cells.join("  "));
       expect(plain).not.toContain(BAR);
     }
+  });
+
+  it("draws the table's own header with a rule of its own under it", () => {
+    // The loop's @rule falls BETWEEN elements, so nothing there can divide the header from the first one. Two @head
+    // lines is what puts a rule exactly where this view needs one.
+    const msg = lines("@{view:lines}", "| Etat | Detail |", "| --- | --- |", "| Status | all green |", "");
+    const drawn = plainly(render(msg)).split("\n");
+    expect(drawn[0]).toBe("Etat    Detail");
+    expect(drawn[1].startsWith(DASH)).toBe(true);
+    expect(drawn[2]).toBe("Status  all green");
   });
 
   it("fills the rule to the body it divides, never to the terminal", () => {

@@ -15,6 +15,8 @@ import type { Scope, Tables } from "../scope.js";
 const LIMIT = 60;
 const NO_TABLES: Tables = {};
 const TITLE = "a title";
+/** One substitution, spelled once: the loop cases below all draw the same field. */
+const SLOT = "${w}";
 
 const render = (body: string[], scope: Scope = {}, lists: Record<string, string[]> = {}): string[] =>
   renderBody(body, scope, NO_TABLES, lists, LIMIT, "");
@@ -49,6 +51,19 @@ describe("the table is what the engine reads", () => {
     without(IN_EACH, RULE, () => {
       // Not a mark any more: the line went to substitution, which is what every other directive in a loop body does.
       expect(render(template, scope)).toEqual(["one", RULE, "two", RULE]);
+    });
+  });
+
+  it("stops drawing @head in a loop the moment @each's entry no longer names it", () => {
+    // The SAME word in a second container, and the case is the pair: with the entry in place the header draws once
+    // above the items and never as a line of one; with it gone the line falls to substitution and repeats per item,
+    // which is exactly what the table is there to decide.
+    const template = [`${EACH} notes`, `${HEAD} [${SLOT}]`, SLOT, END];
+    const scope = { notes: [{ w: "one" }, { w: "two" }], head: { w: "W" } };
+    const lists = { notes: ["w"] };
+    expect(render(template, scope, lists)).toEqual(["[W]", "one", "two"]);
+    without(IN_EACH, HEAD, () => {
+      expect(render(template, scope, lists)).toEqual([`${HEAD} [one]`, "one", `${HEAD} [two]`, "two"]);
     });
   });
 });

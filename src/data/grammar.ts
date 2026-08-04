@@ -62,9 +62,12 @@ export const READS: Record<Container, readonly string[]> = {
   [IN_BOX_BARE]: [],
   [IN_ASIDE]: [],
   // A divider BETWEEN items is a thing only the loop can place, and the collapsing in box.ts drops the trailing one.
+  // @head is the other line only the loop can place: it draws ONCE, above the items, against the row the payload put at
+  // the head of the list, and it spends the loop's own column widths, which is the whole reason it cannot live outside.
+  // The word means the same thing it means in a box, the line that heads this container, and takes the same text.
   // Everything else inside an @each is a line of the item and belongs to substitution, @use included: a view drawn PER
   // ITEM is a feature nobody has designed.
-  [IN_EACH]: [RULE],
+  [IN_EACH]: [RULE, HEAD],
 };
 
 /** Whether this container reads this word. The engine's own question, asked before every matcher. */

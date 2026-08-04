@@ -16,6 +16,7 @@
 
 import {
   FIELD_CONTENT,
+  FIELD_HEAD,
   FIELD_LABEL,
   FIELD_ROWS,
   FIELD_TONE,
@@ -181,7 +182,7 @@ function cell(raw: string): string {
  * rather than padded, because guessing which column a missing cell belonged to is exactly the invention the fail-open
  * exists to avoid: the author then reads their table as markdown wrote it.
  */
-function parseRows(lines: string[]): DecoratedRow[] | null {
+function parseRows(lines: string[]): { rows: DecoratedRow[]; head?: DecoratedRow } | null {
   if (lines.length < 3) return null;
   const arity = ARITIES.find((n) => ROW_RES.get(n)!.test(lines[0]));
   if (arity === undefined) return null;
@@ -193,7 +194,12 @@ function parseRows(lines: string[]): DecoratedRow[] | null {
     if (!m) return null;
     rows.push(rowFields(m.slice(1, arity + 1)));
   }
-  return rows;
+  // The header, kept the moment ONE of its cells holds a word. `| | |` is what markdown forces on a table that wants no
+  // header, so an all-blank one yields nothing and a template's @head line draws nothing: that is the whole of "show it
+  // when it says something". Judged on the RAW cells, before neutralising, since a control mark is not a word.
+  const headCells = lines[0].match(rowRe)!.slice(1, arity + 1);
+  const head = headCells.some((c) => c.trim() !== "") ? rowFields(headCells) : undefined;
+  return head === undefined ? { rows } : { rows, head };
 }
 
 /** A payload a parser claimed, as the render entry receives it. */
@@ -262,8 +268,11 @@ const SHAPES: Shape[] = [
     opens: (l) => PIPE_LINE_RE.test(l),
     holds: (l) => PIPE_LINE_RE.test(l),
     parse: (zone) => {
-      const rows = parseRows(zone);
-      return rows === null ? null : { data: { [FIELD_ROWS]: rows } };
+      const table = parseRows(zone);
+      if (table === null) return null;
+      const data: Scope = { [FIELD_ROWS]: table.rows };
+      if (table.head !== undefined) data[FIELD_HEAD] = table.head;
+      return { data };
     },
   },
   {

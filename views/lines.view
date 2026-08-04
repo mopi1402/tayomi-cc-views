@@ -47,6 +47,11 @@
 # contract, and a column no row carries takes its own blanks down with it (the hollow rule,
 # src/layout/columns.ts), so a two-column table draws exactly what it always drew.
 #
+# @head draws once above the elements, from the table's own header line and only when that
+# line says something, with a rule of its own under it: the loop's own @rule falls BETWEEN
+# items and would leave the header glued to the first one. Two @head lines, because the
+# header is two lines.
+#
 # The content column is the LAST field, emitted verbatim, so it carries whatever emphasis
 # the message wrote. A quote handed to this view resolves nothing, and the raw markdown
 # shows instead.
@@ -54,6 +59,8 @@
 @fields rows label mid1 mid2 content
 @box bare
 @each rows cap="1/3" bullet=""
+@head {{b}}${label}{{/}}  ${mid1}  ${mid2}  ${#bullet}${content}
+@head @rule
 {{tone}}${label}{{/}}  ${mid1}  ${mid2}  ${#bullet}${content}
 @rule
 @end

@@ -23,6 +23,7 @@ import {
   END,
   ENDASIDE,
   ENDBOX,
+  FIELD_HEAD,
   FIELD_TONE,
   FIELD_TYPE,
   FOOT,
@@ -115,6 +116,15 @@ function asList(val: unknown): unknown[] {
   if (Array.isArray(val)) return val;
   return stringify(val).trim() === "" ? [] : [val];
 }
+
+/**
+ * Whether a value is a ROW: an object of fields, the shape a list item has and the shape @head draws from.
+ *
+ * An array is refused deliberately. A block writing `head:` and then a list of items has written something this
+ * template cannot draw as one line, and spreading it would put `0`, `1`, `2` into the scope as field names.
+ */
+const isRow = (val: unknown): val is Scope =>
+  val != null && typeof val === "object" && !Array.isArray(val);
 
 // The bottom zone of a box, fed by @foot <field>. Its content is a field like any other, so a block that never sets it
 // renders as it did before the zone existed. Blank ITEMS are dropped here and not in asList, because the zone is prose
@@ -298,18 +308,26 @@ export function renderBody(
     const eachField = head && leftover === "" ? head[1] : null;
     if (eachField != null) {
       const inner: string[] = [];
+      // The lines that draw ONCE above the items rather than per item. Pulled out here so the loop below never sees
+      // them: a header repeated on every row is the defect this split exists to make impossible.
+      const heads: string[] = [];
       i++;
       while (i < body.length && !END_RE.test(body[i])) {
-        inner.push(body[i]);
+        const hm = readsHere(IN_EACH, HEAD) ? body[i].match(HEAD_RE) : null;
+        if (hm) heads.push(hm[1]);
+        else inner.push(body[i]);
         i++;
       }
       const items = asList(lookup(scope, eachField));
       // Measured over the items of THIS list and applied on the per-item scope built below, so nothing outside a list
-      // is padded.
+      // is padded. The HEAD row joins the measurement, never the iteration: a header word longer than every value under
+      // it still has to fit its column, or it is the one cell that overflows.
       const fields = objectLists[eachField];
+      const headRow = peek(scope, FIELD_HEAD);
+      const measured = isRow(headRow) ? [...items, headRow] : items;
       const pad: PadCtx = {
-        widths: columnWidths(items, fields, inner, tables),
-        hollow: hollowFields(items, fields),
+        widths: columnWidths(measured, fields, [...heads, ...inner], tables),
+        hollow: hollowFields(measured, fields),
         tail: fields && fields.length > 0 ? fields[fields.length - 1] : undefined,
       };
       if (capDecl) {
@@ -319,6 +337,19 @@ export function renderBody(
         );
         for (const f of Object.keys(pad.widths)) {
           pad.widths[f] = Math.min(pad.widths[f], cap);
+        }
+      }
+      // The header pass, before the first item and only when the payload carried a row for it. A template declaring
+      // @head against a table that headed nothing draws NOTHING here, which is what makes one file answer both: an
+      // author who wants no header writes markdown's own empty header row and gets the list alone.
+      if (heads.length > 0 && isRow(lookup(scope, FIELD_HEAD))) {
+        const headScope: Scope = { ...scope, ...(peek(scope, FIELD_HEAD) as Scope) };
+        for (const l of heads) {
+          out.push(
+            readsHere(IN_EACH, RULE) && isRuleLine(l)
+              ? ruleLine(l, headScope, tables, pad)
+              : subst(l, headScope, tables, pad)
+          );
         }
       }
       const label = labelDecl?.[1];

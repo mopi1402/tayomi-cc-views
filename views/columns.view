@@ -37,11 +37,18 @@
 # column is the LAST field, emitted verbatim, so it carries whatever emphasis the message
 # wrote.
 #
+# @head draws ONCE above the rows, from the table's own header line, and only when that
+# line says something: `| | |` is what markdown forces on a table wanting no header, so an
+# all-blank one draws nothing here and the list starts at the first row, exactly as before.
+# A header word longer than every value under it still widens its column, because the head
+# row joins the MEASUREMENT even when it is not iterated.
+#
 # The fenced form works too, for a message with no table to give: a `rows:` list whose
 # every item is `- <label> <the rest of the line>`. There every declared field is assigned,
 # so nothing is hollow and all four columns draw.
 @tone key
 @fields rows label mid1 mid2 content
 @each rows cap="1/3"
+@head {{b}}${label}{{/}}{{dim}}  │  {{/}}${mid1}{{dim}}  │  {{/}}${mid2}{{dim}}  │  {{/}}${content}
 {{tone}}${label}{{/}}{{dim}}  │  {{/}}${mid1}{{dim}}  │  {{/}}${mid2}{{dim}}  │  {{/}}${content}
 @end

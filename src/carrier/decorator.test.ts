@@ -17,6 +17,7 @@ import {
   EACH,
   END,
   FIELDS,
+  HEAD,
   MAX_COLUMNS,
   MIDDLE_FIELDS,
   MIN_COLUMNS,
@@ -114,6 +115,7 @@ write(
   lines(
     `${FIELDS} rows label ${WIDE_FIELDS.join(" ")}`,
     `${EACH} rows`,
+    `${HEAD} ` + "${label}" + WIDE_FIELDS.map((f) => `${SEP}\${${f}}`).join(""),
     "{{cyan}}${label}{{/}}" + WIDE_FIELDS.map((f) => `${SEP}\${${f}}`).join(""),
     END
   )
@@ -356,6 +358,20 @@ describe("a table wider than two columns", () => {
       options
     );
     expect(out).toContain(`${CYAN}c1${RESET}`);
+  });
+
+  it("hands the HEADER row to the template when it says something, and drops it when it does not", () => {
+    // The header used to be read for its column count and thrown away, so `| Largeur | Verdict |` reached no screen at
+    // all. Kept the moment one cell holds a word, absent when they are all blank, which is the empty header markdown
+    // forces on a table that wants none.
+    const head = "| Largeur | Verdict |";
+    const row = "| 4 | tient |";
+    const drawn = plainly(head, pipeRow(MIN_COLUMNS, () => "---"), row).split("\n");
+    expect(drawn[0]).toBe(`Largeur${SEP}Verdict`);
+    expect(drawn[1].trimEnd()).toBe(`4${" ".repeat("Largeur".length - 1)}${SEP}tient`);
+    // And the blank header draws nothing at all, the list starting at its first row.
+    const bare = plainly(pipeRow(MIN_COLUMNS, () => ""), pipeRow(MIN_COLUMNS, () => "---"), row);
+    expect(bare.split("\n")[0]).toBe(`4${SEP}tient`);
   });
 
   it("refuses a RAGGED table whole, rather than guessing which column a cell lost", () => {
