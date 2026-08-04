@@ -10,7 +10,8 @@ Take the cheapest one that answers your question.
 | --- | --- | --- |
 | a `.view` template | `CC_VIEWS_PATH` | edit, send a message |
 | engine code, judged by a rule | `pnpm test` | seconds |
-| engine code, judged by the screen | `sandbox/` linked | `pnpm build` |
+| engine code, judged by the screen | this repo's own session, wired in `.claude/settings.json` | `pnpm build` |
+| the packaged bin and its WIRING | `sandbox/` linked | `pnpm build` |
 | `files`, exports, bin | `pnpm verify:pack` | one pack |
 | `skills/write-view` | a marketplace on this directory, [target 3](docs/contributing/manual-checks.md) | add, install, restart |
 | the real TAYOMI plugin | Verdaccio, then the 4 steps below | slow, do it once |
@@ -27,6 +28,29 @@ pnpm check:sidecars   # every module answers for itself
 pnpm check:vocabulary # every word of the language comes from src/data/
 pnpm verify           # all of the above, then the pack gate
 ```
+
+## The session you work in is dressed by your own build
+
+A clone comes wired: `.claude/settings.json` registers a MessageDisplay hook on `scripts/messagedisplay-dev.mjs`, so a session opened at the repo ROOT renders through the engine sitting in your `dist/`. Without it every `@{view:...}` shows raw here, in the repo that owns the engine.
+
+**The loop is `pnpm build`, and that is all of it.** No pack, no publish, no install: the chain in [manual-checks.md](docs/contributing/manual-checks.md) exists to prove the PACKAGE inside a real consumer, and none of it stands between an edit and this screen.
+
+The hook is a wrapper rather than `dist/bin/messagedisplay.js` for a reason a clone makes obvious: `dist/` is gitignored, so that path does not exist yet and Claude Code would report a missing command on every message. The wrapper is versioned, always present, and fails open in both directions. No build, or a build that throws on load, and it emits nothing: you get raw markdown, which [manual-checks.md](docs/contributing/manual-checks.md) already teaches you to read as "no engine ran".
+
+Two other hooks say, in one line, what nothing on screen reports:
+
+| Event | When it speaks | What it says |
+| --- | --- | --- |
+| `SessionStart` | always | which `dist/` dresses this session, and how old it is |
+| `UserPromptSubmit` | only when `dist/` is older than `src/` | that what you are about to read came from the OLD engine |
+
+The second is the one worth having, and the reason it is a line and not a band: a band would draw on EVERY message, above every box you are inspecting for alignment, in the repo whose product is terminal height. This one measures instead, and extinguishes itself the moment you rebuild. Editing a `*.test.ts` never triggers it, since `tsconfig.build.json` excludes tests and no build could have changed.
+
+### When two engines draw your session
+
+If you also run a MessageDisplay hook from a plugin, both are registered and they CHAIN, first to run consuming the zone, and the order is not yours to choose ("Two engines can draw the same message" in [caveats.md](docs/caveats.md)). So a box in this repo may come from the published engine rather than from your working tree, with nothing on screen saying which.
+
+Ask for `@{view:welcome}`: the box names the engine that drew it, version included.
 
 ## The inner loop: render without any hook
 

@@ -1,5 +1,11 @@
 node_modules/
 dist/
+# The root session's wiring is versioned (.claude/settings.json), so every clone is
+# dressed by its own build. What sits BESIDE it is not: settings.local.json holds one
+# machine's granted permissions and absolute paths, and Claude Code merges it over the
+# shared file, so committing it would hand a contributor someone else's statusline.
+.claude/*
+!.claude/settings.json
 # The eye-test bench: its SOURCE is versioned in place, everything it GENERATES is
 # not. The recipe in docs/contributing/manual-checks.md cannot run without the
 # wiring and the views, and a `git clean` used to take them with the rest. Tracking
