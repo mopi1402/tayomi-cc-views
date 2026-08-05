@@ -50,4 +50,4 @@
 # closing cap lands at the end of the last one. That is the accepted look, not an oversight.
 @tone chip
 @text kinds note="ⓘ NOTE" tip="✔ TIP" important="★ IMPORTANT" warning="⚠ WARNING" caution="⛔ CAUTION" error="✖ ERROR" success="✔ SUCCESS" info="ⓘ INFO" warn="⚠ WARN" fail="✖ FAIL" pass="✔ PASS" high="▲ HIGH" med="■ MED" low="▼ LOW" version="◆ VERSION" *="ⓘ NOTE"
-{{tone_cap}}{{/}}{{tone_bg}} ${type:kinds}  ${content} {{/}}{{tone_cap}}{{/}}
+{{tone_cap}}{{/}}{{tone_bg}}${type:kinds}  ${content}{{/}}{{tone_cap}}{{/}}

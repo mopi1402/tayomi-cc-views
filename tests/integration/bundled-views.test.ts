@@ -96,6 +96,32 @@ describe("the banner the package ships", () => {
     lime: { cap: "38;5;154", fill: "1;30;48;5;154" },
   };
   const RESET = "0";
+  /**
+   * The two Powerline half-circles the template draws its caps with, named here because
+   * the template is their owner and exposes them to nothing: a `.view` is read by the
+   * engine, never imported. They are private-use codepoints, so an editor shows them as
+   * a blank and a hand that retypes the line loses them without seeing it, which is
+   * exactly how they went missing once.
+   */
+  const CAP_LEFT = "\u{E0B6}";
+  const CAP_RIGHT = "\u{E0B4}";
+  const open = (seq: string): string => `\x1b[${seq}m`;
+
+  it("wraps a half-circle INSIDE each cap span, which is the whole of what makes a band a pill", () => {
+    // The case the sequence assertions below cannot make: they read the ANSI stream, and a
+    // cap span that opens a colour and closes it over NOTHING satisfies them exactly as a
+    // filled one does. That defect shipped. So the glyph is pinned where it lives, between
+    // the sequence that colours it and the reset that ends it.
+    for (const [tone, { cap }] of Object.entries(BANDS)) {
+      const drawn = render(band(tone));
+      expect({ tone, head: drawn.includes(open(cap) + CAP_LEFT + open(RESET)) }).toEqual({ tone, head: true });
+      expect({ tone, tail: drawn.includes(open(cap) + CAP_RIGHT + open(RESET)) }).toEqual({ tone, tail: true });
+    }
+    // And they are the OUTER edges: a half-circle anywhere else is furniture inside the band.
+    const printed = plainly(render(band()));
+    expect(printed.startsWith(CAP_LEFT)).toBe(true);
+    expect(printed.endsWith(CAP_RIGHT)).toBe(true);
+  });
 
   it("caps every filled band in the foreground painting that band's own fill", () => {
     for (const [tone, { cap, fill }] of Object.entries(BANDS)) {
