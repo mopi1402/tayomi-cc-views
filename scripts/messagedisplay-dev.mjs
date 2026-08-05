@@ -2,11 +2,10 @@
 // this working tree. Without it a fresh clone renders every `@{view:...}` raw, in the repo that owns the engine.
 //
 // Why a wrapper and not the packaged bin: dist/ is gitignored, so `dist/bin/messagedisplay.js` does not exist in a
-// clone and Claude Code would report a missing command on every message. THIS file is versioned, so it always exists,
-// and it is what decides.
+// clone and Claude Code would report a missing command on every message. THIS file is versioned.
 //
-// Fail open everywhere, for the reason the runner itself gives: this runs on every flush of every message, and an
-// engine that is mid-build or half broken must cost a plain screen, never a lost sentence.
+// Fail open everywhere: this runs on every flush of every message, and an engine that is mid-build or half broken must
+// cost a plain screen, never a lost sentence.
 
 import fs from "node:fs";
 import path from "node:path";

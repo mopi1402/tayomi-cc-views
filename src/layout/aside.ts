@@ -11,7 +11,6 @@ import { RESET_MARK, tagMark } from "../style.js";
 import { padCell, printedWidth } from "./measure.js";
 import { wrapLine } from "./wrap.js";
 
-/** Where the SHORTER column sits against the taller one, declared on the region. The words are the language's. */
 export type AsideAlign = Align;
 
 const SEPARATOR = `${tagMark("dim")}│${RESET_MARK}`;
@@ -37,11 +36,9 @@ function padColumn(col: string[], height: number, align: AsideAlign, filler: str
 }
 
 /**
- * The width the MAIN column gets beside this aside, `content` itself when the aside is DROPPED. It degrades whole and
- * never half way: no aside row, or a main column under the floor, both take that exit.
- *
- * Exported because the render draws the region's body before composing it, and a body drawn at the box's full width
- * loses a nested border when cut to size afterwards. One function, so the two can never disagree.
+ * The width the MAIN column gets beside this aside, `content` itself when the aside is DROPPED. Exported because the
+ * render draws the region's body before composing it, and a body drawn at the box's full width loses a nested border
+ * when cut to size afterwards. One function, so the two can never disagree.
  */
 export function asideMainWidth(asideRows: string[], content: number): number {
   const asideWidth = asideRows.reduce((n, l) => Math.max(n, printedWidth(l)), 0);

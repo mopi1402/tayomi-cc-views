@@ -1,13 +1,9 @@
-// The second audience.
+// The second audience: at RUNTIME nothing may erase what the model sent, so a malformed line falls through to the body
+// and a broken view hands the raw block back. At AUTHORING time that same silence teaches nothing.
 //
-// At RUNTIME nothing may erase what the model sent, so a malformed line falls through to the body and a broken view
-// hands the raw block back (pipeline.ts): the user still reads the warning Claude wrote. At AUTHORING time that same
-// silence teaches nothing, and whoever just wrote the `.view` needs the reason it will not draw.
-//
-// So this needs no parser of its own, and that is the whole design: an unknown tag comes back literally (style.ts) and
-// a malformed directive falls through to the body (data/grammar.ts), which means a SURVIVOR in the rendered output IS
-// the error, already located. The engine runs, and what it printed is read back. A schema restating the grammar could
-// drift from what the matchers actually decide; a survivor cannot.
+// So this needs no parser of its own: an unknown tag comes back literally and a malformed directive falls through to
+// the body, which means a SURVIVOR in the rendered output IS the error, already located. A schema restating the grammar
+// could drift from what the matchers actually decide; a survivor cannot.
 
 import { TAKES } from "./data/grammar.js";
 import type { RenderOptions } from "./options.js";
@@ -56,9 +52,9 @@ const finding = (
 ): Finding => ({ severity, kind, line, message });
 
 /**
- * What the template WROTE and the render still PRINTED. Both halves are the point: the output alone would blame the
- * template for a `{{tag}}` the sample data carried, and the template alone cannot tell a directive that was read from
- * one that fell through, since the two are spelled identically.
+ * What the template WROTE and the render still PRINTED. Both halves: the output alone would blame the template for a
+ * `{{tag}}` the sample data carried, and the template alone cannot tell a directive that was read from one that fell
+ * through.
  */
 function survivors(out: string, body: readonly string[]): Finding[] {
   const printed = strip(out);
@@ -82,11 +78,9 @@ const caught = (e: unknown): Finding =>
   finding(ERROR, REFUSAL, null, e instanceof Error ? e.message : String(e));
 
 /**
- * Run `name` against a sample block and report what an author has to fix, worst kind first: the engine's refusal ends
- * the report on its own, since nothing was drawn to read survivors out of.
- *
- * A block that is EMPTY checks the template with no data at all, which is what keeps a static view (welcome, the health
- * check) checkable rather than refused for want of a sample it never spends.
+ * Run `name` against a sample block and report what an author has to fix. The engine's refusal ends the report on its
+ * own, since nothing was drawn to read survivors out of. An EMPTY block checks the template with no data at all, which
+ * keeps a static view checkable rather than refused for want of a sample it never spends.
  */
 export function check(name: string, block = "", options?: RenderOptions): Finding[] {
   const dirs = options?.viewsPath ?? defaultViewsPath();

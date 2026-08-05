@@ -24,10 +24,12 @@
 #
 # The glyph is U+258E, the one wrap.ts calls GUTTER_BAR, and that is not decoration: a
 # continuation row keeps that bar and keeps its colour with it. It only bites where
-# something WRAPS, and outside a box nothing does, so a quote wider than the terminal is
-# soft-wrapped by the terminal itself and its second row starts at the margin with no bar.
-# Same accepted trade as the band. Keep a quote to a sentence or two, or wrap the line in
-# an @box, where the bar is redrawn on every row.
+# something WRAPS, and outside a container nothing does, so a quote wider than the terminal
+# is soft-wrapped by the terminal itself and its second row starts at the margin with no
+# bar. A bare container would buy the wrap here as it does in banner.view, and it is not
+# bought: a quote is a sentence set apart, and one long enough to need a measurement is a
+# paragraph wanting a box. Keep a quote to a sentence or two, or wrap the line in an @box,
+# where the bar is redrawn on every row.
 #
 # The content is emitted verbatim, so it carries whatever emphasis the message wrote. A
 # table handed to this view resolves nothing, and the raw markdown shows instead.

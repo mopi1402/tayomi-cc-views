@@ -22,7 +22,8 @@ every view the search path resolves, in resolution order, each with the fields i
 
 A view whose `spends` already covers the fields you have is a view you do not have to write. The
 bundled ones cover most asks: `banner` and `quote` over a markdown quote, `columns` and `lines` over a
-markdown table, `hr` on its own line. If one fits, go straight to step 4 and write no file at all.
+markdown table, `box` over a table whose header row is a title and a badge rather than column names,
+`hr` on its own line. If one fits, go straight to step 4 and write no file at all.
 
 ## 2. Read the language, never infer it
 

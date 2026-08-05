@@ -28,10 +28,7 @@ const NL = "\n";
  * Every member is optional: with no host at all the engine still renders every block from the block's own text.
  */
 export interface DisplayHost {
-  /**
-   * Extra scope for facts the model did not write. Returning undefined means "nothing to add", and the view renders
-   * exactly as it would without this member.
-   */
+  /** Extra scope for facts the model did not write. */
   inject?(view: string, body: string, cwd?: string): Scope | undefined;
   /**
    * The ONE view that must never fail open to its raw markdown, and the line shown in its place. Without it, a failing
@@ -61,13 +58,10 @@ export function transform(
   // offsets no longer name the same characters once the blocks below have been replaced by their renders.
   const fences = fenceSpans(text);
   let out = text.replace(BLOCK_RE, (m: string, name: string, bodyText: string, at: number) => {
-    // A block quoted inside an ordinary fence is an EXAMPLE, and running it is what made documentation about this
-    // package render itself. Its own fence is the one span it is allowed to be inside.
+    // A block quoted inside an ordinary fence is an EXAMPLE. Its own fence is the one span it may be inside.
     const fence = fenceAt(fences, at);
     if (fence !== undefined && !fence.carrier) return m;
     try {
-      // The RAW block text: renderView parses it with the view's own @fields directive. A total parser plus this catch
-      // means any oddity shows the raw block.
       const rendered =
         renderView(
           name,
@@ -103,8 +97,6 @@ export function transform(
 }
 
 /**
- * Does this message carry anything the engine has business touching at all?
- *
  * The two carriers, and only them. `{{` is deliberately NOT a marker: engaging on one would take the delta from the
  * host to hand back the same text, flattening the markdown the host would have drawn.
  */
@@ -122,11 +114,9 @@ function sharedPrefix(a: string, b: string): number {
 /**
  * What ONE flush puts on screen, or null when the host should show its own delta.
  *
- * `prev` is the text of every earlier flush of this message. The offset is DERIVED from it (transform it again and
- * measure) rather than remembered, and the second transform per flush is the price: a remembered offset is shared
- * mutable state, and three flushes in flight at once lost updates on it.
- *
- * `null` on a message the engine has no business in, so the host keeps its own rendering.
+ * `prev` is the text of every earlier flush of this message. The offset is DERIVED from it rather than remembered, and
+ * the second transform per flush is the price: a remembered offset is shared mutable state, and three flushes in flight
+ * at once lost updates on it.
  */
 export function slice(
   prev: string,
@@ -140,8 +130,7 @@ export function slice(
   if (!engaged(full)) return null;
   const before = transform(prev, host, false, cwd, options);
   const after = transform(full, host, final, cwd, options);
-  // `before` is normally a prefix of `after`: prose is untouched, and a block still arriving is withheld at the
-  // position its render later occupies. The one shape that breaks it is a CARRIER TOKEN cut mid-way at the end of
+  // `before` is normally a prefix of `after`. The one shape that breaks it is a CARRIER TOKEN cut mid-way at the end of
   // `prev` ("@{view:ta"), prose to the cut there and an anchor once complete. Slicing at the shared prefix re-emits
   // from the divergence, so the corrected text always reaches the screen and no content is dropped.
   return after.slice(sharedPrefix(before, after));

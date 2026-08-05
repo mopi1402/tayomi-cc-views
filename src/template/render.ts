@@ -1,7 +1,7 @@
 // One view, rendered: the composition of the three halves that must not know each other (where the template lives, how
 // the block's data parses, how a line draws).
 
-import { HANG_MARK } from "../layout/marks.js";
+import { HANG_MARK, TAIL_MARK, VOID_MARK } from "../layout/marks.js";
 import { dropInert, fillTone, markCode, renderTags, toneClass } from "../style.js";
 import { nameField, type Scope } from "../scope.js";
 import { FIELD_TONE, FIELD_TYPE } from "../data/language.js";
@@ -23,11 +23,9 @@ export interface Dressing {
 }
 
 /**
- * A render and what it RECORDED: every top-level field the body actually asked the scope for.
- *
- * A RETURN value and not a seventh parameter, deliberately. The set lives on the scope while the body runs, so a caller
- * able to hand one in would be handing in a field: `got` is taken before the set is attached, and a scope arriving with
- * its own `__read` would count among the fields that ARRIVED and could flip the third refusal below.
+ * A render and what it RECORDED: every top-level field the body actually asked the scope for. A RETURN value and not a
+ * parameter, deliberately: a scope arriving with its own `__read` would count among the fields that ARRIVED and could
+ * flip the third refusal below.
  */
 export interface Traced {
   out: string;
@@ -91,18 +89,14 @@ export function traceView(
     // never probe for a file.
     out = renderBody(body, full, tables, objectLists, maxBoxWidth(options), dir);
   } finally {
-    // Both are the ENGINE's, and `full` may BE the caller's own object, so neither is left on it. The throwing path is
-    // the one that would: a template failing mid-render is exactly when a caller retries.
-    //
-    // The set has the sharper consequence, since a second render of the same data would count it among the fields that
-    // ARRIVED. The width is the template's and not the data's, so a scope carrying one from a PREVIOUS view would hand
-    // the next its predecessor's label column. Nothing reads either past this line: both are spent inside renderBody.
+    // Both are the ENGINE's and `full` may BE the caller's own object, so neither is left on it: a second render of the
+    // same data would count `__read` among the fields that ARRIVED, and a stale width hands the next view its
+    // predecessor's label column.
     delete full.__read;
     delete full.__labelWidth;
   }
   // Third reading: data ARRIVED and the template read none of it. Decided on what the render actually ASKED the scope
-  // for, recorded by the accessor (scope.ts), which is why it runs down here with the output already built and about to
-  // be thrown away.
+  // for, which is why it runs down here with the output already built and about to be thrown away.
   if (spendsSlots && got.length > 0 && !got.some((key) => read.has(key))) {
     throw new Error(`view ${name}: reads none of the fields it was given`);
   }
@@ -115,8 +109,9 @@ export function traceView(
     nameField(full, FIELD_TYPE),
     tone
   );
-  // Both marks exist for the layers above and must never reach a terminal. Inert goes LAST, after renderTags, so what
+  // These marks exist for the layers above and must never reach a terminal. Inert goes LAST, after renderTags, so what
   // it protected is text by then.
   const drawn = renderTags(fillTone(markCode(out.join("\n")), cls));
-  return { out: dropInert(drawn).split(HANG_MARK).join(""), read };
+  const bare = [HANG_MARK, VOID_MARK, TAIL_MARK].reduce((s, m) => s.split(m).join(""), dropInert(drawn));
+  return { out: bare, read };
 }

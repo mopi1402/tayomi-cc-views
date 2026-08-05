@@ -335,6 +335,30 @@
       "lists": {}
     },
     {
+      "name": "box",
+      "file": "views/box.view",
+      "static": false,
+      "payload": "table",
+      "spends": [
+        "content",
+        "head",
+        "label",
+        "mid1",
+        "mid2",
+        "rows"
+      ],
+      "tone": "dim",
+      "tables": {},
+      "lists": {
+        "rows": [
+          "label",
+          "mid1",
+          "mid2",
+          "content"
+        ]
+      }
+    },
+    {
       "name": "columns",
       "file": "views/columns.view",
       "static": false,

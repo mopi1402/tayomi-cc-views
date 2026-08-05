@@ -1,11 +1,8 @@
-// Where a carrier must not look, pinned on the shape alone.
+// Where a carrier must not look, pinned on the shape alone: which characters of a text sit inside a fenced block, and
+// which of those blocks is the block carrier's own.
 //
-// This module answers ONE question, so everything here is a span: which characters of a text sit inside a fenced block,
-// and which of those blocks is the block carrier's own. What the carriers DO with the answer is their sidecars'
-// business, not this one's.
-//
-// The fences are spelled here rather than imported from the production constant: a test sharing the spelling of what it
-// measures cannot catch a drift in it.
+// The fences are spelled here rather than imported: a test sharing the spelling of what it measures cannot catch a
+// drift in it.
 
 import { describe, it, expect } from "vitest";
 import { fenceAt, fenceSpans } from "./fences.js";

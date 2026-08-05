@@ -1,7 +1,5 @@
-// Column alignment, computed at RENDER time only.
-//
-// Every width is computed HERE, over the items actually rendered: the parse layer keeps returning verbatim, unpadded
-// values.
+// Column alignment, computed at RENDER time only, over the items actually rendered: the parse layer keeps returning
+// verbatim, unpadded values.
 //
 // Three rules compose on a leading declared field:
 //   - an @map field renders a chip, so its cell is at least that map's longest key plus the
@@ -25,7 +23,7 @@ import { CHIP_CHROME } from "../style.js";
 import { longestKey, printedWidth } from "./measure.js";
 
 // Alignment context for the inner lines of an @each: the cell width of every leading declared field, plus the tail
-// field that is exempt from all padding.
+// field exempt from all padding.
 export interface PadCtx {
   widths: Record<string, number>;
   tail?: string;
@@ -34,12 +32,11 @@ export interface PadCtx {
 }
 
 /**
- * The declared fields NOT ONE item carries, whose column is drawn nowhere and whose separator would therefore be
- * furniture around nothing.
+ * The declared fields NOT ONE item carries, whose separator would be furniture around nothing.
  *
- * Measured over the WHOLE list and never per item, and that is the guarantee: a field one row happens to omit keeps its
- * cell on every row, so ragged data still lines up. Only a column the data never had at all disappears, which is how one
- * template draws a table of two, three or four columns without a conditional in the language.
+ * Measured over the WHOLE list and never per item: a field one row happens to omit keeps its cell on every row, so
+ * ragged data still lines up. Only a column the data never had at all disappears, which is how one template draws a
+ * table of two, three or four columns without a conditional in the language.
  */
 export function hollowFields(items: unknown[], fields: string[] | undefined): ReadonlySet<string> {
   const hollow = new Set<string>();

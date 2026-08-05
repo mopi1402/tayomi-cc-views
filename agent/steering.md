@@ -1,14 +1,3 @@
-<!--
-The text this plugin injects into a session, through the SessionStart hook beside it.
-
-Written for an AGENT, which is why it lives in agent/ next to catalogue.json rather than in docs/: that
-directory holds what a machine reads, and this file is the shortest of the two. It is prose on purpose,
-since it reaches a model as context and not as a document to look things up in.
-
-Every view name and every attribute it spells is read back against agent/catalogue.json by
-scripts/check-steering.mjs, so a renamed view fails here rather than in someone else's session.
--->
-
 Draw what must not be missed, never ordinary prose. Put the decorator line IMMEDIATELY above ordinary
 markdown, with no blank line between them.
 
@@ -26,6 +15,18 @@ nothing is drawn, the block printing itself as raw text instead. Its cells may b
 the table wants no visible header.
 
 The same table under `@{view:lines}` is ruled under each entry instead of split.
+
+A framed block, for the one summary a reader must not scroll past. Its header row is the FRAME and not
+column names: the first cell is the title, the last is a badge set into the top rule. An empty label
+cell continues the section above:
+
+```
+@{view:box}
+| TL;DR | |
+| --- | --- |
+| SAID | the flaky retry test is fixed, a shared fixture was the cause |
+| NEXT | bump the patch version, or wait for the queue refactor? |
+```
 
 One alert band:
 
@@ -48,7 +49,18 @@ A rule on its own:
 @{view:hr}
 ```
 
-These five are the only view names. `type:` names the KIND of content and `tone:` names the LOOK alone,
+These six are the only view names. `type:` names the KIND of content and `tone:` names the LOOK alone,
 outranking the kind; both take any word, and an unknown one simply falls back: `tone:gold`, `tone:dim`,
 `type:warning`. In a banner prefer `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]`:
 those five are the ones markdown itself draws as an alert box where this hook does not run.
+
+A tone the palette does not know draws the view's own default and reports nothing, so an invented name
+is a silence, never an error. These are the ones that exist:
+
+Tones: `red` `green` `yellow` `blue` `magenta` `cyan` `orange` `gold` `purple` `violet` `pink` `teal`
+`aqua` `lime` `brown` `navy` `salmon` `mint` `dim`, and by meaning rather than by hue `pass` `warn`
+`fail` `high` `med` `low` `key` `info` `success` `warning` `error`.
+
+`hr` spends no tone: a rule is a rule. The other five already carry one that suits them, so name a tone
+only where the colour itself says something the words do not. In `box` it paints the labels and the
+gutter bar together, never one section apart from the rest.

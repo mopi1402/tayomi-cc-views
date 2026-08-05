@@ -66,7 +66,7 @@ Nothing here is a second palette. The two values are the host's own, for the two
 
 ## `extendTags`: the palette
 
-The `{{tag}}` vocabulary is a PROCESS-GLOBAL registry, not a per-call option (the reason is in [architecture.md](architecture.md)). How a colour is spelled, and which spellings earn a chip and a cap for free, belong to [the language reference](view-language.md); what follows is what the CALL guarantees.
+The `{{tag}}` vocabulary is a PROCESS-GLOBAL registry, not a per-call option (the reason is in [architecture.md](architecture.md)). What a template does with a tag is [the language reference](view-language.md)'s; what follows is what the CALL guarantees, and how a colour is spelled so the engine can derive from it.
 
 `extendTags` is TOTAL and never throws: a styling call must never cost the screen, so a startup registration cannot kill a host's whole display the day the engine claims a name that host already used. Registration lives under the same law as the views, the LAST one winning: shadowing an engine name is deliberate, and the screen's owner has the last word.
 

@@ -1,12 +1,8 @@
 // The cell width of every leading column of a list, measured over the items ACTUALLY rendered.
 //
-// Two rules compose here and their interaction is the whole module: a mapped column is at least its longest key plus
-// the chip's padding, and an off-map value may raise it past that bound. Get the second wrong and a list holding one
-// unmapped value shifts every column to its right.
-//
-// A TEXT column is measured on a third rule, and it has to be a third: what occupies the cell is the WORD that comes
-// out, never the key that chose it, so a column of `warning` keys holding `⚠ WARNING` words is nine columns wide and
-// not seven.
+// Three rules compose: a mapped column is at least its longest key plus the chip's padding; an off-map value may raise
+// it past that bound (get this wrong and one unmapped value shifts every column to its right); and a TEXT column is
+// measured on the WORD that comes out, never the key that chose it.
 
 import { describe, it, expect } from "vitest";
 import { DEFAULT_KEY } from "../data/language.js";

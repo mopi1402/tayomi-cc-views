@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import { RESET_MARK, RESUME_MARK, SPAN_MARK, chip, tagMark } from "../style.js";
-import { HANG_MARK } from "./marks.js";
+import { HANG_MARK, TAIL_MARK, VOID_MARK } from "./marks.js";
 import { printedWidth } from "./measure.js";
 import { wrapLine } from "./wrap.js";
 
@@ -170,5 +170,73 @@ describe("a declared bullet", () => {
     expect(rows.length).toBeGreaterThan(1);
     expect(rows[1]).toContain(BAR);
     expect(rows[1]).not.toContain("-");
+  });
+});
+
+// Where blanking is not enough: a band opens its fill BEFORE its label, so a kept tag repaints the hole the fold was
+// meant to leave. Left of the mark the prefix goes to bare columns, style and all.
+describe("a voided head", () => {
+  const LABEL = `${tagMark("dim")}LABEL${RESET_MARK}`;
+  const voided = (text: string): string => `${LABEL}${VOID_MARK}${BAR} ${HANG_MARK}${text}`;
+
+  it("is consumed: the mark never reaches the screen", () => {
+    expect(wrapLine(voided("alpha beta gamma delta"), LIMIT).join("\n")).not.toContain(VOID_MARK);
+  });
+
+  it("drops the STYLE it voids, which is what parts it from blanking", () => {
+    const rows = wrapLine(voided("alpha beta gamma delta"), LIMIT);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows[0]).toContain(tagMark("dim"));
+    expect(rows[1]).not.toContain(tagMark("dim"));
+  });
+
+  it("opens the continuation on a RESET, since the row above left its own style standing", () => {
+    const rows = wrapLine(voided("alpha beta gamma delta"), LIMIT);
+    expect(rows[1].startsWith(RESET_MARK)).toBe(true);
+  });
+
+  it("keeps what sits AFTER the mark, blanked as usual, so the two columns still line up", () => {
+    const rows = wrapLine(voided("alpha beta gamma delta"), LIMIT);
+    expect(rows[1]).toContain(BAR);
+    expect(printedWidth(rows[1].slice(0, rows[1].indexOf(BAR)))).toBe(printedWidth("LABEL"));
+  });
+
+  it("means nothing outside a prefix: a mark in the TEXT is stripped and changes no column", () => {
+    const plain = wrapLine(`${BAR} alpha beta gamma delta epsilon`, LIMIT);
+    const marked = wrapLine(`${BAR} alpha beta${VOID_MARK} gamma delta epsilon`, LIMIT);
+    expect(marked.join("\n").split(VOID_MARK).join("")).toEqual(plain.join("\n"));
+  });
+});
+
+// Closing furniture a fold has no use for: a rounded end belongs to a pill, and a block of rows is a rectangle.
+describe("a declared tail", () => {
+  const CLOSER = ")";
+  const tailed = (text: string): string => `${BAR} ${HANG_MARK}${text}${TAIL_MARK}${CLOSER}`;
+
+  it("is DRAWN while the line fits, the tail being furniture and not a hint", () => {
+    const short = tailed("short");
+    expect(wrapLine(short, LIMIT)).toEqual([short]);
+  });
+
+  it("is DROPPED the moment the line folds", () => {
+    const rows = wrapLine(tailed("alpha beta gamma delta"), LIMIT);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.join("\n")).not.toContain(CLOSER);
+    expect(rows.join("\n")).not.toContain(TAIL_MARK);
+  });
+
+  it("squares every row to the limit, which is the whole point of dropping it", () => {
+    const rows = wrapLine(tailed("alpha beta gamma delta"), LIMIT);
+    for (const row of rows) expect(printedWidth(row)).toBe(LIMIT);
+  });
+
+  it("closes every row, or a fill left open is painted to the terminal's own edge", () => {
+    const rows = wrapLine(tailed("alpha beta gamma delta"), LIMIT);
+    for (const row of rows) expect(row.endsWith(RESET_MARK)).toBe(true);
+  });
+
+  it("changes nothing for a line that declares none, which is every other view", () => {
+    const rows = wrapLine(`${BAR} ${HANG_MARK}alpha beta gamma delta`, LIMIT);
+    expect(rows.some((r) => printedWidth(r) < LIMIT)).toBe(true);
   });
 });

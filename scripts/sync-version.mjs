@@ -1,13 +1,8 @@
-// The ONE version, carried into the two manifests that cannot import it.
+// The ONE version, carried into the two manifests that cannot import it: a plugin manifest is static JSON read before
+// any of our code runs, so it has to spell the number rather than ask for it.
 //
-// `package.json` holds the version this package is. A plugin manifest is static JSON read by Claude
-// Code before any of our code runs, so it cannot ask for the number: it has to spell it. That is a
-// copy, and this repo's answer to a copy it cannot remove is never to trust it.
-//
-// So the pair is the one gen-catalogue.mjs already draws, one storey up: this WRITES, and
-// check-skill.mjs GATES. Deliberately no --check mode here, since a second reader of the same rule
-// is the drift the rule exists to stop; a manifest out of step fails `pnpm verify` on the gate that
-// already answers for it.
+// This WRITES and check-skill.mjs GATES. Deliberately no --check mode here, since a second reader of the same rule is
+// the drift the rule exists to stop.
 //
 // Run via `pnpm sync:version` after bumping package.json.
 

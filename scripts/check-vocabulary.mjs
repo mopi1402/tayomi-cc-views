@@ -1,16 +1,8 @@
-// One shape, one constant: a word of the .view language is spelled in src/data/ and
-// nowhere else. This gate holds the engine to it.
+// One shape, one constant: a word of the .view language is spelled in src/data/ and nowhere else.
 //
-// The rule is a style rule right up until it is a correctness one. "Raw over hollow"
-// refuses a render whose template read none of the data it was handed, and it decides
-// on the reads the accessor RECORDED, so a directive resolving a field WITHOUT going
-// through lookup is read by nobody and its render is refused. What stops that is a
-// suite driving every directive of the language, and that suite reads the vocabulary
-// itself to know what "every" means: a word typed straight into a matcher is invisible
-// to it, gets no case, and takes the engine back to a defect it cost a rewrite to close.
-//
-// So the sweep over the vocabulary is only as good as the promise that the vocabulary is
-// COMPLETE, and this is that promise, checked rather than remembered.
+// The rule is a style rule right up until it is a correctness one. The suite that drives every directive reads the
+// vocabulary itself to know what "every" means, so a word typed straight into a matcher is invisible to it and gets no
+// case. This is the promise that the vocabulary is COMPLETE, checked rather than remembered.
 //
 // Run via `pnpm check:vocabulary`, wired into `pnpm verify`.
 

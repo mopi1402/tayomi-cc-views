@@ -1,11 +1,8 @@
 // The stable half of the catalogue, frozen into agent/catalogue.json.
 //
-// 100% generated, which is what lets its gate be a byte diff: --check regenerates in MEMORY and fails on any
-// difference without touching the file, so a word added to the language and never regenerated cannot ship, and an
-// entry left behind for a word since deleted fails the same way.
-//
-// It imports the BUILT module rather than reading TypeScript as text: the catalogue is assembled by the engine's own
-// modules, so what is dumped here is what the engine executes.
+// 100% generated, which lets its gate be a byte diff: --check regenerates in MEMORY and fails on any difference,
+// biting in both directions. It imports the BUILT module rather than reading TypeScript as text, so what is dumped is
+// what the engine executes.
 //
 // Run via `pnpm gen:catalogue` (write) or `pnpm check:catalogue` (gate, wired into `pnpm verify`).
 

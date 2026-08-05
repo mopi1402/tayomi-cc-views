@@ -39,12 +39,9 @@ function runOf(line: string): { run: number; info: string } | null {
 /**
  * Every OUTERMOST fenced block of a text, in order.
  *
- * A fence opens on a run of three or more backticks at the start of a line (markdown allows the indent) and closes on a
- * run at least as long carrying NO info string. Requiring the closing run to be bare is what lets a longer fence quote
- * a shorter one: without it, the ```view: line inside a ```` block would close the block it is being shown inside.
- *
- * A fence that never closes runs to the end of the text, markdown's own reading and what a still-streaming message
- * needs.
+ * Opens on three or more backticks at the start of a line, closes on a run at least as long carrying NO info string.
+ * That bareness is what lets a longer fence quote a shorter one. A fence that never closes runs to the end of the text,
+ * markdown's own reading and what a still-streaming message needs.
  */
 export function fenceSpans(text: string): Fence[] {
   if (!text.includes(FENCE)) return [];

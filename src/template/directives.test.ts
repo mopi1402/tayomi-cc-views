@@ -154,6 +154,14 @@ describe(`${HEAD} inside a loop`, () => {
     for (const line of out) expect(line.indexOf("|")).toBe(LONG.length);
   });
 
+  it("stays OUT of the measurement where the loop draws no head, whatever it carries", () => {
+    // A template spending the header somewhere else (box.view makes it the frame's title) still gets it in scope, and
+    // a column padded to a width no item occupies is a gap the author cannot account for.
+    const LONG = "a header longer than any value";
+    const out = render([`${EACH} rows`, LINE, END], { rows: ROWS, head: { k: LONG, v: "V" } }, NO_TABLES, LISTS);
+    expect(out).toEqual(["a|1", "b|2"]);
+  });
+
   it("honours a rule among its lines, which the loop's own rule cannot place", () => {
     // A loop's @rule falls BETWEEN items, so nothing there can draw under the header itself.
     const out = render(

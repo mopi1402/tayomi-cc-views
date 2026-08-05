@@ -1,6 +1,4 @@
-// How wide a line will PRINT, which is not its string length.
-//
-// Measured in terminal COLUMNS rather than code units (width.ts), over what actually reaches the screen.
+// How wide a line will PRINT: terminal COLUMNS rather than code units (width.ts), over what actually reaches the screen.
 //
 // ONE measure, for the frame and for a data cell alike. A second one counting a backtick and a {{tag}} as text
 // disagreed with this on any cell holding a code span: the cell was sized on the backticks and the column after it
@@ -96,9 +94,8 @@ export function fitCell(s: string, width: number): string {
     i += ch.length;
   }
   if (code) out += CODE_TICK;
-  // Never a reset: the value is a span the engine put inside a line whose style it did not choose, so a reset here
-  // kills the colour the TEMPLATE opened around the cell and the ellipsis and everything after it print plain. How many
-  // resumes that takes is the frame arithmetic, and it lives in style.ts beside the rule they resolve by.
+  // Never a reset: the value is a span inside a line whose style the engine did not choose, so a reset here kills the
+  // colour the TEMPLATE opened around the cell.
   return closeCut(out, open) + ELLIPSIS;
 }
 

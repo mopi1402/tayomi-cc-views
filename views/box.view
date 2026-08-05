@@ -1,0 +1,73 @@
+# box.view: a framed block with a TITLE, a label column down the left and the text beside
+# it, separated by a gutter bar. The one view that draws a border.
+#
+# The way in is a decorator over a plain markdown table, which is the whole point: where
+# this hook does not run, the reader still gets a real table.
+#
+#   @{view:box}
+#   | TL;DR | |
+#   | --- | --- |
+#   | SAID | - the flaky retry test is fixed, root cause was a shared fixture |
+#   | DID | - retries no longer mutate the shared fixture, 3 suites back to green |
+#   | TRACE | - Read `retry.ts`, `queue.test.ts` |
+#   | | - Ran `pnpm test` (2x) |
+#   | NEXT | - bump the patch version, or wait for the queue refactor? |
+#
+# The HEADER ROW is the frame, and that is the whole difference with columns.view and
+# lines.view, which read it as the names of their columns. Here its first cell is the
+# TITLE, drawn inside the border above a full-width rule, and its last cell is a BADGE set
+# into the top rule near the right corner. Anything between the two is not read: a box has
+# two chrome slots and no more.
+#
+# So the header is never blank here. `| | |`, the form markdown forces on a table wanting
+# no header, draws an empty title row and its rule all the same: this view is a box, and a
+# box with nothing above the rule is a table with a border. Want no title, use lines.view.
+#
+# Every row is SET OFF by a blank line, which is what makes the block read as a summary
+# rather than as a table with a border. The blank is emitted per row and unconditionally:
+# the container's blank-run collapsing is what keeps it to one and drops the one trailing
+# the last row, so a separator appears only BETWEEN two rows that printed.
+#
+# It falls between a labelled row and its CONTINUATION too, and there is no way around it:
+# an empty label cell continues the section above, but nothing in this language is
+# conditional on a row's own value, so a blank drawn per row is drawn for every row. Two
+# lines that must stay glued belong in one cell, where the wrap keeps them together.
+#
+# That wrap is the other half: a long line folds inside the border, and the fold keeps the
+# bar and blanks the label, so it stays in its column instead of restarting at the margin.
+# `bullet=""` is what buys that boundary, at `${#bullet}`, and prints nothing.
+#
+# The tone slot colours the LABEL and the BAR together and nothing else, so a box is one
+# colour and never a rainbow:
+#
+#   @{view:box}                 the default below, grey
+#   @{view:box, tone:cyan}      labels and bars cyan, the text still white
+#   @{view:box, type:warning}   yellow, and the message still says what it IS
+#
+# The bar is U+258E, the one wrap.ts calls GUTTER_BAR, and it is not decoration: it is the
+# glyph a continuation row is REDRAWN with, so it has to be the same one. Consecutive rows
+# join it into a single frange down the block.
+#
+# The bullet is the AUTHOR's, written in the cell, never furniture this file adds: `- ` on
+# a note and `□ R1 ·` on a reminder are the same column, and a template drawing its own
+# would impose one on the section that wanted the other. The content cell is the LAST
+# field, emitted verbatim, so it carries whatever emphasis the message wrote.
+#
+# Two to four columns, like the two other table views and for the same reason: the carrier
+# hands this view whatever the table had, and a middle column it did not declare would be
+# dropped in silence. The middles sit between the label and the bar, and a column no row
+# carries takes its own lead down with it (the hollow rule, src/layout/columns.ts), so a
+# two-column table draws exactly a label, a bar and a line.
+#
+# cap="1/3" keeps a long label from pushing the text to the margin: past a third of the
+# width it is cut on an ellipsis, markup-aware, so a tag is never cut open.
+@tone dim
+@fields rows label mid1 mid2 content
+@box
+@head {{box_title}}${head.label}{{/}}
+@right ${head.content}
+@each rows cap="1/3" bullet=""
+{{b}}{{tone}}${label}{{/}}  ${mid1}  ${mid2}  {{tone}}▎{{/}} ${#bullet}${content}
+
+@end
+@endbox

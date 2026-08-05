@@ -3,22 +3,16 @@
 // once; a reader concatenates 0..n-1.
 //
 // The facts that force it, read off the 2.1.220 bundle: the dispatcher keeps up to THREE hook calls in flight and
-// finalize() dispatches the last one immediately, bypassing the 100 ms throttle. The previous store was one mutable
-// file per message, read-modify-written by every flush, so the flush carrying a block's body and the one carrying its
-// closing fence routinely raced and the second write won. Losing the body left an EMPTY box on a perfect message
-// (reproduced live on 2026-07-28, with the render marker reporting success).
-//
-// Two more, same bundle, confirmed live: message_id is stable across every flush of one message, and the index is
-// zero-based, increments by one, and has no holes. That is what makes ordering a function of the payload rather than of
-// the schedule, and it leaves one wait: a PREDECESSOR that has not written yet, one process startup wide.
+// finalize() bypasses the throttle, so a mutable per-message file was read-modify-written by racing flushes and the
+// second write won, leaving an EMPTY box on a perfect message. message_id is stable across every flush and the index is
+// zero-based with no holes, which is what makes ordering a function of the payload rather than of the schedule.
 
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_STATE_DIR } from "./scratch.js";
 
 // Its own subdirectory, so a sweep by age can never reach another file of the state dir (the probed terminal width
-// lives there, and a host may keep files of its own beside it). A trailing parameter rather than module state: each
-// caller of one flush passes the same host config it renders with.
+// lives there, and a host may keep files of its own beside it).
 function streamDir(stateDir: string): string {
   return path.join(stateDir, "stream");
 }
@@ -28,9 +22,8 @@ export const WAIT_MS = 250;
 const POLL_MS = 5;
 
 /**
- * When a message directory is garbage rather than in flight. A message streams in seconds; anything this old was
- * abandoned mid-stream (the dispatcher aborts a message when a new one begins, and that path sends no final flush, so
- * nothing would ever delete it).
+ * When a message directory is garbage rather than in flight: a message streams in seconds, so anything this old was
+ * abandoned mid-stream, and that path sends no final flush.
  */
 export const STALE_MS = 60 * 60 * 1000;
 
@@ -41,8 +34,7 @@ export interface Prefix {
 
 /**
  * Anything a message id may NOT put in a path. A host chooses the id, so a separator or a `..` in one would reach
- * outside the scratch dir. Folded to one safe character, which keeps the naming total instead of rejecting an id the
- * host considers valid.
+ * outside the scratch dir. Folded rather than rejected, which keeps the naming total.
  */
 const UNSAFE_IN_ID = /[^\w.-]/g;
 const SAFE_CHAR = "_";
@@ -57,11 +49,8 @@ function deltaPath(dir: string, index: number): string {
 
 /**
  * Record this flush's delta under its index. Write-once and atomic: the text lands in a private temporary file and is
- * RENAMED into place, so a reader either does not see the file or sees it whole, and two processes never write the same
- * path.
- *
- * Total by construction: a failure costs the successors one incomplete prefix, which they handle, and never an error on
- * screen.
+ * RENAMED into place, so a reader either does not see the file or sees it whole. Total by construction, a failure
+ * costing the successors one incomplete prefix rather than an error on screen.
  */
 export function recordDelta(
   id: string,
@@ -82,10 +71,8 @@ export function recordDelta(
 }
 
 /**
- * The text of every flush BEFORE `index`, in index order, or an incomplete prefix when one of them has not landed yet.
- *
- * On a hole it returns no text at all rather than the part it could read: a caller using a partial prefix would compute
- * an offset into text the screen does not hold, and mis-slicing is the failure this module exists to remove.
+ * The text of every flush BEFORE `index`, in index order. On a hole it returns no text at all rather than the part it
+ * could read: a caller using a partial prefix would compute an offset into text the screen does not hold.
  */
 export function readEarlier(
   id: string,
@@ -105,11 +92,8 @@ export function readEarlier(
 }
 
 /**
- * readEarlier, with a bounded wait for a predecessor that is still starting up.
- *
- * Dispatch order does not guarantee arrival order: process i-1 and process i are spawned milliseconds apart and either
- * can reach its first write first. Bounded, because a predecessor that never writes is one that died, and waiting
- * longer only delays the fail-open the caller does next.
+ * readEarlier, with a bounded wait: process i-1 and process i are spawned milliseconds apart and either can reach its
+ * first write first. Bounded, because a predecessor that never writes is one that died.
  */
 export async function awaitEarlier(
   id: string,
@@ -136,11 +120,8 @@ export function dropMessage(id: string, stateDir: string = DEFAULT_STATE_DIR): v
 }
 
 /**
- * Drop the message directories nothing will ever come back for.
- *
- * A message abandoned mid-stream gets no final flush, so without this the scratch dir grows for as long as the machine
- * is up (the previous format left hundreds of files behind). Swept on the final flush of another message: one readdir
- * over a handful of live entries.
+ * Drop the message directories nothing will ever come back for: a message abandoned mid-stream gets no final flush, so
+ * without this the scratch dir grows for as long as the machine is up.
  */
 export function sweepStale(maxAgeMs = STALE_MS, stateDir: string = DEFAULT_STATE_DIR): void {
   try {

@@ -6,17 +6,12 @@
 //   "  k: v"      -> a pair of the mapping that key opened, ONE level and no deeper
 //   anything else -> ignored (keeps the parser total)
 //
-// Not YAML and never will be: the blocks carry prose it chokes on, so a value stays OPAQUE to end of line and the
-// parser never throws. Nesting rides on INDENTATION alone, which leaves that opacity untouched. It exists because a
-// view fed to another (`@use x from k`) needs its own field, and because these lines used to match nothing and be
-// dropped in silence: a field a message wrote then reached no screen at all, neither drawn nor in the raw fallback.
+// Not YAML: the blocks carry prose it chokes on, so a value stays OPAQUE to end of line and the parser never throws.
 //
-// Its OWN module because the format has TWO readers that must never disagree: this engine, and a host's gate judging
-// the same block without drawing it. That gate cannot reuse the hook edge's parse (an edge ends in a main()-guard, and
-// two main() in one process steal each other's stdin), so it re-implemented the parse once and the duplicate DIVERGED.
+// Its OWN module because TWO readers must never disagree: this engine, and a host's gate judging the same block
+// without drawing it. That gate cannot reuse the hook edge's parse, so its duplicate once DIVERGED.
 //
-// For a list declared with `@fields`, each item splits into the declared fields: every leading field takes one
-// whitespace-delimited token, the LAST takes the rest.
+// Under `@fields`, each leading field takes one token and the LAST takes the rest.
 
 import { ITEM_MARK, NAME_MARK } from "../data/markup.js";
 import { inert } from "../style.js";

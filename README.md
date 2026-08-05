@@ -22,7 +22,7 @@ Titled frames, aligned rows, coloured chips: the answer stops looking like the s
 Not one extra token for the model: nothing that is drawn ever enters its context window.
 
 **✨ Nothing to write to start.**  
-Columns, ruled rows, bands, quotes and rules ship with the package. Yours come later.
+Columns, ruled rows, framed summaries, bands, quotes and rules ship with the package. Yours come later.
 
 **✨ Fail-open.**  
 A failing view shows its original text in place, the rest still renders. Never a blank.
@@ -73,7 +73,7 @@ Ordered directories resolve `.view` files: name one the same and yours beats a p
 
 ### Use the skill
 
-The `write-view` skill is the **fastest** way: it teaches your agent the whole procedure, and it installs from this repo, not from npm:
+The `write-view` skill is the **fastest** way: it teaches your agent the whole procedure, and it installs from this repo, not from npm. It carries the skill, never the engine: the hook above draws, this teaches. Install both.
 
 ```bash
 # as a plugin
@@ -127,7 +127,7 @@ Then ask for what you want drawn, in plain words. The agent does the rest.
 
 A fenced block's fallback is a code wall. The decorator flips the trade: **the payload is markdown that stands on its own**, so anywhere the hook does not run, the reader still gets a real block.
 
-Five views ship for it, and your agent needs to be told they exist. **Installed as a plugin, it already is**: a `SessionStart` hook puts [`agent/steering.md`](agent/steering.md) into the session on every start, clear, compact and resume, so there is nothing to paste and nothing that goes stale in a file of yours.
+Six ready-made views ship for it, and your agent needs to be told they exist. (`welcome`, above, is not one of them: it is the health check saying cc-views is wired and still alive, never a view you draw with.) **Installed as a plugin, it already is**: a `SessionStart` hook puts [`agent/steering.md`](agent/steering.md) into the session on every start, clear, compact and resume, so there is nothing to paste and nothing that goes stale in a file of yours.
 
 Using the package alone, with a hook of your own, there is no `SessionStart` to carry it. Paste [`agent/steering.md`](agent/steering.md) into your system prompt or `CLAUDE.md` then: it is that same text, kept honest by a gate that reads every view name in it back against what this package actually ships.
 
@@ -140,6 +140,18 @@ What each degrades to, where the hook is absent:
 | Fenced `view:` block | a code wall | a code wall |
 | Table under a decorator | a native table, one stray line above it | a table, one stray line above it |
 | Alert quote under a decorator | a native alert box for `NOTE`, `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`; an ordinary quote otherwise | a quote whose first line names its kind |
+| Decorator with no payload (`hr`) | nothing: the bare line shows | the bare line shows |
+
+## Configuration
+
+Four environment variables, all optional.
+
+| Variable | Takes | Does |
+| --- | --- | --- |
+| `CC_VIEWS_PATH` | dirs, split like `PATH` | searched before `./views` and the bundled ones; first hit wins |
+| `CC_VIEWS_WIDTH` | a positive number | the width boxes are drawn to, instead of the terminal's |
+| `CC_VIEWS_THEME` | `light`, `dark`, or either with `-ansi` or `-daltonized` | the theme, instead of the one detected |
+| `CC_VIEWS_STEERING` | `off`, `0`, `false`, `no` | silences the plugin's `SessionStart` briefing; the skill and the engine stay |
 
 ## Use it in your plugin or framework
 
@@ -159,13 +171,7 @@ await runMessageDisplayHook(undefined, {
 
 ## Documentation
 
-- [Cheatsheet](docs/CHEATSHEET.md): **start here.** Every directive, substitution and tag on one page, with a worked example. The only doc that ships in the package.
-- [Caveats](docs/caveats.md): **read this before you wire it in.** Every known boundary, each ending on the line that names whose it is.
-- [The `.view` language reference](docs/architecture/view-language.md): every form the engine accepts, for when the cheatsheet is not enough.
-- [Integration reference](docs/architecture/display-host.md): `DisplayHost`, `RenderOptions`, every public export, troubleshooting.
-- [Architecture](docs/architecture/architecture.md): the layer chain, streaming, width, the decorator trade and the palette.
-- [The `write-view` skill](skills/write-view/SKILL.md): the procedure the agent follows, gated against the generated catalogue.
-- [Contributing](CONTRIBUTING.md) and [manual checks](docs/contributing/manual-checks.md): the verification ladder, and the pre-publish checks no script can run.
+[All of it, sorted by what you are doing](docs/index.md). If you read one page, make it the [Cheatsheet](docs/CHEATSHEET.md): the whole language on one screen, with a worked example.
 
 ---
 

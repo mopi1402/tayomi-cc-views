@@ -1,11 +1,8 @@
-// The MessageDisplay edge, shipped: everything between stdin and stdout that every adopter would otherwise restate, and
-// that took three incidents to get right (the lost update the delta log replaces, the UTF-8 split the joined-buffer
-// read prevents, fail-open everywhere so an error never blanks the screen).
+// The MessageDisplay edge, shipped: everything between stdin and stdout that every adopter would otherwise restate.
 //
 // Two storeys on purpose. handleMessageDisplay takes a PARSED payload and returns the envelope or null: all of the
 // reassembly logic, no process anywhere, which is what makes the dance testable. runMessageDisplayHook is the thin edge
-// over it, and the only storey that touches stdin or stdout. Neither ever exits the process: a library that calls
-// process.exit cannot be composed, so the exit belongs to the caller (the bin below, or a host's own edge).
+// over it. Neither ever exits the process: the exit belongs to the caller (the bin below, or a host's own edge).
 
 import { slice, type DisplayHost } from "../pipeline.js";
 import {

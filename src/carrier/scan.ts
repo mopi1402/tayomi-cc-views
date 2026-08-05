@@ -24,14 +24,10 @@ export const VIEW_OPEN = new RegExp(BLOCK_HINT + NAME_EOL, "g");
 const SPACE = /\s/;
 const CR = "\r";
 
-// Where an opening fence STILL ARRIVING starts, or -1.
-//
-// Such a fence carries no newline yet and its name carries no whitespace, so the whole of it lives inside the run of
-// non-blank characters ENDING the text. That run is found by one backward pass and walked forward once, earliest
-// backtick first, so an inline `code` span earlier on the line is left alone and no input makes this scan quadratic.
-//
-// Two shapes qualify: the hint typed so far (```v), and the hint complete with the name still coming (```view:tab). A
-// trailing CR is the front half of a CRLF still arriving, not a boundary, because VIEW_OPEN accepts it.
+// Where an opening fence STILL ARRIVING starts, or -1. Such a fence carries no newline yet and its name carries no
+// whitespace, so the whole of it lives inside the run of non-blank characters ENDING the text: one backward pass, then
+// one forward walk, earliest backtick first, so an inline `code` span earlier on the line is left alone and no input
+// makes this scan quadratic. A trailing CR is the front half of a CRLF still arriving, not a boundary.
 function openingStart(text: string): number {
   const end = text.endsWith(CR) ? text.length - CR.length : text.length;
   let run = end;

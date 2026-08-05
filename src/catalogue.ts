@@ -1,13 +1,10 @@
 // What the engine says about ITSELF, as data an agent reads instead of touring the source.
 //
 // A DUMP and never a second telling: every entry comes from the module that owns it, so a word taken out of the
-// composition table stops being read, the render changes, and this file changes with it. A hand-written description
-// could stay complete while being wrong, which is the one thing a catalogue must never be.
+// composition table stops being read, the render changes, and this file changes with it.
 //
-// Two halves, and the split is the whole design. The STABLE half is true of a VERSION: the language, the names this
-// package defines, the views it ships. It is what `agent/catalogue.json` holds, generated and gated at the byte. The
-// LIVE half is true of an INSTALL: what a host registered with `extendTags` and what THIS search path resolves, which
-// no committed file could ever state.
+// The STABLE half is true of a VERSION and is what `agent/catalogue.json` holds, generated and gated at the byte. The
+// LIVE half is true of an INSTALL: what a host registered with `extendTags` and what THIS search path resolves.
 
 import {
   ARG_FIELD,
@@ -68,7 +65,6 @@ export interface DirectiveDoc {
   kind: string;
   /** What follows the word, as an author types it. */
   takes: string;
-  /** The containers this word opens, empty for everything that opens none. */
   opens: string[];
   closedBy: string | null;
   /** The containers whose own loop reads this word. Empty for a declaration, which the PARSER reads wherever it sits. */
@@ -82,7 +78,6 @@ export interface ViewDoc {
   static: boolean;
   /** The payload shape this view expects, derived from the fields it spends, or null when it expects none. */
   payload: string | null;
-  /** The fields it spends, which is the derivation's own evidence and what an agent has to put in the block. */
   spends: string[];
   tone: string | null;
   /** Every @map and @text table, under the name a substitution reaches it by, with which of the two declared it. */
@@ -115,7 +110,6 @@ export interface LineDoc {
 export interface PayloadDoc {
   /** The fields this shape yields. Spending one of them is what says a view expects it. */
   fields: readonly string[];
-  /** What SELECTS this shape, decided on the payload's first line and nowhere else. */
   selectedBy: string;
   /** The kind marker this shape may open with, on the one shape that has one. */
   marker: string | null;
@@ -130,9 +124,7 @@ export interface Catalogue {
   directives: DirectiveDoc[];
   /** Which words each container reads. The composition graph, as the engine executes it. */
   containers: Record<string, readonly string[]>;
-  /** How a message CARRIES data to a view: the two carriers, and the lines the data format recognises. */
   block: BlockDoc;
-  /** Which fields each payload shape yields and what selects it. */
   payloads: Record<string, PayloadDoc>;
   tags: { names: string[]; suffixes: readonly string[] };
   views: ViewDoc[];
@@ -184,7 +176,7 @@ function slotField(ref: string): string | null {
 
 /**
  * Every field name a template spends: each substitution's own, each field a directive NAMES, and everything an @fields
- * declares. The three together are what a block has to carry, and what the payload below is derived from.
+ * declares. What a block has to carry, and what the payload below is derived from.
  */
 function spentFields(tpl: Template): string[] {
   const spent = new Set<string>();
@@ -205,11 +197,9 @@ function spentFields(tpl: Template): string[] {
 }
 
 /**
- * Which payload a view is asking for, scored on what it spends: a hit for each of the shape's fields it spends, a miss
- * for each it leaves alone. Nothing but scoring can answer it, since `content` belongs to both shapes and a view
- * spending it ALONE (quote.view) is asking for the one that leaves the least unspent.
- *
- * A view spending none of them expects no payload at all, and a tie is reported as none rather than guessed.
+ * Which payload a view is asking for, scored on what it spends. Nothing but scoring can answer it, since `content`
+ * belongs to both shapes and a view spending it ALONE (quote.view) is asking for the one that leaves the least unspent.
+ * A tie is reported as none rather than guessed.
  */
 function payloadOf(spent: readonly string[]): string | null {
   const held = new Set(spent);
@@ -241,10 +231,8 @@ function viewDoc(name: string, dir: string, file: string): ViewDoc {
 }
 
 /**
- * How a message CARRIES data to a view, which is the half a reader cannot infer from the views above: knowing that
- * `banner` wants a quote spending `content` says nothing about what to type.
- *
- * Every form is spelled from the token the engine ENGAGES on, so a rename reaches this dump with no edit here.
+ * How a message CARRIES data to a view: knowing that `banner` wants a quote spending `content` says nothing about what
+ * to type. Every form is spelled from the token the engine ENGAGES on, so a rename reaches this dump with no edit here.
  */
 function block(): BlockDoc {
   const attribute = (name: string, takes: string, does: string): AttributeDoc => ({
@@ -305,7 +293,6 @@ function payloads(): Record<string, PayloadDoc> {
   );
 }
 
-/** The half both callers share, so neither states the language a second time. */
 function assemble(views: ViewDoc[], tags: string[]): Catalogue {
   return {
     directives: directives(),
@@ -317,10 +304,7 @@ function assemble(views: ViewDoc[], tags: string[]): Catalogue {
   };
 }
 
-/**
- * What is true of this VERSION: the language, the names this package defines, and the views it ships, each named by the
- * path it occupies INSIDE the package so an agent can copy one and adapt it under another name.
- */
+/** What is true of this VERSION, each view named by the path it occupies INSIDE the package. */
 export function stableCatalogue(): Catalogue {
   const dir = bundledViewsDir();
   const views = listViews(dir).map((name) =>
@@ -330,8 +314,8 @@ export function stableCatalogue(): Catalogue {
 }
 
 /**
- * What is true of this INSTALL: the tags a host registered here, and the views THIS search path resolves, in resolution
- * order with the first hit winning, each named by the file it was actually read from.
+ * What is true of this INSTALL: the tags a host registered here, and the views THIS search path resolves, first hit
+ * winning, each named by the file it was actually read from.
  */
 export function liveCatalogue(dirs: string[] = defaultViewsPath()): LiveCatalogue {
   const views: ViewDoc[] = [];

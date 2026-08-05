@@ -6,6 +6,7 @@
 
 import {
   CODE_TICK,
+  RESET_MARK,
   RESUME_MARK,
   SPAN_MARK,
   TAG_AT,
@@ -13,8 +14,8 @@ import {
   isTag,
   tagSource,
 } from "../style.js";
-import { HANG_MARK } from "./marks.js";
-import { printedWidth } from "./measure.js";
+import { HANG_MARK, TAIL_MARK, VOID_MARK } from "./marks.js";
+import { padCell, printedWidth } from "./measure.js";
 import { clusterMap, displayWidth } from "./width.js";
 
 /** The section bar a template draws down its left margin. */
@@ -31,9 +32,8 @@ type Atom = { s: string; w: number; space: boolean; tick: boolean };
 
 function atomize(text: string): Atom[] {
   const atoms: Atom[] = [];
-  // One atom per GRAPHEME CLUSTER, not per code unit. Two reasons, and the first is the one that reaches the screen: an
-  // atom of one code unit lets the greedy fill below cut a surrogate pair or a joined sequence in half, which prints a
-  // broken glyph. The second is arithmetic: a per-unit atom is w: 1 whatever it draws.
+  // One atom per GRAPHEME CLUSTER, not per code unit: the greedy fill below would cut a surrogate pair or a joined
+  // sequence in half, and a per-unit atom is w: 1 whatever it draws.
   const clusters = clusterMap(text);
   let i = 0;
   while (i < text.length) {
@@ -62,10 +62,9 @@ function atomize(text: string): Atom[] {
 // read as the same section, and the blank label is what keeps the text in one column.
 // eslint-disable-next-line security/detect-non-literal-regexp
 const PREFIX_RE = new RegExp(`^(${ANY}${GUTTER_BAR}(?:${tagSource("/")})?${SPACE}?)(${ANY})$`);
-// What survives the blanking. A span's BOTH ends belong there as much as a tag does: a prefix holding a chip keeps the
-// tag that opened it, so dropping the closing mark paints every continuation row in the chip's fill out to the border,
-// and dropping the boundary sends that closing mark unwinding into the row's own tags. Zero width apiece, so the loss
-// shows on screen and in nothing the measurer can see.
+// What survives the blanking. A span's BOTH ends belong there as much as a tag does: dropping the closing mark paints
+// every continuation row in the chip's fill out to the border, and dropping the boundary sends that closing mark
+// unwinding into the row's own tags. Zero width apiece, so the loss shows on screen and nowhere the measurer can see.
 // eslint-disable-next-line security/detect-non-literal-regexp
 const KEEP_RE = new RegExp(`(${TAG_SOURCE}|${SPAN_MARK}|${RESUME_MARK}|${GUTTER_BAR})`);
 // eslint-disable-next-line security/detect-non-literal-regexp
@@ -82,21 +81,39 @@ function blankPrefix(prefix: string): string {
     .join("");
 }
 
+// A VOIDED head is columns and nothing else: not even the style that drew it, which is what parts this from blanking. A
+// band opens its fill before its label, so a kept tag there repaints the hole the fold was meant to leave.
+function foldPrefix(prefix: string): string {
+  const at = prefix.indexOf(VOID_MARK);
+  if (at === -1) return blankPrefix(prefix);
+  const head = prefix.slice(0, at);
+  const rest = prefix.slice(at + VOID_MARK.length);
+  // The reset is load-bearing: whatever the row above left open is still standing when this one starts printing.
+  return RESET_MARK + SPACE.repeat(printedWidth(head)) + blankPrefix(rest);
+}
+
 export function wrapLine(line: string, limit: number): string[] {
   if (limit < MIN_LIMIT || printedWidth(line) <= limit) return [line];
+  // A declared TAIL only ever belonged to a line that fits: past here the fold drops it and squares every row to the
+  // limit instead, which is what parts a rectangle from a staircase. Measured ABOVE with the tail still on, so a band
+  // keeps its closing furniture for as long as that furniture fits.
+  const tail = line.indexOf(TAIL_MARK);
+  const body = tail === -1 ? line : line.slice(0, tail);
   // An explicit hanging boundary wins over the inferred one: a bullet declared on the @each sits AFTER the gutter bar,
   // so PREFIX_RE alone would leave it inside the wrapped text and print it again on every continuation row.
-  const hang = line.indexOf(HANG_MARK);
-  const m = hang === -1 ? line.match(PREFIX_RE) : null;
+  const hang = body.indexOf(HANG_MARK);
+  const m = hang === -1 ? body.match(PREFIX_RE) : null;
   const prefix =
     hang !== -1
-      ? line.slice(0, hang)
+      ? body.slice(0, hang)
       : m
         ? m[1]
-        : (line.match(INDENT_RE) as RegExpMatchArray)[0];
+        : (body.match(INDENT_RE) as RegExpMatchArray)[0];
   const rest =
-    hang !== -1 ? line.slice(hang + HANG_MARK.length) : m ? m[2] : line.slice(prefix.length);
-  const cont = hang !== -1 || m ? blankPrefix(prefix) : prefix;
+    hang !== -1 ? body.slice(hang + HANG_MARK.length) : m ? m[2] : body.slice(prefix.length);
+  const cont = hang !== -1 || m ? foldPrefix(prefix) : prefix;
+  // The FIRST row draws the prefix as written, less the mark that only ever spoke to the fold.
+  const head = prefix.split(VOID_MARK).join("");
   const width = limit - printedWidth(prefix);
   if (width < MIN_CONT) return [line];
   // Greedy fill, breaking at the last space of the line and hard-splitting a token wider than the whole column (a long
@@ -133,7 +150,10 @@ export function wrapLine(line: string, limit: number): string[] {
       if (a.tick) o = !o;
     }
     if (o) s += CODE_TICK;
-    out.push((idx === 0 ? prefix : cont) + s);
+    const row = (idx === 0 ? head : cont) + s;
+    // Squared and CLOSED: without the reset the row's own fill runs on, and a terminal erasing to end of line paints
+    // the rectangle out to its own edge, one row at a time.
+    out.push(tail === -1 ? row : padCell(row, limit) + RESET_MARK);
     open = o;
   });
   return out;

@@ -4,7 +4,17 @@
 // undefined rather than throwing, and a renamed bookkeeping field would blank a column with no error anywhere.
 
 import { describe, it, expect } from "vitest";
-import { BULLET_REF, DEFAULT_KEY, INDEX_REF, ITEM_REF, LABEL_REF } from "./data/language.js";
+import {
+  BULLET_REF,
+  DEFAULT_KEY,
+  FOLD_REF,
+  HANG_REF,
+  INDEX_REF,
+  ITEM_REF,
+  LABEL_REF,
+  TAIL_REF,
+} from "./data/language.js";
+import { HANG_MARK, TAIL_MARK, VOID_MARK } from "./data/marks.js";
 import { SUBST_RE, TEXT_TABLE, lookup, stringify, tableWord, type Scope } from "./scope.js";
 
 describe("lookup", () => {
@@ -30,6 +40,17 @@ describe("lookup", () => {
   it("resolves the bullet the @each declared, and nothing where none was", () => {
     expect(lookup({ __bullet: "- " }, BULLET_REF)).toBe("- ");
     expect(lookup({}, BULLET_REF)).toBe("");
+  });
+
+  it("resolves the hanging boundary to the MARK, against no bookkeeping at all", () => {
+    expect(lookup({}, HANG_REF)).toBe(HANG_MARK);
+    expect(lookup({ __bullet: "- " }, HANG_REF)).toBe(HANG_MARK);
+  });
+
+  it("resolves the fold and the tail to their OWN marks, three codes that cannot collide", () => {
+    expect(lookup({}, FOLD_REF)).toBe(VOID_MARK);
+    expect(lookup({}, TAIL_REF)).toBe(TAIL_MARK);
+    expect(new Set([HANG_MARK, VOID_MARK, TAIL_MARK]).size).toBe(3);
   });
 
   it("gives an unlabelled line the label column in SPACES, so it starts where items do", () => {
@@ -77,7 +98,7 @@ describe("what a lookup records", () => {
   });
 
   it("counts NO pseudo-field, which resolves against the bookkeeping and not the data", () => {
-    expect(seen([ITEM_REF, INDEX_REF, LABEL_REF, BULLET_REF])).toEqual([]);
+    expect(seen([ITEM_REF, INDEX_REF, LABEL_REF, BULLET_REF, HANG_REF, FOLD_REF, TAIL_REF])).toEqual([]);
   });
 
   it("records nothing at all when the caller asked for no account", () => {

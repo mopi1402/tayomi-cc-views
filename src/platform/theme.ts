@@ -1,22 +1,12 @@
-// Which theme Claude Code is drawing in, which this process cannot see.
-//
-// It matters to the two things this engine draws that have no colour of their own to fall back on.
-//
-// An inline code span: Claude Code resolves one through its `permission` palette slot (`case"codespan":return
-// no("permission",t)` in the 2.1.x bundle), and that slot holds a different value in each of the six themes. A view
-// pinning one of them is right in one theme and wrong in five, and on a light terminal the dark theme's periwinkle is
-// barely legible.
-//
-// And the neutral pill, which is a SURFACE: near-white reads as a bright band on a dark screen and as nothing at all on
-// a light one, so it is the one fill in the palette that has to turn over with the terminal.
+// Which theme Claude Code is drawing in, which this process cannot see. It matters to the two things this engine draws
+// with no colour of their own: an inline code span, which the host resolves through its `permission` palette slot
+// (different pixels under each of the six themes), and the neutral pill, a SURFACE that has to turn over with the
+// terminal.
 //
 // Claude Code itself answers `kln ?? COLORFGBG ?? "dark"`, where `kln` is the terminal background it read over OSC 11 at
-// startup. That first source is out of reach: it lives in the host's memory, never on disk (probed 2026-08-04, nothing
-// under the config dir carries a resolved theme), and this process could only re-ask the terminal by writing the query
-// onto the tty the host is reading in raw mode, where the answer lands in whichever of the two reads first.
-//
-// So the sources here are the DELIBERATE ones, and the last two are Claude Code's own, read exactly as it reads them.
-// Where nothing answers the fallback is `dark`, which is what the host falls back to as well.
+// startup. That first source is out of reach: it lives in the host's memory, never on disk (probed 2026-08-04), and
+// re-asking the terminal means writing the query onto the tty the host reads in raw mode, where the answer lands in
+// whichever of the two reads first. So the sources below are the DELIBERATE ones, plus the host's own last two.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -40,15 +30,12 @@ const SIDE_SEP = "-";
 /** The two themes a background LUMINANCE can name: it separates light from dark and says nothing finer. */
 const BY_BACKGROUND: Record<string, Theme> = { [LIGHT_SIDE]: LIGHT_SIDE, [DARK_SIDE]: DARK_SIDE };
 
-/** Whether a theme paints on a LIGHT background. */
 export const isLight = (theme: Theme): boolean => theme.split(SIDE_SEP)[0] === LIGHT_SIDE;
 
 /**
- * The same theme on the OTHER side, its variant kept.
- *
- * What it is FOR: a colour drawn on a fill that opposes the terminal (light ink inside a dark band) needs the value the
- * host would have used had the terminal been that way round. Tabled rather than spelled from the name, so the type
- * proves the pairing is total and a seventh theme cannot be added without one.
+ * The same theme on the OTHER side, its variant kept: a colour drawn on a fill that opposes the terminal needs the
+ * value the host would have used had the terminal been that way round. Tabled rather than spelled from the name, so the
+ * type proves the pairing is total.
  */
 const COUNTERPART: Record<Theme, Theme> = {
   light: "dark",
@@ -77,9 +64,8 @@ const DARK_SLOT_LAST = 6;
 const DARK_SLOT_GREY = 8;
 
 /**
- * Whether a base-sixteen SLOT is on the dark side, read exactly as the host reads it: the palette's own dark half plus
- * its grey. Exported because the same question is asked of an ink written as a slot, whose pixels belong to the theme
- * and can never be measured.
+ * Whether a base-sixteen SLOT is on the dark side, read exactly as the host reads it. Exported because the same
+ * question is asked of an ink written as a slot, whose pixels belong to the theme and can never be measured.
  */
 export const slotIsDark = (slot: number): boolean => slot <= DARK_SLOT_LAST || slot === DARK_SLOT_GREY;
 
@@ -119,9 +105,8 @@ function fromBackground(env: NodeJS.ProcessEnv): Theme | undefined {
 
 /**
  * The active theme, most deliberate source first: this engine's own env var, then the theme the host's config NAMES,
- * then the background the terminal declares, then the host's own fallback.
- *
- * Pure in its environment on purpose, so the whole chain is drivable from a test without a process to spawn.
+ * then the background the terminal declares, then the host's own fallback. Pure in its environment, so the whole chain
+ * is drivable from a test without a process to spawn.
  */
 export function activeTheme(env: NodeJS.ProcessEnv = process.env): Theme {
   return named(env[THEME_ENV]) ?? fromSettings(env) ?? fromBackground(env) ?? DEFAULT_THEME;

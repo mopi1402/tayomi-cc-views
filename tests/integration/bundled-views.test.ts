@@ -1,13 +1,9 @@
 // The views the TARBALL ships, rendered through the real engine. A suite for a PATH,
 // not for a module, so it lives here rather than beside anything.
 //
-// Its reason for existing is a defect it could not catch until it did. banner.view drew
-// its caps with {{tone}}, the class's TEXT colour, against a band filled with that
-// class's chip: bold promotes a base-sixteen foreground to the bright slot and nothing
-// promotes a background, so the caps were one shade off the band they capped, in every
-// theme that separates the two. Nothing was red. examples.test.ts drives examples/, and
-// load.test.ts only asks whether a bundled view RESOLVES, so the shipped templates
-// crossed the whole ladder with no suite that could go red on what they draw.
+// It exists because the shipped templates once crossed the whole ladder with no suite
+// able to go red on what they DRAW: examples.test.ts drives examples/, load.test.ts only
+// asks whether a bundled view resolves.
 //
 // Width is a fixed NUMBER (first in the resolution order), so no env var, probe or
 // terminal reaches the render.
@@ -18,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { transform } from "../../src/pipeline.js";
-import { ANSI_RE } from "../../src/style.js";
+import { ANSI_RE, RESET_MARK, renderTags, tagMark } from "../../src/style.js";
 import { printedWidth } from "../../src/layout/measure.js";
 import { BLOCK_HINT, FENCE, VIEW_EXT } from "../../src/data/markup.js";
 import { MAX_COLUMNS, MIN_COLUMNS } from "../../src/data/language.js";
@@ -35,25 +31,17 @@ const seqs = (out: string): string[] =>
 const plainly = (out: string): string => out.replace(ANSI_RE, "").trim();
 
 const CONTENT = "contenu de la bande";
-/**
- * The FENCED way in: the kind is a FIELD, because a fence carries no attributes. This is
- * the one-off form, for a kind the packaged table has no entry for.
- */
-const band = (tone?: string, type?: string): string =>
+/** The FENCED way in: the kind is a FIELD, a fence carrying no attributes. */
+const band = (tone?: string, type?: string, text: string = CONTENT): string =>
   lines(
     BLOCK_HINT + "banner",
     ...(tone == null ? [] : [`tone: ${tone}`]),
     ...(type == null ? [] : [`type: ${type}`]),
-    `content: ${CONTENT}`,
+    `content: ${text}`,
     FENCE
   );
 
-/**
- * The DECORATED way in, spelled the way a model writes it and not through any production
- * constant: a test sharing the spelling of the token it drives cannot catch a drift in
- * it. The trailing blank line is the rule a quote lives under, and it is written here on
- * purpose rather than hidden in the helper's tail.
- */
+/** Spelled the way a model writes it, never through a production constant: a shared spelling catches no drift in it. */
 const quoted = (marker: string | null, ...attrs: string[]): string =>
   lines(
     `@{view:banner${attrs.map((a) => `, ${a}`).join("")}}`,
@@ -65,15 +53,12 @@ const quoted = (marker: string | null, ...attrs: string[]): string =>
 /** The words the packaged table declares for the kinds asserted below. */
 const WARNING_WORD = "⚠ WARNING";
 const NOTE_WORD = "ⓘ NOTE";
+/** What the banner draws between the word and the message. Furniture, so the template owns it and exports nothing. */
+const SEPARATOR = "|";
 
 describe("the banner the package ships", () => {
-  /**
-   * Each class a band can wear, its cap and the chip that fills it. The pair is the
-   * contract the template states in writing ("caps matching the fill"), and the two
-   * columns must name the SAME colour: `36` against a `46` fill, `38;5;208` against a
-   * `48;5;208` one. A cap carrying the bold attribute is the defect coming back, since
-   * bold is exactly what moves a base-sixteen foreground off its own slot.
-   */
+  // Cap and fill must name the SAME colour: `36` against `46`, `38;5;208` against `48;5;208`. A cap carrying BOLD is
+  // the defect coming back, bold being what moves a base-sixteen foreground off its own slot.
   const BANDS: Record<string, { cap: string; fill: string }> = {
     info: { cap: "36", fill: "1;30;46" },
     warning: { cap: "33", fill: "1;30;43" },
@@ -85,8 +70,12 @@ describe("the banner the package ships", () => {
     gold: { cap: "38;5;220", fill: "1;30;48;5;220" },
     cyan: { cap: "36", fill: "1;30;46" },
     dim: { cap: "38;5;250", fill: "30;48;5;250" },
-    blue: { cap: "34", fill: "1;97;44" },
-    magenta: { cap: "35", fill: "1;97;45" },
+    // These two LEFT the base range. Their band used to fill with slots 44 and 45, whose
+    // pixels belong to the theme, so the ink beside them was a guess: on a terminal painting
+    // 44 a light periwinkle it came out bright white on near-white. An index is measurable,
+    // so the ink and the code span inside both derive now, like the four below.
+    blue: { cap: "38;5;20", fill: "1;97;48;5;20" },
+    magenta: { cap: "38;5;127", fill: "1;97;48;5;127" },
     // Named indices, whose chip and cap BOTH derive from the index: one line each in the
     // palette, and the ink measured rather than picked. Light fills take black, dark
     // ones white, which is the only decision a derived chip makes.
@@ -96,13 +85,8 @@ describe("the banner the package ships", () => {
     lime: { cap: "38;5;154", fill: "1;30;48;5;154" },
   };
   const RESET = "0";
-  /**
-   * The two Powerline half-circles the template draws its caps with, named here because
-   * the template is their owner and exposes them to nothing: a `.view` is read by the
-   * engine, never imported. They are private-use codepoints, so an editor shows them as
-   * a blank and a hand that retypes the line loses them without seeing it, which is
-   * exactly how they went missing once.
-   */
+  // Private-use codepoints, so an editor shows a blank and a hand retyping the line loses them unseen. Named here
+  // because the template owns them and exposes them to nothing: a `.view` is read, never imported.
   const CAP_LEFT = "\u{E0B6}";
   const CAP_RIGHT = "\u{E0B4}";
   const open = (seq: string): string => `\x1b[${seq}m`;
@@ -125,9 +109,12 @@ describe("the banner the package ships", () => {
 
   it("caps every filled band in the foreground painting that band's own fill", () => {
     for (const [tone, { cap, fill }] of Object.entries(BANDS)) {
+      // The leading reset is emitted even on a band that fits: one line is written, and it cannot know it will wrap.
+      // The fill twice over is the fold's doing: the label and the separator are two painted zones so the hole between
+      // them can exist at all, and back to back they draw as one band.
       expect({ tone, seqs: seqs(render(band(tone))) }).toEqual({
         tone,
-        seqs: [cap, RESET, fill, RESET, cap, RESET],
+        seqs: [RESET, cap, RESET, fill, fill, RESET, cap, RESET],
       });
     }
   });
@@ -141,7 +128,7 @@ describe("the banner the package ships", () => {
     const CAP_INDEX = "38;5;";
     const FILL_INDEX = "48;5;";
     const PARAM = ";";
-    const [cap, , fill] = seqs(render(band("chip")));
+    const [, cap, , fill] = seqs(render(band("chip")));
     expect(cap.startsWith(CAP_INDEX)).toBe(true);
     const index = cap.slice(CAP_INDEX.length);
     expect(fill.endsWith(FILL_INDEX + index)).toBe(true);
@@ -155,16 +142,21 @@ describe("the banner the package ships", () => {
     expect(seqs(render(band()))).toEqual(seqs(render(band("chip"))));
   });
 
-  it("degenerates on a WEIGHT, the last name with no colour to fill from, and says so", () => {
-    // A cap is half a pill: with no band to extend, two solid glyphs sit around bare
-    // text and the whole thing reads as broken. That is what `tone:gold` looked like
-    // before a chip derived from every colour, and a weight is all that can still reach
-    // it: `b` carries no colour at all, so nothing about it can be measured. Pinned
-    // rather than fixed, because naming a weight as a band's tone is a category error
-    // the palette cannot answer, and fail-open still shows every field.
-    const BOLD = "1";
-    expect(seqs(render(band("b")))).toEqual([BOLD, RESET, BOLD, RESET, BOLD, RESET]);
-    expect(render(band("b")).replace(ANSI_RE, "")).toContain(CONTENT);
+  it("draws the NEUTRAL band for a name carrying no pixels, never caps around nothing", () => {
+    // A cap is half a pill: with no band to extend, two solid glyphs sat around bare text and the whole thing read as
+    // broken. That was pinned here as a category error not worth answering, on the belief that `b` was the only name
+    // able to reach it. `box_title` reaches it too, and that one an author does write: on a dark terminal it is a
+    // base-sixteen bright slot, pixels the theme owns, so no chip derives from it either.
+    //
+    // So the surface slots fall to the neutral instead. The template asked for something to draw ON, and the pill is
+    // the palette's answer for a surface with no colour opinion.
+    for (const weightless of ["b", "box_title"]) {
+      expect({ tone: weightless, seqs: seqs(render(band(weightless))) }).toEqual({
+        tone: weightless,
+        seqs: seqs(render(band("chip"))),
+      });
+      expect(render(band(weightless)).replace(ANSI_RE, "")).toContain(CONTENT);
+    }
   });
 
   it("falls THROUGH a class the palette does not know, rather than losing the band", () => {
@@ -181,8 +173,74 @@ describe("the banner the package ships", () => {
     expect(plain).not.toContain("{{");
   });
 
-  it("stays ONE line, which is what makes the caps read as a pill", () => {
+  it("stays ONE line while it fits, which is what makes the caps read as a pill", () => {
     expect(plainly(render(band("error"))).split("\n")).toHaveLength(1);
+  });
+
+  describe("a band wider than the width", () => {
+    const TONE = "warning";
+    const { cap, fill } = BANDS[TONE];
+    const WORD = "mot";
+    // In words the greedy fill can break between: one unbreakable token would pin the hard-split path instead.
+    const LONG = Array.from({ length: 40 }, () => WORD).join(" ");
+    const rows = (): string[] => render(band(TONE, undefined, LONG)).trimEnd().split("\n");
+
+    it("wraps at OUR width rather than the terminal's", () => {
+      expect(rows().length).toBeGreaterThan(1);
+      for (const row of rows()) expect(printedWidth(row)).toBeLessThanOrEqual(options.width);
+    });
+
+    it("leaves the LABEL's columns bare on a continuation, and resumes the fill under the separator", () => {
+      // Asserted IN ORDER, reset included: spaces are there either way, and only the terminal knows what background
+      // was still standing when it printed them.
+      const [first, ...rest] = rows();
+      expect(rest.length).toBeGreaterThan(0);
+      expect(first.startsWith(open(RESET) + open(cap) + CAP_LEFT + open(RESET) + open(fill))).toBe(true);
+      // The arc, the word, the space and the separator: everything the first row draws before the blank it hangs from.
+      const hole = 1 + printedWidth(NOTE_WORD) + 1 + SEPARATOR.length;
+      for (const row of rest) {
+        expect(row.startsWith(open(RESET) + " ".repeat(hole) + open(fill))).toBe(true);
+      }
+    });
+
+    it("resumes the fill one column PAST the separator, and the text still lines up", () => {
+      const printed = rows().map((r) => r.replace(ANSI_RE, ""));
+      const column = printed[0].indexOf(SEPARATOR);
+      expect(column).toBeGreaterThan(0);
+      // Everything up to and including the separator's cell is bare; the fold paints the blank after it alone.
+      const body = column + SEPARATOR.length + 1;
+      for (const row of printed.slice(1)) {
+        expect(row.slice(0, body)).toBe(" ".repeat(body));
+        expect(row[body]).not.toBe(" ");
+      }
+      expect(printed[0][body]).not.toBe(" ");
+    });
+
+    it("draws ONE opening arc and no closing one, a rectangle having no rounded end to give", () => {
+      const printed = rows().map((r) => r.replace(ANSI_RE, ""));
+      expect(printed[0].startsWith(CAP_LEFT)).toBe(true);
+      for (const row of printed.slice(1)) expect(row).not.toContain(CAP_LEFT);
+      // The band that FITS keeps both, which is the whole of what the tail mark decides.
+      expect(printed.join("")).not.toContain(CAP_RIGHT);
+      expect(plainly(render(band(TONE))).endsWith(CAP_RIGHT)).toBe(true);
+    });
+
+    it("squares every row to the SAME width, so the block is a rectangle and not a staircase", () => {
+      const drawn = rows();
+      expect(drawn.length).toBeGreaterThan(1);
+      for (const row of drawn) expect(printedWidth(row)).toBe(options.width);
+      // Closed at the end of each row: a fill left open is painted to the terminal's own edge by any terminal that
+      // erases to end of line, and the rectangle grows a ragged right edge nothing here can see.
+      for (const row of drawn) expect(row.endsWith(renderTags(RESET_MARK))).toBe(true);
+    });
+
+    it("carries the whole message across the rows it took", () => {
+      const printed = rows()
+        .map((r) => r.replace(ANSI_RE, "").trim())
+        .join(" ");
+      expect(printed.split(WORD).length - 1).toBe(LONG.split(" ").length);
+      expect(printed).toContain(NOTE_WORD);
+    });
   });
 });
 
@@ -515,6 +573,143 @@ describe("the lines view the package ships", () => {
   });
 });
 
+// The only bundled view that FRAMES, and the only one reading the table's header row as
+// something other than the names of its columns: the frame's title and its badge. So most
+// of what follows pins that reading, which nothing else in the engine can see.
+describe("the box view the package ships", () => {
+  const GUTTER = "▎"; // the same glyph quote.view spends, because wrap.ts redraws that one
+  const TITLE = "TL;DR";
+  const BADGE = "session 3";
+  const DASH = "─";
+
+  /** Asked of the palette, never spelled: `box_title` alone turns over with the terminal. */
+  const ink = (...tags: string[]): string => tags.map((t) => renderTags(tagMark(t))).join("");
+
+  const box = (deco: string, head: string, ...rows: string[]): string =>
+    lines(deco, head, "| --- | --- |", ...rows, "");
+  const HEAD = `| ${TITLE} | |`;
+  const ROWS = ["| SAID | the retry test is fixed |", "| NEXT | bump the patch version |"];
+  const MSG = box("@{view:box}", HEAD, ...ROWS);
+  /** Every line carrying an element, which is every line the bar stands on. */
+  const barred = (out: string): string[] =>
+    plainly(out)
+      .split("\n")
+      .filter((l) => l.includes(GUTTER));
+
+  it("reads the header row as the FRAME, its two ends and nothing between them", () => {
+    const drawn = plainly(render(box("@{view:box}", `| ${TITLE} | ${BADGE} |`, ...ROWS))).split("\n");
+    expect(drawn[0]).toContain(BADGE); // set into the top rule, near the corner
+    expect(drawn[1]).toContain(TITLE); // its own row, inside the border
+    expect(drawn[1]).not.toContain(GUTTER); // and never an element of the list
+    expect(drawn[2].includes(DASH)).toBe(true);
+    expect(barred(render(MSG))).toHaveLength(ROWS.length);
+  });
+
+  it("paints the label and the bar together, and the text never", () => {
+    // The whole tone contract of this view: ONE colour per box. A slot reaching the content column would recolour
+    // words the model wrote, which is the seam only a template may cross.
+    const drawn = render(box("@{view:box, tone:cyan}", HEAD, ROWS[0]));
+    const cyan = seqs(ink("cyan"))[0];
+    const row = drawn.split("\n").find((l) => l.includes(GUTTER)) as string;
+    expect(seqs(row).filter((c) => c === cyan)).toHaveLength(2);
+    expect(plainly(drawn)).toBe(plainly(render(box("@{view:box}", HEAD, ROWS[0])))); // colour is the ONLY difference
+  });
+
+  it("draws grey by default, the weight in FRONT of the ink as the label column always is", () => {
+    expect(render(MSG)).toContain(`${ink("b", "dim")}SAID`);
+  });
+
+  it("continues a section on an empty label, where lines.view would rule between them", () => {
+    // The reason the two differ: this view divides with a BAR down the margin, and a bar is what a continuation keeps.
+    const rows = barred(render(box("@{view:box}", HEAD, ROWS[0], "| | and more |")));
+    expect(rows).toHaveLength(2);
+    const at = rows[0].indexOf(GUTTER);
+    expect(rows[1].indexOf(GUTTER)).toBe(at); // same column, so the two read as one section
+    expect(rows[1].slice(0, at).replace("│", "").trim()).toBe("");
+    expect(rows[1]).toContain("and more");
+  });
+
+  it("sets EVERY row off with one blank line, and leaves none trailing the last", () => {
+    // A blank per row, dropped to one and popped at the end by the container's own collapsing, which is the whole
+    // reason the template can emit it unconditionally.
+    const body = (out: string): string[] =>
+      plainly(out)
+        .split("\n")
+        .slice(3, -1) // the top rule, the title and the rule under it, then the bottom border
+        .map((l) => l.replaceAll("│", "").trim());
+    expect(body(render(MSG))).toEqual([
+      "SAID  ▎ the retry test is fixed",
+      "",
+      "NEXT  ▎ bump the patch version",
+    ]);
+  });
+
+  it("sets a CONTINUATION off too, the cost of a language with no per-row conditional", () => {
+    // Pinned because it is the one place this view reads worse than the summary it draws: an empty label continues the
+    // section above and still gets its blank. Two lines that must stay glued belong in one cell, where the wrap keeps
+    // them. A silent change here would be a look nobody chose.
+    const drawn = plainly(render(box("@{view:box}", HEAD, ROWS[0], "| | and more |"))).split("\n");
+    const at = drawn.findIndex((l) => l.includes("and more"));
+    expect(drawn[at - 1].replaceAll("│", "").trim()).toBe("");
+  });
+
+  it("folds a long line inside the border and redraws the bar on the fold", () => {
+    // What the frame buys over a bare container: outside one nothing wraps, and the fold restarts at the margin with
+    // no bar, which is the documented cost of quote.view.
+    const long = "mot ".repeat(40).trim();
+    const drawn = plainly(render(box("@{view:box}", HEAD, `| SAID | ${long} |`)));
+    const rows = barred(drawn);
+    expect(rows.length).toBeGreaterThan(1);
+    for (const l of drawn.split("\n")) expect(printedWidth(l)).toBeLessThanOrEqual(options.width);
+    const at = rows[0].indexOf(GUTTER);
+    for (const l of rows.slice(1)) {
+      expect(l.indexOf(GUTTER)).toBe(at);
+      expect(l.slice(0, at).replace("│", "").trim()).toBe(""); // the label is blanked, the bar is not
+    }
+  });
+
+  it("hangs the fold on the template's OWN bar, never on one the message wrote", () => {
+    // What `bullet=""` buys, and it prints nothing: an explicit boundary. Without it the prefix is inferred and reaches
+    // the LAST bar of the line, so a bar in the model's text is promoted to furniture and redrawn down the block.
+    const long = `un texte ${GUTTER} avec une barre dedans ` + "mot ".repeat(20);
+    const rows = barred(render(box("@{view:box}", HEAD, `| SAID | ${long} |`)));
+    expect(rows.length).toBeGreaterThan(1);
+    for (const l of rows.slice(1)) expect(l.split(GUTTER)).toHaveLength(2);
+  });
+
+  it("keeps a long TITLE out of the label column, which it no longer heads", () => {
+    // The header joins the measurement only where the loop DRAWS it. Here it is the frame, so a long one widens the
+    // box and leaves every element where it was.
+    const LONG = "a title longer than any label here";
+    const at = (out: string): number[] => barred(out).map((l) => l.indexOf(GUTTER));
+    expect(at(render(box("@{view:box}", `| ${LONG} | |`, ...ROWS)))).toEqual(at(render(MSG)));
+  });
+
+  it("takes every width the carrier hands it, the middles between the label and the bar", () => {
+    for (let n = MIN_COLUMNS; n <= MAX_COLUMNS; n++) {
+      const cells = Array.from({ length: n }, (_, i) => `c${i + 1}`);
+      const row = `|${cells.map((c) => ` ${c} |`).join("")}`;
+      const head = `|${cells.map(() => " |").join("")}`;
+      const delim = `|${cells.map(() => " --- |").join("")}`;
+      const drawn = barred(render(lines("@{view:box}", head, delim, row, "")));
+      expect(drawn[0]).toContain(`${cells.slice(0, -1).join("  ")}  ${GUTTER} ${cells[n - 1]}`);
+    }
+  });
+
+  it("draws its title row even for the blank header markdown forces, a box having one", () => {
+    // The documented cost, pinned so it cannot change in silence: `| | |` is a table wanting no header, and this view
+    // frames all the same. lines.view is the one that draws nothing there.
+    const drawn = plainly(render(box("@{view:box}", "| | |", ROWS[0]))).split("\n");
+    expect(drawn[1].replaceAll("│", "").trim()).toBe("");
+    expect(drawn[2]).toContain(DASH);
+  });
+
+  it("refuses a QUOTE payload outright, exactly as the two other table views do", () => {
+    const msg = lines("@{view:box}", "> [!WARNING]", "> no rows here", "");
+    expect(render(msg)).toBe(msg);
+  });
+});
+
 // The third consumer of the decorated QUOTE, and the one that shares a payload shape with
 // the banner while drawing the opposite thing: where a band swallows its marker and prints
 // the WORD, this one swallows the marker and prints nothing but the sentence. The two
@@ -622,9 +817,14 @@ describe("the hr view the package ships", () => {
     expect(plainly(eaten)).not.toContain("x");
   });
 
-  it("prints raw under a line no parser claims, the loud half of the same trap", () => {
-    const msg = lines("@{view:hr}", "---", "");
-    expect(render(msg)).toBe(msg);
+  it("draws under a line no parser claims, this view having nothing a payload could feed", () => {
+    // The counterpart of the case above, and the whole point of the pair: a TABLE announces itself and is claimed,
+    // where a plain line announces nothing. A rule is furniture with no slot to fill, so text written straight under
+    // it is text, and refusing to draw would cost the author the one thing the line was for.
+    const out = render(lines("@{view:hr}", "État de l'arbre : 44 fichiers.", ""));
+    const rows = plainly(out).split("\n");
+    expect(rows[0]).toBe(DASH.repeat(options.width));
+    expect(rows[1]).toBe("État de l'arbre : 44 fichiers.");
   });
 });
 

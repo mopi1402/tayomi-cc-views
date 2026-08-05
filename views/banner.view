@@ -34,6 +34,9 @@
 # SEVERAL bands are several blocks, never one list: the caps exist to make ONE band read
 # as a pill, and stacking them scallops both flanks.
 #
+# The pipe parts the word from the message, whatever the word. Furniture, so it is drawn
+# here and not spelled in every entry of the table below.
+#
 # The caps are U+E0B6/U+E0B4 (Powerline). A font without them shows two hollow boxes
 # around the band; swap them for ▐ and ▌ if yours does not. They spend {{tone_cap}},
 # which the engine DERIVES from the chip filling the band, so they match it exactly
@@ -45,9 +48,18 @@
 # the readable foreground over it are both DERIVED from the colour, so a host's own tag
 # bands the day it is registered, and nothing here has to be kept in step with the palette.
 #
-# The band is emitted on ONE line and nothing measures it: a body wider than the terminal
-# is soft-wrapped by the terminal itself, the colour continues on the next row and the
-# closing cap lands at the end of the last one. That is the accepted look, not an oversight.
+# A long band WRAPS here rather than at the terminal's mercy: `@box bare` buys the body
+# machinery without the chrome. A wrapped row leaves the word's columns EMPTY and picks the
+# fill back up one column past the pipe, so the message reads as one paragraph in one column.
+#
+# `${#fold}` voids everything before it (bare columns, opened on a reset, the fill dropped)
+# and `${#hang}` says where the text starts. Two marks because the fill resumes one column
+# ahead of the text. The reset is load-bearing: a row ends with its fill still standing.
+#
+# The fill is opened TWICE, once for the word and once past the pipe, and that is what makes
+# the hole possible at all. Back to back they draw as one band.
 @tone chip
 @text kinds note="ⓘ NOTE" tip="✔ TIP" important="★ IMPORTANT" warning="⚠ WARNING" caution="⛔ CAUTION" error="✖ ERROR" success="✔ SUCCESS" info="ⓘ INFO" warn="⚠ WARN" fail="✖ FAIL" pass="✔ PASS" high="▲ HIGH" med="■ MED" low="▼ LOW" version="◆ VERSION" *="ⓘ NOTE"
-{{tone_cap}}{{/}}{{tone_bg}}${type:kinds}  ${content}{{/}}{{tone_cap}}{{/}}
+@box bare
+{{/}}{{tone_cap}}{{/}}{{tone_bg}}${type:kinds} |${#fold}{{tone_bg}} ${#hang}${content}${#tail}{{/}}{{tone_cap}}{{/}}
+@endbox

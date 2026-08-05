@@ -14,8 +14,6 @@ import {
 } from "../scope.js";
 
 /**
- * One expression's value, everything around it already decided.
- *
  * Kept apart from the scan below so the HOLLOW rule can drop a substitution without this ever running: a field no item
  * carries must not be looked up at all, since the lookup is what records a field as READ.
  */
@@ -27,9 +25,8 @@ function value(expr: string, scope: Scope, tables: Tables, pad?: PadCtx): string
   const aligned = pad != null && field !== pad.tail;
   const cell = aligned ? pad!.widths[field] : undefined;
   const table = rawTable ? tables[rawTable.trim()] : undefined;
-  // A TEXT table answers for the value that never arrived, which is what its reserved entry exists for, so its lookup
-  // runs BEFORE the absent-value exit below rather than after it. @map keeps that exit untouched, and with it every
-  // byte it draws today: an absent value there has no word to fall back on and never had one.
+  // A TEXT table answers for the value that never arrived, so its lookup runs BEFORE the absent-value exit below. @map
+  // keeps that exit: an absent value there has no word to fall back on.
   if (table?.kind === TEXT_TABLE) {
     const word = tableWord(table, val == null ? "" : stringify(val).trim());
     return cell == null ? word : padCell(fitCell(word, cell), cell);
@@ -63,11 +60,9 @@ const fieldOf = (expr: string): string => expr.split(":")[0].trim();
 const LEAD_TAG_RE = new RegExp(TAG_SOURCE, "g");
 
 /**
- * What SURVIVES a dropped lead: the tag closers the lead does not open itself.
- *
- * A separator writes a closed span (`{{dim}}  │  {{/}}`) and goes down whole with its column. A closer standing at the
- * head of the lead belongs to the column BEFORE it, `{{tone}}${label}{{/}}`, and dropping that one would leak the tone
- * across the rest of the line, which is the one way this rule could repaint a row.
+ * What SURVIVES a dropped lead: the tag closers the lead does not open itself. A separator writes a closed span
+ * (`{{dim}}  │  {{/}}`) and goes down whole with its column, but a closer standing at the head of the lead belongs to
+ * the column BEFORE it, and dropping that one would leak the tone across the rest of the line.
  */
 function unmatchedCloses(lead: string): string {
   let depth = 0;
@@ -81,14 +76,12 @@ function unmatchedCloses(lead: string): string {
 }
 
 /**
- * A line with its expressions resolved, and its HOLLOW ones removed along with the text leading up to them.
+ * A line with its expressions resolved, and its HOLLOW ones removed along with the text leading up to them. That lead
+ * is everything since the previous expression, which is where a template writes a column's separator, so a column the
+ * data never had takes its own furniture down with it.
  *
- * That lead is everything since the previous expression, which is where a template writes a column's separator, so a
- * column the data never had takes its own furniture down with it. Nothing else can reach the rule: only a list computes
- * a hollow set, and only over fields declared by @fields.
- *
- * The lead therefore has to be BALANCED markup, `{{dim}}  │  {{/}}` and not a bare `{{/}}` belonging to the column
- * before: a template that splits a tag across two columns loses the closer with the column.
+ * The lead therefore has to be BALANCED markup: a template that splits a tag across two columns loses the closer with
+ * the column.
  */
 export function subst(text: string, scope: Scope, tables: Tables, pad?: PadCtx): string {
   let out = "";

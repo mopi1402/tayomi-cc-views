@@ -1,14 +1,8 @@
-// Every module answers for itself: `foo.ts` is tested by `foo.test.ts` beside it, or
-// it says IN WRITING why it is not.
+// Every module answers for itself: `foo.ts` is tested by `foo.test.ts` beside it, or it says IN WRITING why it is not.
 //
-// Coverage tools measure lines executed, which a suite driving the whole engine from
-// the top satisfies without ever pinning one module's edge. This gate measures
-// something coarser and harder to fake: does this module have a place where its OWN
-// behaviour is stated? A module tested only through the front door has its contract
-// written nowhere, and the day it changes, the failure lands three layers away.
-//
-// It bites in BOTH directions, or the exclusion list rots into a list of excuses:
-// an entry naming a file that has gained a test, or that no longer exists, fails too.
+// Coverage measures lines executed, which a suite driving the engine from the top satisfies without pinning one
+// module's edge. This asks the coarser question, and bites in BOTH directions or the exclusion list rots into excuses:
+// an entry naming a file that has gained a test, or no longer exists, fails too.
 //
 // Run via `pnpm check:sidecars`, wired into `pnpm verify`.
 

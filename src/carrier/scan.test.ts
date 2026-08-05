@@ -1,13 +1,8 @@
-// The carrier's two streaming losses. Both were SCREEN losses rather than render bugs, so everything here is measured
-// on the screen:
+// The carrier's two streaming losses, measured on the SCREEN: the opening fence line arriving character by character
+// (VIEW_OPEN waits for the newline that ENDS it), and the block that never closes (the cut ran on the final delta too,
+// where no later flush exists to reveal what it held).
 //
-//   - the opening fence line arriving character by character. VIEW_OPEN waits for the
-//     newline that ENDS it, so every cut inside that line left the carrier blind.
-//   - the block that never closes. The cut ran on the final delta too, where no later flush
-//     exists to reveal what it held, so the tail of the message was swallowed.
-//
-// The witness is character-exact, because the positions are the report: its prose is 7 characters, so the opening fence
-// starts at 7 and its line closes at 19.
+// The witness is character-exact: its prose is 7 characters, so the opening fence starts at 7 and its line closes at 19.
 
 import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";

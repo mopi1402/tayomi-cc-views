@@ -1,10 +1,5 @@
-// The pre-publish gate: prove the PACKED package works before npm ever sees it.
-//
-// What a unit test cannot catch lives here: the "files" whitelist (a view missing
-// from the tarball), the bin wiring, and the bundled resolution as an INSTALLED
-// copy sees it. The scenario is the README's minimal setup, end to end: pack the
-// tarball, install it in a throwaway project, feed the installed bin one real
-// MessageDisplay payload carrying the welcome block, and require the box.
+// The pre-publish gate: prove the PACKED package works before npm ever sees it. What a unit test cannot catch lives
+// here: the "files" whitelist, the bin wiring, and the bundled resolution as an INSTALLED copy sees it.
 //
 // Run via `pnpm verify:pack` (which builds first); wired into prepublishOnly.
 
@@ -23,10 +18,14 @@ const fail = (msg) => {
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-verify-"));
 try {
-  // 1. The real tarball, exactly what `npm publish` would upload.
-  execSync(`npm pack --pack-destination "${work}"`, { stdio: "pipe" });
+  // 1. The real tarball, exactly what `pnpm publish` would upload.
+  //
+  // PNPM, never `npm pack`: publishConfig swaps `exports` from the dev entry (./src/index.ts, kept OUT of the tarball)
+  // to the built one, and npm applies it at publish time alone. Measured: an npm-packed tarball installs and its binary
+  // draws, resolved through `bin`, while `import { renderView } from "@tayomi/cc-views"` throws ERR_MODULE_NOT_FOUND.
+  execSync(`pnpm pack --pack-destination "${work}"`, { stdio: "pipe" });
   const tgzName = fs.readdirSync(work).find((f) => f.endsWith(".tgz"));
-  if (!tgzName) fail("npm pack produced no tarball");
+  if (!tgzName) fail("pnpm pack produced no tarball");
   const tgz = path.join(work, tgzName);
 
   // 2. The files contract: the health check ships, and so does the ONE doc with a
@@ -115,6 +114,17 @@ try {
   );
   execSync(`npm install --no-audit --no-fund "${tgz}"`, { cwd: proj, stdio: "pipe" });
 
+  // 3b. The PUBLIC API, by package name. The only step going through `exports`: every other resolves a path, so a
+  // broken entry leaves them green while an adopter's own import throws.
+  const api = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", `import { renderView } from "${pkg.name}"; if (typeof renderView !== "function") process.exit(2);`],
+    { cwd: proj, encoding: "utf8" }
+  );
+  if (api.status !== 0) {
+    fail(`the installed package cannot be imported by name: ${(api.stderr || "").split("\n")[1] ?? api.status}`);
+  }
+
   // 4. One real MessageDisplay payload through the INSTALLED bin.
   const bin = path.join(proj, "node_modules", "@tayomi", "cc-views", "dist", "bin", "messagedisplay.js");
   const block = [
@@ -193,14 +203,9 @@ try {
   }
   if (ART_CELL.test(narrowPlain)) fail(`the art was not dropped at ${NARROW} columns`);
 
-  // 7. The banner, both ways in, from the INSTALLED tarball. The claim being gated is
-  // that a consumer who has created NOTHING can write a marked quote and get a dressed
-  // band: the word comes out of the packaged @text table, so a table that failed to ship
-  // (or a template that stopped reading it) shows up here and nowhere else.
-  // The body carries a CODE SPAN on purpose: banner.view draws its band as a filled
-  // chip, so a span inside it is a span the engine inserted inside a style the template
-  // opened, and its terminator has to hand the band back. Rendered from the installed
-  // tarball, this is the one place that gate is spoken end to end.
+  // 7. The banner, both ways in, from the INSTALLED tarball: a consumer who created NOTHING writes a marked quote and
+  // gets a dressed band, the word coming out of the packaged @text table. The body carries a CODE SPAN on purpose,
+  // since its terminator has to hand the filled band back, and this is the one place that is spoken end to end.
   /** The two C0 codes a rendered screen is allowed to carry: the row break and ANSI's own. */
   const ON_SCREEN_C0 = new Set(["\n", "\x1b"]);
   const SPAN = "pnpm verify";

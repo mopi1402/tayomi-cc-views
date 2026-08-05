@@ -22,8 +22,11 @@ import {
   FRAME,
   FOOT,
   HEAD,
+  FOLD_REF,
+  HANG_REF,
   INDEX_REF,
   ITEM_REF,
+  TAIL_REF,
   LABEL,
   LABEL_REF,
   MAP,
@@ -44,7 +47,7 @@ import {
 const AT = "@";
 const DIRECTIVES = [MAP, TEXT, FIELDS, TONE, BOX, HEAD, RIGHT, FOOT, FRAME, RULE, EACH, ASIDE, END];
 const TERMINATORS = [ENDBOX, ENDASIDE];
-const REFS = [ITEM_REF, INDEX_REF, LABEL_REF, BULLET_REF];
+const REFS = [ITEM_REF, INDEX_REF, LABEL_REF, BULLET_REF, HANG_REF, FOLD_REF, TAIL_REF];
 
 describe("the directives", () => {
   it("all wear the one prefix, so a matcher can anchor on it", () => {

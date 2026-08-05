@@ -14,8 +14,7 @@ export const R = `${ESC}[0m`;
 const RESET_NAME = "/";
 const CODE = "code";
 
-// Above BASE, which calls the builders at module load. A base-sixteen background sits ten above its foreground; the
-// extended forms differ only by their selector.
+// A base-sixteen background sits ten above its foreground; the extended forms differ only by their selector.
 const BG_FIRST = 40;
 const BG_LAST = 47;
 const BG_BRIGHT_FIRST = 100;
@@ -31,40 +30,34 @@ const EXT_SPAN: Record<string, number> = { [INDEX_SEL]: 3, [RGB_SEL]: 5 };
 const SGR = /^\x1b\[([0-9;]*)m$/;
 const PARAM = ";";
 const BOLD = "1";
-// A base-sixteen FOREGROUND, and the slot each parameter names. The bright run continues the same sixteen, which is why
-// it starts eight in.
+// The bright run continues the same sixteen, which is why it starts eight in.
 const FG_FIRST = 30;
 const FG_LAST = 37;
 const FG_BRIGHT_FIRST = 90;
 const FG_BRIGHT_LAST = 97;
 const BRIGHT_TO_SLOT = 8;
 
-/** The terminal this process draws into, asked ONCE: a hook lives the length of one message and the answer costs disk. */
+/** Asked ONCE: a hook lives the length of one message and the answer costs disk. */
 const THEME = activeTheme();
 const TERMINAL_IS_LIGHT = isLight(THEME);
 
-/** Rounded, then clamped. A NaN would spell the word into the sequence, so it takes the floor. */
+/** A NaN would spell the word into the sequence, so it takes the floor. */
 const BYTE_LAST = 255;
 const byte = (n: number): number =>
   Number.isNaN(n) ? 0 : Math.min(BYTE_LAST, Math.max(0, Math.round(n)));
 
-/**
- * A colour named by its 256-palette INDEX. Exported for extendTags, and called by the palette below so no second
- * spelling can drift. `0..15` is accepted though it names a THEME slot and derives no chip.
- */
+/** A colour named by its 256-palette INDEX. `0..15` is accepted though it names a THEME slot and derives no chip. */
 export const ansi256 = (n: number): string =>
   `${ESC}[${EXT_FG}${PARAM}${INDEX_SEL}${PARAM}${byte(n)}m`;
 
-/** A colour named by its PIXELS. */
 export const rgb = (r: number, g: number, b: number): string =>
   `${ESC}[${EXT_FG}${PARAM}${RGB_SEL}${PARAM}${byte(r)}${PARAM}${byte(g)}${PARAM}${byte(b)}m`;
 
-// The two ends of the 256-colour cube, which the theme does not repaint: whatever palette the terminal was handed, these
-// two are still the darkest and the lightest thing it can draw.
+// The two ends of the 256-colour cube, which the theme does not repaint.
 const CUBE_BLACK = 16;
 const CUBE_WHITE = 231;
 
-/** A filled pill: ink and fill in one sequence, so the pair can only ever be swapped together. */
+/** Ink and fill in one sequence, so the pair can only ever be swapped together. */
 const pill = (ink: number, fill: number): string =>
   `${ESC}[${BOLD}${PARAM}${EXT_FG}${PARAM}${INDEX_SEL}${PARAM}${byte(ink)}` +
   `${PARAM}${EXT_BG}${PARAM}${INDEX_SEL}${PARAM}${byte(fill)}m`;
@@ -93,12 +86,66 @@ const BASE: Record<string, string> = {
   navy: ansi256(25),
   salmon: ansi256(209),
   mint: ansi256(121),
-  // The one fill in this table that TURNS OVER with the terminal. Every other colour here is a hue, visible on either
-  // background; this one is the neutral pill, and a neutral is only neutral against something. Near-white reads as a
-  // bright band on a dark screen and as nothing at all on a light one, where the ink is all that survives. Swapping the
-  // pair keeps the band at the same contrast and carries its ink across with it.
+  // The one fill in this table that TURNS OVER with the terminal: a neutral is only neutral against something, and
+  // near-white reads as a band on a dark screen and as nothing on a light one. Swapping the pair keeps the contrast.
   chip: TERMINAL_IS_LIGHT ? pill(CUBE_WHITE, CUBE_BLACK) : pill(CUBE_BLACK, CUBE_WHITE),
 };
+
+// The xterm-256 geometry, which is what makes an INDEX measurable: a 6x6x6 cube of fixed levels, then a 24-step grey
+// ramp. The first sixteen are the theme's own and no arithmetic reaches them.
+const CUBE_FIRST = 16;
+const CUBE_SIDE = 6;
+const CUBE_LEVELS = [0, 95, 135, 175, 215, 255];
+const RAMP_FIRST = CUBE_FIRST + CUBE_SIDE ** 3;
+const RAMP_BASE = 8;
+const RAMP_STEP = 10;
+const INDEX_LAST = 255;
+
+function indexRgb(n: number): number[] | undefined {
+  if (!Number.isInteger(n) || n < CUBE_FIRST || n > INDEX_LAST) return undefined;
+  if (n >= RAMP_FIRST) {
+    const v = RAMP_BASE + (n - RAMP_FIRST) * RAMP_STEP;
+    return [v, v, v];
+  }
+  const i = n - CUBE_FIRST;
+  return [2, 1, 0].map((p) => CUBE_LEVELS[Math.floor(i / CUBE_SIDE ** p) % CUBE_SIDE]);
+}
+
+// WCAG relative luminance, spelled out rather than approximated by "is the sum of the channels high", which calls a
+// saturated blue light.
+const CHANNEL_MAX = 255;
+const SRGB_KNEE = 0.03928;
+const SRGB_SLOPE = 12.92;
+const SRGB_OFFSET = 0.055;
+const SRGB_GAMMA = 2.4;
+const LUMA = [0.2126, 0.7152, 0.0722];
+const CONTRAST_FLOOR = 0.05;
+const INK_DARK = "30";
+const INK_LIGHT = "97";
+
+function luminance(rgb: number[]): number {
+  const linear = (c: number): number => {
+    const s = c / CHANNEL_MAX;
+    return s <= SRGB_KNEE ? s / SRGB_SLOPE : ((s + SRGB_OFFSET) / (1 + SRGB_OFFSET)) ** SRGB_GAMMA;
+  };
+  return LUMA.reduce((sum, w, i) => sum + w * linear(rgb[i]), 0);
+}
+
+/** WCAG, and the one ratio in this module: an ink choice and a legibility test that disagreed would be two thresholds. */
+function contrast(a: number[], b: number[]): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + CONTRAST_FLOOR) / (lo + CONTRAST_FLOOR);
+}
+
+const BLACK = [0, 0, 0];
+const WHITE = [CHANNEL_MAX, CHANNEL_MAX, CHANNEL_MAX];
+
+/** The ink that contrasts MORE against a colour, which is the only choice a chip makes. */
+const inkOn = (rgb: number[]): string =>
+  contrast(rgb, BLACK) > contrast(rgb, WHITE) ? INK_DARK : INK_LIGHT;
+
+/** Asked of inkOn so no second threshold can disagree with it. */
+const colourIsLight = (rgb: number[]): boolean => inkOn(rgb) === INK_DARK;
 
 // EVERY colour a tone may name must have a chip: a template may spend it as a SURFACE (banner.view fills a band with
 // it), and a class with no chip leaves that template drawing the edges of nothing.
@@ -106,9 +153,16 @@ const RED_CHIP = `${ESC}[1;97;41m`;
 const GREEN_CHIP = `${ESC}[1;30;42m`;
 const YELLOW_CHIP = `${ESC}[1;30;43m`;
 const CYAN_CHIP = `${ESC}[1;30;46m`;
-// The two DARK fills of the base range, hence white ink where the others take black.
-const BLUE_CHIP = `${ESC}[1;97;44m`;
-const MAGENTA_CHIP = `${ESC}[1;97;45m`;
+// Blue and magenta OFF the base range, the two whose ink the guess above got BACKWARDS: measured on a terminal painting
+// slot 44 a light periwinkle, the band came out bright white on near-white, and the code span inside inherited that same
+// verdict and landed at 1.9. An INDEX is pixels, so both derive instead. The cost is that the band stops being the
+// reader's own blue, which a fill nothing can measure was never able to promise anyway.
+const BLUE_FILL = 20;
+const MAGENTA_FILL = 127;
+/** Through the same door every derived chip goes through, so no ink here is declared where one could be measured. */
+const indexChip = (n: number): string => chipOf(ansi256(n)) ?? BASE.chip;
+const BLUE_CHIP = indexChip(BLUE_FILL);
+const MAGENTA_CHIP = indexChip(MAGENTA_FILL);
 // `low` and `dim` are a WEIGHT, so nothing about them is measurable and this grey is a choice.
 const GREY_CHIP = `${ESC}[30;48;5;250m`;
 
@@ -118,9 +172,8 @@ const NEUTRAL = BASE.cyan;
 // (`case"codespan":return no("permission",t)` in the 2.1.x bundle), and that slot holds a different value under each of
 // its six themes. Read slot by slot from the same bundle, so a view's code span matches the host's own line beside it.
 //
-// Two of the six name a base-sixteen SLOT rather than pixels, and neither is the palette's own `blue`: that one is bold,
-// and bold promotes a base-sixteen foreground to the bright slot, which would draw `light-ansi` in the colour that
-// `dark-ansi` asked for.
+// The two ANSI themes name a SLOT and must not be the palette's own `blue`: that one is bold, and bold promotes a
+// base-sixteen foreground to the bright slot, which would draw `light-ansi` in the colour `dark-ansi` asked for.
 const ANSI_BLUE = `${ESC}[34m`;
 const ANSI_BLUE_BRIGHT = `${ESC}[94m`;
 const CODE_INK: Record<Theme, string> = {
@@ -132,12 +185,8 @@ const CODE_INK: Record<Theme, string> = {
   "dark-daltonized": rgb(153, 204, 255),
 };
 
-// A span's ink is chosen against the FILL UNDER IT, never against the theme, and the theme's only job is to say what
-// that fill is when nothing is open, namely the terminal itself. A code span inside the neutral pill used to take the
-// terminal's value and land at a contrast of 1.62 against it, which is a colour no reader can find.
-//
-// The counterpart is what a fill on the other side asks for: the value the host would have used had the terminal been
-// that way round. Keeping the VARIANT is the point of pairing rather than picking two fixed colours, or an `ansi` or
+// A span's ink is chosen against the FILL UNDER IT, never against the theme: a code span inside the neutral pill used
+// to take the terminal's value and land at a contrast of 1.62. The counterpart keeps the VARIANT, or an `ansi` or
 // daltonized reader would get, inside a band, the one palette they went out of their way not to be shown.
 const CODE_ON_LIGHT = CODE_INK[TERMINAL_IS_LIGHT ? THEME : counterpart(THEME)];
 const CODE_ON_DARK = CODE_INK[TERMINAL_IS_LIGHT ? counterpart(THEME) : THEME];
@@ -145,6 +194,8 @@ const CODE_ON_DARK = CODE_INK[TERMINAL_IS_LIGHT ? counterpart(THEME) : THEME];
 const BG = "_bg";
 const CAP = "_cap";
 const TONE = "tone";
+/** What a class with no pixels of its own is given to draw ON. Named here because fillTone is its only reader. */
+const NEUTRAL_SURFACE = "chip";
 const TONE_BG = TONE + BG;
 const TONE_CAP = TONE + CAP;
 
@@ -168,14 +219,8 @@ const TAGS: Record<string, string> = {
   [CODE]: TERMINAL_IS_LIGHT ? CODE_ON_LIGHT : CODE_ON_DARK,
   title: BASE.chip,
   box_rule: `${ESC}[38;5;238m`,
-  // The other name in this palette with no colour of its own to fall back on, and the second thing a light terminal
-  // swallowed. Bright white is a SLOT, so on a light screen it is roughly the background and the title goes with it.
-  //
-  // Its replacement is the WEIGHT alone, which is the smallest thing that answers and the only one that stays true: the
-  // title then takes the terminal's own foreground, whatever the reader chose it to be. Two candidates were worse. The
-  // black slot cannot carry the bold, since bold promotes a base-sixteen foreground to its bright slot and `1;30` comes
-  // out grey on white, the defect the caps already paid for. The cube's black survives that, but it names PIXELS, so it
-  // would derive a chip and `box_title` would fill on one terminal and not the other.
+  // Bright white is a SLOT, so on a light screen it is roughly the background and the title goes with it. The
+  // replacement is the WEIGHT alone: `1;30` comes out grey on white, and the cube's black would derive a chip.
   box_title: TERMINAL_IS_LIGHT ? BASE.b : `${ESC}[1;97m`,
   // semantic filled-background chips
   pass_bg: GREEN_CHIP,
@@ -212,7 +257,6 @@ const BRACE_CHAR = /[{}]/g;
 const ESCAPED = String.raw`\$&`;
 const brace = (s: string): string => s.replace(BRACE_CHAR, ESCAPED);
 
-// One spelling, or the registry accepts a name the matcher can never find.
 const NAME_SOURCE = String.raw`\w+`;
 /** A solidus is punctuation to a pattern. */
 const CLOSE_SOURCE = `\\${RESET_NAME}`;
@@ -249,20 +293,17 @@ export function chip(tag: string, label: string): string {
 }
 
 /**
- * How a span the ENGINE inserted BEGINS. The mark is not decoration on the tag: it is the only thing separating the
- * span's frame from what the line had already opened. Written even where spanClose answers with a reset, which costs
- * nothing since a reset clears the whole stack.
+ * How a span the ENGINE inserted BEGINS. The mark is the only thing separating the span's frame from what the line had
+ * already opened.
  */
 export function spanOpen(tag: string): string {
   return SPAN_MARK + tagMark(tag);
 }
 
 /**
- * How a span the ENGINE inserted TERMINATES, decided in one place.
- *
- * A resume closes exactly the tag its span opened, so it is only right where that opener is a name the palette answers
- * for. A `@map` may hand a chip a word nobody knows: the opener is then TEXT, it opened nothing, and a resume would
- * close the style the span sits IN. That span clears instead.
+ * How a span the ENGINE inserted TERMINATES. A resume closes exactly the tag its span opened, so it is right only where
+ * that opener is a name the palette answers for: an unknown `@map` word leaves the opener as TEXT, and a resume would
+ * then close the style the span sits IN. That span clears instead.
  */
 export function spanClose(tag: string): string {
   return isTag(tag) ? RESUME_MARK : RESET_MARK;
@@ -293,12 +334,8 @@ export const CODE_RE = new RegExp(String.raw`${CODE_TICK}([^${CODE_TICK}\n]+)${C
 const EXTENDED: Record<string, string> = {};
 
 /**
- * The foreground painting a chip's BACKGROUND colour, or undefined for a sequence that fills nothing. The first
- * background wins.
- *
- * A cap must never be a second constant free to drift from its chip. `1;36` and `46` name the same palette entry and
- * still do not agree on screen: bold promotes a base-sixteen FOREGROUND to the bright slot and nothing promotes the
- * background.
+ * The foreground painting a chip's BACKGROUND colour, derived so a cap cannot drift from its chip. `1;36` and `46` name
+ * one palette entry and still disagree on screen: bold promotes a base-sixteen foreground, nothing promotes a fill.
  */
 function capOf(seq: string): string | undefined {
   const m = SGR.exec(seq);
@@ -322,61 +359,33 @@ function capOf(seq: string): string | undefined {
   return undefined;
 }
 
-// The xterm-256 geometry, which is what makes an INDEX measurable: a 6x6x6 cube of fixed levels, then a 24-step grey
-// ramp. The first sixteen are the theme's own and no arithmetic reaches them.
-const CUBE_FIRST = 16;
-const CUBE_SIDE = 6;
-const CUBE_LEVELS = [0, 95, 135, 175, 215, 255];
-const RAMP_FIRST = CUBE_FIRST + CUBE_SIDE ** 3;
-const RAMP_BASE = 8;
-const RAMP_STEP = 10;
-const INDEX_LAST = 255;
-
-function indexRgb(n: number): number[] | undefined {
-  if (!Number.isInteger(n) || n < CUBE_FIRST || n > INDEX_LAST) return undefined;
-  if (n >= RAMP_FIRST) {
-    const v = RAMP_BASE + (n - RAMP_FIRST) * RAMP_STEP;
-    return [v, v, v];
-  }
-  const i = n - CUBE_FIRST;
-  return [2, 1, 0].map((p) => CUBE_LEVELS[Math.floor(i / CUBE_SIDE ** p) % CUBE_SIDE]);
-}
-
-// WCAG relative luminance, spelled out rather than approximated by "is the sum of the channels high", which calls a
-// saturated blue light.
-const CHANNEL_MAX = 255;
-const SRGB_KNEE = 0.03928;
-const SRGB_SLOPE = 12.92;
-const SRGB_OFFSET = 0.055;
-const SRGB_GAMMA = 2.4;
-const LUMA = [0.2126, 0.7152, 0.0722];
-const CONTRAST_FLOOR = 0.05;
-const WHITE_LUMINANCE = 1;
-const INK_DARK = "30";
-const INK_LIGHT = "97";
-
-/** The ink that contrasts MORE against a colour, which is the only choice a chip makes. */
-function inkOn(rgb: number[]): string {
-  const linear = (c: number): number => {
-    const s = c / CHANNEL_MAX;
-    return s <= SRGB_KNEE ? s / SRGB_SLOPE : ((s + SRGB_OFFSET) / (1 + SRGB_OFFSET)) ** SRGB_GAMMA;
-  };
-  const l = LUMA.reduce((sum, w, i) => sum + w * linear(rgb[i]), 0);
-  const onDark = (l + CONTRAST_FLOOR) / CONTRAST_FLOOR;
-  const onLight = (WHITE_LUMINANCE + CONTRAST_FLOOR) / (l + CONTRAST_FLOOR);
-  return onDark > onLight ? INK_DARK : INK_LIGHT;
-}
-
-/** Which side of the palette a MEASURABLE colour sits on, asked of inkOn so no second threshold can disagree with it. */
-const colourIsLight = (rgb: number[]): boolean => inkOn(rgb) === INK_DARK;
+// AA for body text. A code span inside a band is read, never glanced at, so the large-text 3:1 does not apply.
+const CODE_TARGET = 4.5;
+// Toward the endpoint the fill's own ink points at, which is the direction that gains contrast. Small enough that the
+// first step clearing the target is close to it, bounded so an unreachable target ends rather than loops.
+const CODE_STEP = 0.85;
+const CODE_STEPS = 16;
 
 /**
- * Which side the fill of a chip sits on, or undefined for a sequence that names no foreground.
+ * The host's code colour, pushed until it is legible ON a given fill.
  *
- * Read off the INK rather than the fill, and that is the whole trick: half the chips here fill with a base-sixteen slot,
- * whose pixels belong to the theme and can never be measured. The ink beside it is the verdict already reached about
- * that fill, by hand for the six declared chips and by inkOn for every derived one, so reading it asks a question that
- * has an answer in both cases instead of one that only works for pixels.
+ * The hue is what makes a span read as code, so it is the one thing kept: every channel moves by the SAME factor
+ * toward black or toward white. Only inside a fill, and that is the whole justification for touching a value read from
+ * the host's own theme: on the terminal a view's span sits beside the host's own line and must match it exactly, where
+ * on a band the host has nothing to match.
+ */
+function legibleOn(ink: number[], fill: number[]): number[] {
+  const toward = colourIsLight(fill) ? 0 : CHANNEL_MAX;
+  let out = ink;
+  for (let n = 0; n < CODE_STEPS && contrast(out, fill) < CODE_TARGET; n++) {
+    out = out.map((c) => Math.round(toward + (c - toward) * CODE_STEP));
+  }
+  return out;
+}
+
+/**
+ * Which side the fill of a chip sits on. Read off the INK, not the fill: half the chips fill with a base-sixteen slot
+ * whose pixels belong to the theme, and the ink beside it is the verdict already reached about that fill.
  */
 function fillIsLight(seq: string): boolean | undefined {
   const m = SGR.exec(seq);
@@ -408,11 +417,35 @@ function fillIsLight(seq: string): boolean | undefined {
 }
 
 /**
- * The chip filling with a foreground's own colour, or undefined when the colour cannot be MEASURED, which means the
- * sequence does not name its pixels: a base-sixteen slot is whatever the THEME paints.
- *
- * A sequence that already fills derives nothing: `chip` writes black on white, and reading its foreground would hand
- * back a BLACK band.
+ * The PIXELS an extended colour names, ink or fill, undefined where the sequence names a base-sixteen slot instead:
+ * those belong to the theme, and a colour nothing can read is a colour nothing can be measured against.
+ */
+function extRgb(seq: string, which: number): number[] | undefined {
+  const m = SGR.exec(seq);
+  if (m == null) return undefined;
+  const p = m[1].split(PARAM);
+  for (let i = 0; i < p.length; ) {
+    const n = Number(p[i]);
+    if (n !== EXT_FG && n !== EXT_BG) {
+      i += 1;
+      continue;
+    }
+    const span = EXT_SPAN[p[i + 1]] ?? 0;
+    if (span === 0 || i + span > p.length) return undefined;
+    if (n === which) {
+      const body = p.slice(i + 1, i + span);
+      const c = body[0] === INDEX_SEL ? indexRgb(Number(body[1])) : body.slice(1).map(Number);
+      return c != null && c.every((v) => Number.isInteger(v)) ? c : undefined;
+    }
+    i += span;
+  }
+  return undefined;
+}
+
+/**
+ * The chip filling with a foreground's own colour, undefined where the sequence does not name its pixels (a
+ * base-sixteen slot is whatever the THEME paints). One that already fills derives nothing: reading `chip`'s foreground
+ * would hand back a BLACK band.
  */
 function chipOf(seq: string): string | undefined {
   if (capOf(seq) !== undefined) return undefined;
@@ -470,13 +503,9 @@ function resolveTag(name: string): string | undefined {
 }
 
 /**
- * Every tag NAME the palette answers to: the engine's own, and whatever a host registered here.
- *
- * NAMES and never sequences. The palette's values stay unexported on purpose, since that is what stops a second module
- * growing its own opinion about a colour, and a catalogue needs the vocabulary, never the ink.
- *
- * The `cap` and `bg` forms are deliberately absent: they are a RULE rather than entries, any colour above suffixing
- * into one, so a reader is told the rule (`TAG_SUFFIXES`) instead of a list that could never be complete.
+ * Every tag NAME the palette answers to. Names and never sequences: the values staying unexported is what stops a
+ * second module growing its own opinion about a colour. The `cap` and `bg` forms are a RULE (`TAG_SUFFIXES`), not
+ * entries, so a reader gets the rule rather than a list that could never be complete.
  */
 export function tagNames(): string[] {
   return [...new Set([...Object.keys(TAGS), ...Object.keys(EXTENDED)])].sort();
@@ -501,8 +530,7 @@ export interface TagReport {
 
 /**
  * Extend the palette with a host's tags. TOTAL: a throw here once killed a whole host's display, silently, when the
- * engine later claimed a name the host already used. What was not applied is RETURNED rather than thrown, so a colour
- * never changes in silence. The LAST registration wins, and re-registering an identical pair is a no-op.
+ * engine later claimed a name the host already used. The LAST registration wins.
  */
 export function extendTags(extra: Record<string, string>): TagReport {
   const report: TagReport = { shadowed: [], skipped: [] };
@@ -526,9 +554,8 @@ export function isTag(name: string): boolean {
 }
 
 /**
- * What a walk has stepped over and not yet closed, innermost LAST: tag names, and the span boundaries between them. ONE
- * notion, read by renderTags and by fitCell and copied by neither, because a boolean says WHETHER a style is open and
- * never WHICH. A boundary rides the same stack because the two interleave: what a resume unwinds is a RANGE of it.
+ * What a walk has stepped over and not yet closed, innermost LAST: tag names, and the span boundaries between them. A
+ * boundary rides the same stack because the two interleave: what a resume unwinds is a RANGE of it.
  */
 export function trackTag(open: string[], name: string): void {
   if (name === RESET_NAME) open.length = 0;
@@ -546,51 +573,56 @@ export function popSpan(open: string[]): void {
 }
 
 /**
- * What a resume becomes: its frame closed, and everything still open under it re-opened. The reset is not a formality:
- * `dim` is an ATTRIBUTE, so re-emitting it over the foreground a code span set would leave the code colour underneath.
- *
- * Nothing open resolves to a PLAIN RESET, which is what makes a span outside any styled region render as it did before
- * these marks existed.
+ * The surface a span is drawn ON: the innermost open tag that FILLS, or undefined where the line stands on the terminal
+ * itself. Innermost first, because a band inside a band is the one the reader actually sees.
  */
-/**
- * The side of the surface a span is drawn ON: the innermost open tag that FILLS, or undefined where the line stands on
- * the terminal itself. Innermost first, because a band inside a band is the one the reader actually sees.
- */
-function surfaceIsLight(open: readonly string[]): boolean | undefined {
+function surface(open: readonly string[]): string | undefined {
   for (let i = open.length - 1; i >= 0; i--) {
     const name = open[i];
     if (name === SPAN_MARK) continue;
     const seq = resolveTag(name);
     // capOf is what "this sequence fills" MEANS here, and asking it is what keeps a foreground from being read as one.
     if (seq === undefined || capOf(seq) === undefined) continue;
-    return fillIsLight(seq);
+    return seq;
   }
   return undefined;
 }
 
 /**
- * A tag resolved WHERE it is written, which for every name but one is the same as resolving it anywhere.
+ * A tag resolved WHERE it is written. `code` is the only name that needs it: it is the host's own value for the surface
+ * underneath, and the surface is only knowable from the stack. A host that shadowed the name owns it outright.
  *
- * `code` is the exception because it names a colour that has to be legible, never a colour that is a choice: it is the
- * host's own value for the surface underneath, and the surface is only knowable from the stack. A host that shadowed the
- * name owns it outright and is asked nothing.
+ * Two questions of the surface, not one. Its SIDE picks which of the host's two code colours to start from, and that
+ * alone left every saturated band under 2:1 (violet at 1.24) because neither value was ever measured against the fill
+ * it landed on. Its PIXELS then push that colour until it is legible, where they are knowable at all.
  */
 function resolveOpen(name: string, open: readonly string[]): string | undefined {
   if (name !== CODE || Object.prototype.hasOwnProperty.call(EXTENDED, CODE)) return resolveTag(name);
-  return (surfaceIsLight(open) ?? TERMINAL_IS_LIGHT) ? CODE_ON_LIGHT : CODE_ON_DARK;
+  const seq = surface(open);
+  const side = seq === undefined ? undefined : fillIsLight(seq);
+  const base = (side ?? TERMINAL_IS_LIGHT) ? CODE_ON_LIGHT : CODE_ON_DARK;
+  const fill = seq === undefined ? undefined : extRgb(seq, EXT_BG);
+  const ink = fill === undefined ? undefined : extRgb(base, EXT_FG);
+  // Unreadable pixels on either side leave the value alone: an `ansi` theme names a slot for its code colour, and half
+  // the chips fill with one. Nothing to measure is nothing to correct, and a guess here would be the defect above.
+  if (ink === undefined || fill === undefined) return base;
+  const [r, g, b] = legibleOn(ink, fill);
+  return rgb(r, g, b);
 }
 
+/**
+ * The reset is not a formality: `dim` is an ATTRIBUTE, so re-emitting it over the foreground a code span set would
+ * leave the code colour underneath.
+ */
 function resumeTags(open: string[]): string {
   popSpan(open);
   return open.reduce((seq, name) => seq + (resolveOpen(name, open) ?? ""), R);
 }
 
 /**
- * A CUT sealed so the row gets its style back: one resume ends a frame, so what is written is the number of frames the
- * cut left half-open and never the number of entries.
- *
- * The cut opens a frame of its OWN. The bare tags a value wrote belong to no span, so a resume closing them would find
- * no boundary and unwind the ROW's tags with the cell's.
+ * A CUT sealed so the row gets its style back: one resume ends a FRAME, so what is written is the number of frames left
+ * half-open, never of entries. The cut opens one of its own, or the bare tags a value wrote would find no boundary and
+ * unwind the ROW's tags with the cell's.
  */
 export function closeCut(cut: string, open: readonly string[]): string {
   if (open.length === 0) return cut;
@@ -612,7 +644,7 @@ export function renderTags(s: string): string {
   return s.replace(MARKUP_RE, (m: string, name?: string) => {
     if (m === SPAN_MARK) {
       trackTag(open, m);
-      return ""; // a boundary prints nothing, and this is the last pass before the screen
+      return "";
     }
     // The alternation's discriminator: only the tag branch captures a name.
     if (name === undefined) return resumeTags(open);
@@ -635,16 +667,19 @@ export function toneClass(...names: (string | undefined)[]): string | undefined 
 }
 
 /**
- * Fill the tone slot: {{tone}}, {{tone_bg}} and {{tone_cap}} become `cls`, its chip and the foreground matching that
- * chip. All three stay TAGS whatever happens, so a width measured before this ran still holds. A class with no filled
- * variant spends its foreground instead: dimmer than the author asked for, never a hole on screen.
+ * Fill the tone slot. All three stay TAGS, so a width measured before this ran still holds. Rewritten by split/join
+ * rather than by a regex built from `cls`, which reaches this from a message.
  *
- * Rewritten by split/join rather than by a regex built from `cls`, which reaches this from a message.
+ * The SURFACE slots fall back to the neutral pill, and the foreground slot alone keeps the class. A chip is asked for
+ * where a template needs pixels to draw on, and a class naming none (`b` is a weight, `box_title` a base-sixteen slot)
+ * cannot supply them: sent to its own foreground, as they were, a band came out as two white half-circles around
+ * nothing, which is the "edges of nothing" the palette warns about, drawn. The neutral is the palette's own answer for
+ * a surface with no colour opinion, and it turns over with the terminal, so the band is a band on either screen.
  */
 export function fillTone(s: string, cls: string | undefined): string {
   if (cls == null) return s;
-  const bg = isTag(cls + BG) ? cls + BG : cls;
-  const cap = isTag(cls + CAP) ? cls + CAP : cls;
+  const bg = isTag(cls + BG) ? cls + BG : NEUTRAL_SURFACE + BG;
+  const cap = isTag(cls + CAP) ? cls + CAP : NEUTRAL_SURFACE + CAP;
   return s
     .split(tagMark(TONE_CAP))
     .join(tagMark(cap))
@@ -663,9 +698,8 @@ export function markCode(s: string): string {
 }
 
 /**
- * Code spans as SEQUENCES, for a host colouring a line of its own. SELF-CONTAINED, and deliberately not
- * `renderTags(markCode(s))`: a host's line carries no marks for a resume to land on, and resolving one would make this
- * a second place where a `{{tag}}` in someone else's text turns into a colour.
+ * Code spans as SEQUENCES, for a host colouring its own line. Not `renderTags(markCode(s))`: that would make this a
+ * second place where a `{{tag}}` in someone else's text turns into a colour.
  */
 export function renderCode(s: string): string {
   const open = resolveTag(CODE) ?? "";

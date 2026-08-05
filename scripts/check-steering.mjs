@@ -1,16 +1,6 @@
-// agent/steering.md is a DOCUMENT that reaches a model as context, so nothing type-checks it and no suite
-// reads its words. This is what does, and it is the counterpart of check-skill.mjs for the other text this
-// repo ships to an agent.
-//
-// The failure it exists to catch is the quietest one here. A view renamed or dropped leaves this file
-// reading perfectly while naming something the engine no longer resolves, and the reader who finds out is
-// a model in someone else's session, told to draw with a word that draws nothing. So every view name and
-// every attribute it spells is read back against agent/catalogue.json, which is generated from the tables
-// the engine executes.
-//
-// It also holds the DELIVERY together, since correct text reaches nobody on its own: the hook has to be
-// registered, it has to name this file's own directory, and the README has to point a reader here rather
-// than carrying a copy that drifts.
+// agent/steering.md reaches a model as context, so nothing type-checks it. This does, the counterpart of
+// check-skill.mjs: every word it spells is read back against agent/catalogue.json, and the DELIVERY is held together
+// too, since a text naming what the engine no longer resolves reads perfectly.
 //
 // Run via `pnpm check:steering`, wired into `pnpm verify`.
 
@@ -25,16 +15,27 @@ const STEERING = `${AGENT_DIR}/steering.md`;
 const HOOKS = "hooks/hooks.json";
 const HOOK_FILE = "hooks/steering.mjs";
 const README = "README.md";
+/** The documents that teach the language, each on its own road: a session's context, a human's page, an agent's skill. */
+const TEACHING = [STEERING, "docs/CHEATSHEET.md", "skills/write-view/SKILL.md"];
 const EVENT = "SessionStart";
 /** The sources a session is injected on. A `compact` or a `resume` that dropped the text would lose it mid-work. */
 const SOURCES = ["startup", "clear", "compact", "resume"];
 
-// The decorator, spelled as the catalogue publishes it: `@{view:<name>}` with optional `attr:value` pairs.
-// Deliberately loose on what follows the name, because the point is to READ the words, never to re-implement
-// the parser: src/carrier/decorator.ts owns that and its own suite pins it.
+// Deliberately loose on what follows the name: the point is to READ the words, never to re-implement the parser, which
+// src/carrier/decorator.ts owns and its own suite pins.
 const DECORATOR_RE = /@\{view:([^}]*)\}/g;
 const PAIR_SEP = ",";
 const NAME_MARK = ":";
+
+// Read OUT of the hook, never restated: a switch this file spelled on its own could gate a name nothing acts on.
+const OPT_OUT_DECL = /const OPT_OUT_ENV = "([^"]+)"/;
+const ENV_FAMILY = /^CC_VIEWS_[A-Z_]+$/;
+
+// The colour paragraphs, found by a word each opens rather than by a line number.
+const TONES_ANCHOR = "Tones:";
+const DEFAULTS_ANCHOR = "spends no tone";
+const PARAGRAPH_SEP = "\n\n";
+const CODE_SPAN_RE = /`([^`]+)`/g;
 
 const failures = [];
 const fail = (why) => failures.push(why);
@@ -46,9 +47,8 @@ const views = new Set(catalogue.views.map((v) => v.name));
 const decorator = catalogue.block.carriers.find((c) => c.kind === "decorator");
 const attributes = new Set((decorator?.attributes ?? []).map((a) => a.name));
 
-// 1. Every view and every attribute the text spells, read back against the generated catalogue. An unknown
-// VALUE is not checked and must not be: `type:` and `tone:` take any word and fall back by design, which is
-// the whole reason the text tells a reader so.
+// 1. Every view and attribute the text spells, read back against the catalogue. An unknown VALUE is not checked and
+// must not be: `type:` and `tone:` take any word and fall back by design.
 const steering = read(STEERING);
 steering.split("\n").forEach((line, n) => {
   const at = `${STEERING}:${n + 1}`;
@@ -62,18 +62,55 @@ steering.split("\n").forEach((line, n) => {
   }
 });
 
-// 2. Every view that ships and can be summoned from a message is NAMED, or the text quietly teaches a
-// smaller language than the one installed. A view spending no payload of its own is not one a message
-// summons (`welcome` is the host's own screen), so the list is the ones that read something.
-for (const view of catalogue.views) {
-  if (view.payload === null) continue;
-  if (!steering.includes(`view:${view.name}`)) {
-    fail(`${STEERING} never names \`${view.name}\`, a view a message can summon`);
+// 2. Every view a message can summon is NAMED, in every document that TEACHES the language, or one of them teaches a
+// smaller one than the engine installs. A view spending no payload is not one a message summons.
+//
+// Three documents because a view reaches an author by three roads: the steering text a session is given, the page a
+// human reads, the skill an agent follows. `box` was added and only the gated one gained it.
+for (const doc of TEACHING) {
+  const text = read(doc);
+  for (const view of catalogue.views) {
+    if (view.payload === null) continue;
+    if (!text.includes(`view:${view.name}`) && !text.includes(`\`${view.name}\``)) {
+      fail(`${doc} never names \`${view.name}\`, a view a message can summon`);
+    }
   }
 }
 
-// 3. The hook is registered, on every source, and points at a file that exists. Without this the text is
-// correct and reaches nobody, which is the failure that looks most like success.
+// 2b. Every tone the text OFFERS resolves to a tag this package ships. An unknown one falls back and draws perfectly,
+// so a colour dropped from the palette is a name an author spends forever without seeing it applied.
+//
+// No check on which DEFAULT each view carries: that is a look, changed while iterating on a .view, and a text one shade
+// out of date misleads nobody.
+const paragraph = (anchor) => steering.split(PARAGRAPH_SEP).find((p) => p.includes(anchor));
+const spans = (text) => [...(text ?? "").matchAll(CODE_SPAN_RE)].map((m) => m[1]);
+
+const tones = paragraph(TONES_ANCHOR);
+if (tones === undefined) {
+  fail(`${STEERING} no longer has a paragraph opening on "${TONES_ANCHOR}"`);
+} else {
+  const known = new Set(catalogue.tags.names);
+  for (const tone of spans(tones)) {
+    if (!known.has(tone)) fail(`${STEERING}  \`${tone}\` is offered as a tone but names no tag this package ships`);
+  }
+}
+
+// The one claim that is STRUCTURAL rather than a shade: `@{view:hr, tone:gold}` draws a plain rule, whatever is written.
+const defaults = paragraph(DEFAULTS_ANCHOR);
+if (defaults === undefined) {
+  fail(`${STEERING} no longer says which view spends no tone`);
+} else {
+  const quoted = new Set(spans(defaults));
+  for (const view of catalogue.views) {
+    if (view.tone !== null || !steering.includes(`view:${view.name}`)) continue;
+    if (!quoted.has(view.name)) {
+      fail(`${STEERING} never names \`${view.name}\` as a view that spends no tone`);
+    }
+  }
+}
+
+// 3. The hook is registered, on every source, and points at a file that exists: a text reaching nobody is the failure
+// that looks most like success.
 const hooks = readJson(HOOKS);
 const registered = hooks.hooks?.[EVENT] ?? [];
 const commands = registered.flatMap((entry) => (entry.hooks ?? []).map((h) => h.command ?? ""));
@@ -90,8 +127,17 @@ if (!read(HOOK_FILE).includes(path.basename(STEERING))) {
   fail(`${HOOK_FILE} no longer reads ${STEERING}`);
 }
 
-// 4. And a human reads about the file rather than a copy of it: the README inlining these words again is
-// how the two start disagreeing, and the one an adopter pastes is always the stale one.
+// 3b. The opt-out is reachable: in the family every other switch belongs to, and written down, an undocumented switch
+// being one nobody turns.
+const optOut = OPT_OUT_DECL.exec(read(HOOK_FILE))?.[1];
+if (optOut === undefined) {
+  fail(`${HOOK_FILE} declares no OPT_OUT_ENV, so the briefing can no longer be turned off`);
+} else {
+  if (!ENV_FAMILY.test(optOut)) fail(`${HOOK_FILE} names \`${optOut}\`, outside this package's env family`);
+  if (!read(README).includes(optOut)) fail(`${README} documents no \`${optOut}\`, a switch nobody can find`);
+}
+
+// 4. A human reads ABOUT the file rather than a copy of it: the one an adopter pastes is always the stale one.
 if (!read(README).includes(STEERING)) fail(`${README} points nobody at ${STEERING}`);
 
 if (failures.length > 0) {

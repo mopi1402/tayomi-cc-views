@@ -4,7 +4,8 @@
 // measurer must agree it costs columns), a brace written by a MESSAGE is neutralised (so data can never open a colour
 // the render meant to keep), and a host's registration is total (a throw at startup once killed a whole display).
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { THEME_ENV } from "./data/markup.js";
 import {
   ANSI_RE,
   CHIP_CHROME,
@@ -42,19 +43,13 @@ const TONE_CAP = "tone_cap";
 /** The suffixes the slot pairs a class with, spelled as a template author spells them. */
 const BG = "_bg";
 const CAP = "_cap";
-/**
- * A tag that is a WEIGHT and not a colour, so nothing about it is measurable and no chip can be derived for it. The
- * last name the fallback still answers for.
- */
+/** A WEIGHT and not a colour, so nothing about it is measurable and no chip can be derived for it. */
 const FURNITURE = "b";
 /** Every colour a tone may name, which is every name that MUST be able to fill. */
 const COLOURS = [
   "red", "green", "yellow", "blue", "magenta", "cyan", "orange", "gold", "dim", "key",
   "purple", "violet", "pink", "teal", "aqua", "lime", "brown", "navy", "salmon", "mint",
-  // Furniture fills too, now that a chip derives. Two names stay out, for ONE reason: a chip is derived by measuring a
-  // colour, and neither of them names pixels in every theme. `box_title` is a weight or a slot and never a colour at
-  // all. `code` is the host's own value for a code span, which two of the six themes spell as a base-sixteen slot
-  // (`ansi` names the reader's palette on purpose, and that is exactly what cannot be measured).
+  // `box_title` and `code` stay out: neither names pixels in every theme, so neither can be measured.
   "chip", "title", "box_rule",
   "pass", "warn", "fail", "high", "med", "low",
   "warning", "error", "success", "info",
@@ -131,8 +126,7 @@ describe("neutralising a message's markup", () => {
 
   it("takes the engine's own control codes OFF, the other half of the same rule", () => {
     // A brace is BROKEN because it must still print; a code prints nothing, so it goes. Left in, a byte the model
-    // spelled would end a span and close a colour the template opened, which is the one thing neutralising exists to
-    // make impossible.
+    // spelled would end a span and close a colour the template opened.
     expect(inert(`a${RESUME_MARK}b`)).toBe("ab");
   });
 });
@@ -148,12 +142,9 @@ describe("a chip", () => {
 });
 
 // A span the engine puts INSIDE a line whose style it did not choose: a code span, a chip, the bold the decorator
-// derives. Clearing at its right edge takes the rest of the line down with it, and no template author can compensate
-// for that: the line has no idea where the model will put a backtick or a `**`.
+// derives. Clearing at its right edge takes the rest of the line down with it.
 describe("a span the ENGINE inserted", () => {
-  /** The sequence a tag renders as, asked of the module that owns it. */
   const seq = (name: string): string => renderTags(tagMark(name));
-  /** The same, for the closing tag, whose name style.ts keeps private. */
   const RESET = renderTags(RESET_MARK);
   const DIM = "dim";
   const CODE = "code";
@@ -175,12 +166,9 @@ describe("a span the ENGINE inserted", () => {
   it("resolves to a PLAIN RESET with nothing open, which is the whole existing corpus", () => {
     const line = "run `it` now";
     expect(renderTags(markCode(line))).toBe(`run ${seq(CODE)}it${RESET} now`);
-    // And the public renderCode, which a host spends on a line of its own, agrees with it to the byte while handing
-    // back sequences rather than markup.
     expect(renderCode(line)).toBe(renderTags(markCode(line)));
     expect(renderCode(line)).not.toContain(tagMark(CODE));
-    // SELF-CONTAINED, and that is why it is not derived from the pair above: nothing else on the host's line is read as
-    // markup on the way past.
+    // SELF-CONTAINED: nothing else on the host's line is read as markup on the way past.
     expect(renderCode(`${tagMark(KNOWN)} \`it\``)).toContain(tagMark(KNOWN));
   });
 
@@ -217,9 +205,8 @@ describe("a span the ENGINE inserted", () => {
   });
 
   it("closes the whole FRAME its span opened, a tag the BODY wrote included", () => {
-    // The defect the opening mark exists for. A resume that popped one entry handed the line back the body's last tag
-    // instead of the style the span interrupted, and the body of a code span is anything up to the closing tick, a
-    // template's tags included.
+    // The defect the opening mark exists for: a resume that popped one entry handed the line back the body's last tag
+    // instead of the style the span interrupted.
     const line = `${tagMark(DIM)}see \`a ${tagMark(FURNITURE)}b\` end${RESET_MARK}`;
     expect(renderTags(markCode(line))).toBe(
       `${seq(DIM)}see ${seq(CODE)}a ${seq(FURNITURE)}b${RESET}${seq(DIM)} end${RESET}`
@@ -339,6 +326,119 @@ describe("the ink of a code span, chosen against the surface under it", () => {
     expect(drawn.endsWith(` b`)).toBe(true);
     expect(drawn).toContain(`${BODY}${renderTags(RESET_MARK)}${seq(DARK_FILL)} b`);
   });
+
+});
+
+// The second half of the same rule, and the half that MEASURES. Choosing the side of the surface was the whole decision
+// before, so both of the host's code colours landed on bands they had never been compared against: violet sat at 1.24
+// where the neutral pill, the one surface already corrected, sits at 4.40.
+//
+// Its own describe because every case drives a FRESH import under a NAMED theme. The palette is captured at module
+// load, so a fixture wanting a known code colour cannot have one any other way, and asking the suite's own theme back
+// would make the expectations whatever that theme happened to be.
+describe("a code span pushed until it is legible ON the fill under it", () => {
+  const BODY = "BODY";
+  /** A fill whose ink is dark, hence a LIGHT surface, and a base-sixteen slot so its pixels are the theme's. */
+  const SLOT_FILL = "warn_bg";
+
+  // WCAG, recomputed here and the one formula this suite holds a second copy of on purpose: an expectation asking
+  // style.ts for its own ratio would pass whatever that ratio became.
+  const AA_BODY = 4.5;
+  const CHANNEL_MAX = 255;
+  const KNEE = 0.03928;
+  const SLOPE = 12.92;
+  const OFFSET = 0.055;
+  const GAMMA = 2.4;
+  const WEIGHTS = [0.2126, 0.7152, 0.0722];
+  const FLOOR = 0.05;
+
+  const luminance = (c: number[]): number =>
+    WEIGHTS.reduce((sum, w, i) => {
+      const s = c[i] / CHANNEL_MAX;
+      return sum + w * (s <= KNEE ? s / SLOPE : ((s + OFFSET) / (1 + OFFSET)) ** GAMMA);
+    }, 0);
+  const ratio = (a: number[], b: number[]): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + FLOOR) / (lo + FLOOR);
+  };
+
+  /** The pixels a sequence names, undefined where it names a THEME slot instead. */
+  const TRUECOLOR = /\x1b\[38;2;(\d+);(\d+);(\d+)m/;
+  const pixels = (s: string): number[] | undefined =>
+    TRUECOLOR.exec(s)
+      ?.slice(1)
+      .map(Number);
+
+  // REGISTERED rather than taken from the palette: only a fill naming pixels can be measured against, and reading them
+  // back out of a bundled chip would need this module's cube geometry here, a second copy of exactly the wrong thing.
+  const FILLS: Record<string, number[]> = {
+    tvi: [175, 95, 255], // violet, the hardest fill of the palette
+    tpu: [175, 135, 255],
+    tor: [255, 135, 0],
+    tna: [0, 95, 175], // dark, so the push goes the other way
+  };
+
+  /** The two themes that matter here: one naming its code colour in pixels, one naming a slot. */
+  const PIXEL_THEME = "dark";
+  const SLOT_THEME = "dark-ansi";
+  /** What `dark` reads for a LIGHT surface, which is the counterpart theme's value. Pinned, or nothing here has a scale. */
+  const ON_LIGHT = [87, 105, 247];
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  /** The span's opening sequence, under a fresh palette built for `theme`. */
+  const inkOn = async (theme: string, fill: string): Promise<string> => {
+    vi.stubEnv(THEME_ENV, theme);
+    vi.resetModules();
+    const S = (await import("./style.js")) as typeof import("./style.js");
+    S.extendTags(
+      Object.fromEntries(Object.entries(FILLS).map(([n, [r, g, b]]) => [n, S.rgb(r, g, b)]))
+    );
+    const prefix = S.tagMark(fill);
+    const drawn = S.renderTags(S.markCode(`${prefix}\`${BODY}\``));
+    return drawn.slice(S.renderTags(prefix).length, drawn.indexOf(BODY));
+  };
+
+  it("clears AA against every fill whose pixels are readable", async () => {
+    for (const [name, fill] of Object.entries(FILLS)) {
+      const ink = pixels(await inkOn(PIXEL_THEME, name + BG));
+      expect(ink).toBeDefined();
+      expect(ratio(ink as number[], fill)).toBeGreaterThanOrEqual(AA_BODY);
+    }
+  });
+
+  it("keeps the HUE, which is the only thing making a span read as code rather than as text", () => {
+    // Every channel moves by the SAME factor, so the ratios between them survive. Pinned because the cheap fix is to
+    // hand back the band's own black or white, and that is a span a reader can no longer tell from the words.
+    return inkOn(PIXEL_THEME, "tvi" + BG).then((s) => {
+      const ink = pixels(s) as number[];
+      expect(ink[2]).toBeGreaterThan(ink[0]); // still blue, never a grey
+      expect(ink[2] / ink[0]).toBeCloseTo(ON_LIGHT[2] / ON_LIGHT[0], 1);
+    });
+  });
+
+  it("goes the way the fill points, darker on a light one and lighter on a dark one", async () => {
+    const onLight = pixels(await inkOn(PIXEL_THEME, "tvi" + BG)) as number[];
+    const onDark = pixels(await inkOn(PIXEL_THEME, "tna" + BG)) as number[];
+    expect(luminance(onLight)).toBeLessThan(luminance(ON_LIGHT));
+    expect(luminance(onDark)).toBeGreaterThan(luminance(ON_LIGHT));
+  });
+
+  it("leaves the value ALONE where the fill is a base-sixteen slot", async () => {
+    // Half the chips fill with a slot the theme paints, and correcting against pixels this process cannot see would be
+    // a second guess stacked on the first.
+    expect(pixels(await inkOn(PIXEL_THEME, SLOT_FILL))).toEqual(ON_LIGHT);
+  });
+
+  it("leaves it alone where the CODE colour is a slot too, which is every `ansi` theme", async () => {
+    // The other half of the same refusal, and the one a suite running under one theme would never reach.
+    const ink = await inkOn(SLOT_THEME, "tvi" + BG);
+    expect(pixels(ink)).toBeUndefined();
+    expect(ink).toBe(await inkOn(SLOT_THEME, "tor" + BG)); // one value for both fills: nothing was measured
+  });
 });
 
 describe("the tone slot", () => {
@@ -362,17 +462,26 @@ describe("the tone slot", () => {
     expect(filled).toContain(tagMark(KNOWN + CAP));
   });
 
-  it("spends the foreground for a class with no filled variant, never a hole", () => {
-    // FURNITURE, which is what the fallback is left with: every colour a tone may plausibly name carries a chip,
-    // because a template may spend one as a surface.
+  /** The palette's own answer for a surface with no colour opinion, which is what an unfilled class is given. */
+  const NEUTRAL = "chip";
+
+  it("gives a class with no filled variant the NEUTRAL surface, never its own foreground", () => {
+    // FURNITURE is a WEIGHT: it names no pixels, so it cannot be drawn on. Sent to itself, as it was, a band came out
+    // as two half-circles around nothing, which is the defect this whole slot exists to prevent.
     expect(isTag(FURNITURE)).toBe(true);
     expect(isTag(FURNITURE + BG)).toBe(false);
-    expect(fillTone(tagMark(TONE_CHIP), FURNITURE)).toBe(tagMark(FURNITURE));
+    expect(fillTone(tagMark(TONE_CHIP), FURNITURE)).toBe(tagMark(NEUTRAL + BG));
   });
 
-  it("sends the CAP of an unfilled class to that same foreground, so the two agree", () => {
+  it("sends its CAP to that same neutral, so the edge and the fill still agree", () => {
+    // The invariant that outlived the change: whatever the chip fills with, the cap paints. A cap answering for one
+    // surface while the chip drew another is a scallop of the wrong colour on both flanks.
     expect(isTag(FURNITURE + CAP)).toBe(false);
-    expect(fillTone(tagMark(TONE_CAP), FURNITURE)).toBe(tagMark(FURNITURE));
+    expect(fillTone(tagMark(TONE_CAP), FURNITURE)).toBe(tagMark(NEUTRAL + CAP));
+  });
+
+  it("keeps the FOREGROUND slot on the class itself, which is the one that never wanted pixels", () => {
+    expect(fillTone(tagMark(TONE_SLOT), FURNITURE)).toBe(tagMark(FURNITURE));
   });
 
   it("leaves the slot alone with no class, so an unfilled template still renders", () => {
@@ -390,9 +499,7 @@ describe("the tone slot", () => {
   });
 
   it("gives EVERY colour a chip and a cap, so a tone can always fill a surface", () => {
-    // The requirement behind the table: a template may spend the chip as a SURFACE and draw against it, and a colour
-    // with no chip leaves it framing nothing. Only furniture and a host's own foreground are allowed to reach the
-    // fallback.
+    // A template may spend the chip as a SURFACE, and a colour with no chip leaves it framing nothing.
     for (const cls of COLOURS) {
       expect({ cls, bg: isTag(cls + BG), cap: isTag(cls + CAP) }).toEqual({
         cls,
@@ -401,13 +508,27 @@ describe("the tone slot", () => {
       });
     }
   });
+
+  /** An extended background, the form that names PIXELS. A base-sixteen one names a slot the theme paints. */
+  const INDEXED_FILL = ";48;5;";
+
+  it("fills blue and magenta with pixels, which is the whole of what made them correctable", () => {
+    // The defect end to end: their band used to fill with slots 44 and 45, so the ink beside them could only be
+    // guessed and the code span inside inherited that guess. The exact sequences are pinned in the bundled suite; what
+    // matters here is that a reader of this module can measure them at all.
+    for (const cls of ["blue", "magenta"]) {
+      expect({ cls, measurable: renderTags(tagMark(cls + BG)).includes(INDEXED_FILL) }).toEqual({
+        cls,
+        measurable: true,
+      });
+    }
+  });
 });
 
 describe("a cap, the foreground painting a chip's own fill", () => {
   /**
-   * Every class a band can wear, and the foreground its chip's fill derives to. This table IS the defect: the caps used
-   * to spend `{{tone}}`, which is bold, and a terminal promotes a bold base-sixteen FOREGROUND to the bright slot while
-   * nothing promotes a background. Same palette entry, two shades on screen.
+   * This table IS the defect: the caps used to spend `{{tone}}`, which is bold, and a terminal promotes a bold
+   * base-sixteen FOREGROUND to the bright slot while nothing promotes a background.
    */
   const FILLED: Record<string, string> = {
     info: `${ESC}[36m`,
@@ -418,8 +539,10 @@ describe("a cap, the foreground painting a chip's own fill", () => {
     med: `${ESC}[38;5;208m`,
     low: `${ESC}[38;5;250m`,
     gold: `${ESC}[38;5;220m`,
-    blue: `${ESC}[34m`,
-    magenta: `${ESC}[35m`,
+    // An INDEX rather than the `34`/`35` slots these two used to fill with: a cap paints its band's own fill, so it
+    // moved with the fill the day blue and magenta left the base range to become measurable.
+    blue: `${ESC}[38;5;20m`,
+    magenta: `${ESC}[38;5;127m`,
   };
 
   it("matches the fill of every class a band can wear, none of them bold", () => {
@@ -433,11 +556,9 @@ describe("a cap, the foreground painting a chip's own fill", () => {
   const FILLS = ";48;5;";
 
   it("paints the neutral pill's cap with the pill's FILL, whichever way round the terminal put it", () => {
-    // Out of the table above, and it is the only class that has to be: every other entry there is a HUE, the same
-    // sequence on either screen, where the pill turns over with the terminal. Naming its two sequences would be a copy
-    // of a value style.ts owns, going red the day a developer switches theme rather than the day a cap breaks. What
-    // holds in every theme is the RELATION, which is also the defect this describe exists for: the cap is the colour
-    // the pill fills with, never the one it writes in.
+    // Out of the table above: every other entry there is a HUE, the same sequence on either screen, where the pill
+    // turns over with the terminal. What holds in every theme is the RELATION, so naming its two sequences would go red
+    // the day a developer switches theme rather than the day a cap breaks.
     const pill = renderTags(tagMark("chip"));
     const fill = CUBE_ENDS.find((n) => pill.endsWith(`${FILLS}${n}m`));
     expect(fill).toBeDefined();
@@ -531,9 +652,7 @@ describe("a chip, the fill a colour derives", () => {
   });
 
   it("refuses a BASE-SIXTEEN slot, whose pixels are the user's theme and not ours", () => {
-    // The whole boundary in one case: `31` names a slot, and what a terminal paints there is loaded from a theme this
-    // process cannot read. No ink can be chosen for it, so the palette declares those chips by hand and this returns
-    // nothing.
+    // `31` names a slot, whose pixels come from a theme this process cannot read, so no ink can be chosen for it.
     const name = "chip_slot_probe";
     extendTags({ [name]: `${ESC}[1;31m` });
     expect(isTag(name + BG)).toBe(false);
@@ -576,9 +695,8 @@ describe("a chip, the fill a colour derives", () => {
 
 describe("the two colour builders a host registers with", () => {
   /**
-   * The two SGR introducers the builders exist to spell, and the only two the engine can MEASURE a chip and a cap from.
-   * Written out once here because this is the sidecar where the shape is the contract; everywhere else they are
-   * composed, never retyped.
+   * The two SGR introducers the builders exist to spell, written out because this is the sidecar where the shape is
+   * the contract; everywhere else they are composed, never retyped.
    */
   const INDEXED = "38;5";
   const TRUECOLOR = "38;2";
@@ -750,11 +868,8 @@ describe("the enumeration of tag names", () => {
   });
 
   it("states the derived forms as a RULE rather than listing them, since any colour suffixes into one", () => {
-    // A cap or a bg resolves on demand, so enumerating the results could never be complete: the suffixes are what a
-    // reader needs, and they are the same two the resolver strips.
-    // Some of these forms ARE listed, being explicit entries; the point is that being listed is not what makes them
-    // resolve. A host colour registered a second ago carries them too, which is why a reader is handed the suffixes
-    // rather than a list that could never be complete.
+    // A cap or a bg resolves on demand, so enumerating the results could never be complete: a host colour registered a
+    // second ago carries them too.
     const name = "suffixprobe";
     extendTags({ [name]: rgb(10, 20, 30) });
     expect(TAG_SUFFIXES.length).toBeGreaterThan(0);

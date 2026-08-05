@@ -1,16 +1,9 @@
 // Which engine dresses a session opened at the repo root, said in one line rather than drawn on every message.
 //
-// A permanent band would be wallpaper: it costs terminal height on EVERY message, in the repo whose product is that
-// height, and it would sit above every box a contributor is inspecting for alignment. So a STANDING fact is said once,
-// at SessionStart, and the only thing said again is a fact that CHANGED and can be measured: dist/ older than src/,
-// which is the one that actually wastes an afternoon. That notice extinguishes itself the moment you rebuild.
+// A STANDING fact is said once at SessionStart (--always); the only thing said again is one that CHANGED and can be
+// measured, dist/ older than src/, and that notice extinguishes itself on the next build.
 //
-// Wired on two events (see .claude/settings.json). SessionStart passes ALWAYS so the wiring names itself even when
-// everything is fresh; UserPromptSubmit passes nothing and stays silent unless something is wrong, which is the cadence
-// that matters: you edit, you send a message, you are told before you read the render.
-//
-// systemMessage is the host's own channel for this ("Display a message to the user (all hooks)", Claude Code 2.1.221),
-// so nothing here touches what the MessageDisplay hook renders.
+// systemMessage is the host's own channel, so nothing here touches what the MessageDisplay hook renders.
 
 import fs from "node:fs";
 import path from "node:path";

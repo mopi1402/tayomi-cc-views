@@ -1,11 +1,7 @@
 // Terminal COLUMN width, which is not string length. `.length` counts UTF-16 code units, and that diverges from what
-// the terminal prints in three independent ways: an ideograph (你) or a default-presentation emoji (✅) is one code unit
-// and prints TWO columns, so the line measures short and its border is pushed past the frame; a ZWJ sequence (👨‍💻,
-// five code units) prints two, so the measure OVER-counts and the border is pulled inside.
-//
-// Measured on a real block at a 95-column frame: +16 columns on a line of 16 ideographs, +1 on a line carrying one ✅,
-// -10 on a line of three ZWJ emoji. A surrogate pair with no joiner (🟥) happens to come out right, which is why the
-// defect looked intermittent.
+// the terminal prints in two directions: an ideograph (你) or a default-presentation emoji (✅) is one code unit and
+// prints TWO columns, so the line measures short and its border is pushed past the frame; a ZWJ sequence (👨‍💻, five code
+// units) prints two, so the measure OVER-counts and the border is pulled inside.
 //
 // So the unit is the GRAPHEME CLUSTER: one cluster is one thing the terminal draws. It is also the unit a wrap must
 // never cut through, hence clusterMap below.

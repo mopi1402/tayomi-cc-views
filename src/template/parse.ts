@@ -30,9 +30,8 @@ const MAP_RE = re(`^${MAP}${NAME_AND_REST}`);
 const TEXT_RE = re(`^${TEXT}${NAME_AND_REST}`);
 const TEXT_PAIR_RE = re(TEXT_PAIR, "g");
 const FIELDS_RE = re(`^${FIELDS}${NAME_AND_REST}`);
-// @tone takes ONE tag name and nothing else: it names the template's default class, so a pair (the @map shape) would be
-// a second mapping table for a decision the palette already holds. A malformed line is body, like every other near-miss
-// in this parser.
+// ONE tag name and nothing else: a pair (the @map shape) would be a second mapping table for a decision the palette
+// already holds. A malformed line is body, like every other near-miss in this parser.
 const TONE_RE = re(String.raw`^${TONE}[ \t]+(\w+)[ \t]*$`);
 const LABELS_RE = re(String.raw`^${EACH}[ \t]+\S+[ \t]*${declSource(LABEL)}`, "gm");
 const USE_FIELD_RE = re(String.raw`^${USE}[ \t]+\S+[ \t]+${FROM}[ \t]+\S+[ \t]*$`);
@@ -43,25 +42,20 @@ const COMMENT_RE = /^\s*#/;
 const CR_RE = /\r/g;
 
 export interface Template {
-  // @map <name> <val>=<tag> (enum to style) and @text <name> <val>="..." (enum to word). One registry, because one
-  // substitution form spends both.
+  // @map <name> <val>=<tag> and @text <name> <val>="...". One registry, because one substitution form spends both.
   tables: Tables;
-  // the lists whose items split into fields, declared with @fields <list> a b c
   objectLists: ObjectLists;
   // every remaining line, in order: the part that renders
   body: string[];
-  // The class the tone slot holds when no carrier names one, declared with @tone <tag>. A DEFAULT, not an override: a
-  // tone: or a type: on the carrier outranks it (render.ts).
+  // A DEFAULT, not an override: a tone: or a type: on the carrier outranks it (render.ts).
   tone?: string;
   // As wide as the WIDEST label the template declares, so a section can be named REMINDER without every other section's
   // bar shifting by hand. Computed here because a template line cannot see the others.
   labelWidth: number;
-  // Does the body spend a SLOT, `${...}` in any of its forms? It separates a template that is static (welcome, the
-  // health check) from one waiting for data, and that is the only honest way to ask whether a render came out hollow: a
-  // template drawing literal furniture always puts ink on screen, so measuring the OUTPUT can never tell.
+  // Does the body spend a SLOT? It separates a static template from one waiting for data, and it is the only honest way
+  // to ask whether a render came out hollow: a template drawing literal furniture always puts ink on screen.
   //
-  // Bookkeeping refs (`${#}`, `${#label}`) count, deliberately: spending one with no list to walk renders a column of
-  // spaces, which is the same skeleton. So does an include NAMING a field, which waits for data without holding a slot.
+  // Bookkeeping refs (`${#}`, `${#label}`) count, deliberately, and so does an include NAMING a field.
   spendsSlots: boolean;
 }
 
@@ -83,12 +77,9 @@ function textPairs(tail: string): Record<string, string> {
 }
 
 /**
- * Declare a table under its name.
- *
  * A name claimed by BOTH directives is a template error rather than a merge: the two answer the very same
- * `${field:name}`, so a merge would leave the winner to the order the lines happen to sit in and one of the two authors
- * would never see their declaration take effect. Thrown, so the carrier fails open and the raw block shows, which is
- * where the author is looking.
+ * `${field:name}`, so a merge would leave the winner to the order the lines happen to sit in. Thrown, so the carrier
+ * fails open and the raw block shows.
  */
 function declare(tables: Tables, name: string, table: Table): void {
   const prior = tables[name];

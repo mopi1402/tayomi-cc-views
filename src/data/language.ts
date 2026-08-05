@@ -1,6 +1,5 @@
 // The .view language's own vocabulary: every word an AUTHOR types in a template. Shared here because each has several
-// readers that must agree on its spelling (docs/architecture/architecture.md, "The layer chain"), so renaming one, a MAJOR version,
-// costs one edit.
+// readers that must agree on its spelling, so renaming one, a MAJOR version, costs one edit.
 
 const AT = "@";
 const keyword = (name: string): string => AT + name;
@@ -10,8 +9,8 @@ export const TEXT = keyword("text");
 export const FIELDS = keyword("fields");
 export const TONE = keyword("tone");
 export const BOX = keyword("box");
-// The ONE word, spelled once: `@head` is the directive, `head` is the field it draws from inside a loop. Two readers
-// that must agree, and deriving both is what stops one being renamed without the other.
+// The ONE word: `@head` is the directive, `head` is the field it draws from inside a loop. Deriving both is what stops
+// one being renamed without the other.
 const HEAD_WORD = "head";
 export const HEAD = keyword(HEAD_WORD);
 export const RIGHT = keyword("right");
@@ -23,10 +22,7 @@ export const ASIDE = keyword("aside");
 export const USE = keyword("use");
 export const END = keyword("end");
 
-/**
- * The token that turns @box into a container with NO outline: the body machinery, none of the chrome. A word rather
- * than a second directive, because the two draw the same body and differ only in what they put around it.
- */
+/** The token that turns @box into a container with NO outline: the body machinery, none of the chrome. */
 export const BARE = "bare";
 
 /**
@@ -36,29 +32,22 @@ export const BARE = "bare";
 export const FROM = "from";
 
 /**
- * The tokens an @aside may carry, saying where the SHORTER column sits against the taller one. Three readers must agree
- * on their spelling: the matcher that reads the declaration, the padding that acts on it, and the type that names the
- * set, so the words live here and the other two derive.
- *
- * A bare token is invisible to `check-vocabulary`, whose matcher only sees `@words`, and that is exactly why these
- * three drifted out here in the first place.
+ * Where the SHORTER column of an @aside sits against the taller one. Here rather than beside the matcher because a bare
+ * token is invisible to `check-vocabulary`, whose matcher only sees `@words`, and that is why these three drifted.
  */
 export const ALIGN_CENTER = "center";
 export const ALIGN_TOP = "top";
 export const ALIGN_BOTTOM = "bottom";
 export const ALIGNS = [ALIGN_CENTER, ALIGN_TOP, ALIGN_BOTTOM] as const;
 
-/** The set as a TYPE, derived rather than retyped: a fourth alignment is one edit above. */
 export type Align = (typeof ALIGNS)[number];
 
 /** Whether a token an author wrote is one of them, so a near-miss stays a near-miss. */
 export const isAlign = (token: string): token is Align => (ALIGNS as readonly string[]).includes(token);
 
 /**
- * The fields a PAYLOAD yields, spent by these names in a template. Three readers must agree on them: the carrier that
- * builds the scope, the author who writes the slot, and the catalogue that derives which payload a view expects FROM
- * the slots it spends, which is the only way `banner` and `quote` can be classified at all since neither declares
- * `@fields` (having no list to split).
+ * The fields a PAYLOAD yields. The catalogue derives which payload a view expects FROM the slots it spends, which is
+ * the only way `banner` and `quote` can be classified at all since neither declares `@fields`.
  */
 export const FIELD_ROWS = "rows";
 export const FIELD_LABEL = "label";
@@ -66,32 +55,26 @@ export const FIELD_CONTENT = "content";
 export const FIELD_TYPE = "type";
 
 /**
- * The row a table payload HEADS its list with, carrying the same field names as any other row and reaching the template
- * through `@head` inside the loop.
- *
- * Absent when the header's cells are all blank, which is the form markdown forces on a table that wants no header at
- * all (`| | |`), and a template's `@head` line then draws nothing. Present the moment the author wrote a word in it,
- * because a cell that reached the message and not the screen is the one outcome this carrier must never produce.
+ * The row a table payload HEADS its list with. Absent when the header's cells are all blank, the form markdown forces
+ * on a table that wants no header (`| | |`), and a template's `@head` line then draws nothing.
  */
 export const FIELD_HEAD = HEAD_WORD;
 
 /**
- * How many columns a table payload may carry. Two is markdown's smallest real table and the shape every view here was
- * written against; four is where a terminal line stops being readable, and a wider table fails open as the markdown it
- * already is.
+ * Two is markdown's smallest real table; four is where a terminal line stops being readable, and a wider table fails
+ * open as the markdown it already is.
  */
 export const MIN_COLUMNS = 2;
 export const MAX_COLUMNS = 4;
 
 /**
- * The cells BETWEEN the first and the last, which keep their own names because the two ends are anchored: the first cell
- * is always `label` and the last always `content`, whatever the arity, so a template written for two columns keeps
- * meaning what it meant. Numbered from one, `mid1` then `mid2`.
+ * The cells BETWEEN the first and the last, which keep their own names because the two ends are anchored: the first
+ * cell is always `label` and the last always `content`, so a template written for two columns keeps meaning what it
+ * meant. Numbered from one, `mid1` then `mid2`.
  */
 const MIDDLE_STEM = "mid";
 export const middleField = (n: number): string => MIDDLE_STEM + String(n);
 
-/** Every middle name the widest table can spend, so a reader never has to count them out. */
 export const MIDDLE_FIELDS: readonly string[] = Array.from(
   { length: MAX_COLUMNS - MIN_COLUMNS },
   (_, i) => middleField(i + 1)
@@ -100,7 +83,6 @@ export const MIDDLE_FIELDS: readonly string[] = Array.from(
 /** The field a block names a tone CLASS with, outranking its kind. Read with FIELD_TYPE wherever a tone is resolved. */
 export const FIELD_TONE = "tone";
 
-/** The payload shapes a decorator claims, named so a catalogue can say which one a view wants. */
 export const PAYLOAD_TABLE = "table";
 export const PAYLOAD_QUOTE = "quote";
 
@@ -113,7 +95,6 @@ export const PAYLOAD_FIELDS: Record<string, readonly string[]> = {
 /** A directive stripped of its `@`. Its closer derives from it, and so does the name of the region an opener opens. */
 export const stem = (word: string): string => word.slice(AT.length);
 
-/** A closing keyword is its opener's name behind `@end`. */
 const closes = (open: string): string => END + stem(open);
 export const ENDBOX = closes(BOX);
 export const ENDASIDE = closes(ASIDE);
@@ -128,9 +109,8 @@ export const DEFAULT_KEY = "*";
 export const TOKEN_SEP = /\s+/;
 
 /**
- * The declarations an @each may carry, with the value shape each accepts. One table, so the matcher that READS a
- * declaration, the scan that measures the label column and the strip that decides whether anything is LEFT OVER cannot
- * drift apart.
+ * The declarations an @each may carry. One table, so the matcher that READS a declaration, the scan that measures the
+ * label column and the strip that decides whether anything is LEFT OVER cannot drift apart.
  */
 export const LABEL = "label";
 export const BULLET = "bullet";
@@ -143,7 +123,6 @@ export const DECLS: Record<string, string> = {
   [CAP]: FRACTION,
 };
 
-/** One declaration, as it appears after an @each's field. */
 export const declSource = (name: string): string => String.raw`[ \t]${name}${PAIR_SEP}${DECLS[name]}`;
 
 /**
@@ -161,9 +140,8 @@ export const MARKER_TOKEN = String.raw`[A-Z][A-Z0-9_-]*`;
 export const MARKER_SOURCE = String.raw`\[!(${MARKER_TOKEN})\]`;
 
 /**
- * The same marker as an author TYPES it, for a catalogue that cannot hand a regex to its reader. Written out rather
- * than derived, a pattern having no readable spelling, and the sidecar feeds this form to the matcher above so the two
- * cannot part company.
+ * The same marker as an author TYPES it, for a catalogue that cannot hand a regex to its reader. The sidecar feeds this
+ * form to the matcher above so the two cannot part company.
  */
 export const MARKER_SLOT = "TOKEN";
 export const MARKER_FORM = `[!${MARKER_SLOT}]`;
@@ -177,3 +155,15 @@ export const ITEM_REF = ".";
 export const INDEX_REF = PSEUDO;
 export const LABEL_REF = PSEUDO + LABEL;
 export const BULLET_REF = PSEUDO + BULLET;
+
+/** The hanging boundary, WRITTEN: for the line with no @each to carry one on a `bullet=`. */
+const HANG = "hang";
+export const HANG_REF = PSEUDO + HANG;
+
+/** Where the fold starts painting. Before it the prefix is voided rather than blanked: spaces, and no style at all. */
+const FOLD = "fold";
+export const FOLD_REF = PSEUDO + FOLD;
+
+/** The closing furniture. Drawn while the line fits; a line that FOLDS drops it and squares every row to the width. */
+const TAIL = "tail";
+export const TAIL_REF = PSEUDO + TAIL;

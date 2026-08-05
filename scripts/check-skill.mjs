@@ -1,15 +1,8 @@
 // The skill is a DOCUMENT, so nothing type-checks it and no suite runs it. This is what does.
 //
-// It exists because a skill is the one artifact here that teaches the language without executing it.
-// Everything else in this repo derives from src/data/ and falls over the day a word changes; a
-// markdown file goes on reading beautifully while naming a directive that no longer exists, and the
-// only reader who finds out is the agent it just misled, in someone else's project.
-//
-// So every word the skill spells is read back against agent/catalogue.json, which is itself generated
-// from the tables the engine executes. A renamed directive fails here, on the file that names it.
-//
-// It also holds the DELIVERY together, since the skill reaches nobody by being correct: the manifests
-// have to resolve to it, and the README has to say how to install it.
+// A markdown file reads beautifully while naming a directive that no longer exists, and the only reader who finds out
+// is the agent it misled. Every word it spells is read back against agent/catalogue.json, and the DELIVERY is held
+// together too: the manifests must resolve to it, the README must say how to install it.
 //
 // Run via `pnpm check:skill`, wired into `pnpm verify`.
 
