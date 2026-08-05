@@ -31,7 +31,8 @@ import {
   USE,
 } from "../data/language.js";
 import { VIEW_EXT } from "../data/markup.js";
-import { HANG_MARK, RULE_MARK } from "../layout/marks.js";
+import { CELL_MARK, HANG_MARK, RULE_MARK, STACK_MARK } from "../layout/marks.js";
+import { printedWidth } from "../layout/measure.js";
 import { fillTone, renderTags, tagMark } from "../style.js";
 import { renderBody } from "./directives.js";
 import { TEXT_TABLE, type Scope, type Tables } from "../scope.js";
@@ -62,6 +63,12 @@ const render = (
 ): string[] => renderBody(body, scope, tables, lists, LIMIT, dir);
 
 const text = (body: string[], scope: Scope = {}): string => render(body, scope).join("\n");
+
+/**
+ * The lines as the SCREEN gets them: a measured cell travels bracketed (wrap.ts) and the render strips the brackets
+ * once the layout is settled. Zero width apiece, so what is asserted below is the alignment either way.
+ */
+const bare = (lines: string[]): string[] => lines.map((l) => l.split(CELL_MARK).join(""));
 
 describe("a plain line", () => {
   it("is substituted and emitted, one line in and one out", () => {
@@ -123,7 +130,7 @@ describe("@each", () => {
     });
     // A declared word, an off-map key echoed uppercase, and the reserved entry for the row that carried nothing: three
     // different widths, one column.
-    expect(out).toEqual(["WARNING!|a", "DEPLOY  |b", "NOTE    |c"]);
+    expect(bare(out)).toEqual(["WARNING!|a", "DEPLOY  |b", "NOTE    |c"]);
   });
 });
 
@@ -138,12 +145,12 @@ describe(`${HEAD} inside a loop`, () => {
 
   it("draws ONCE above the items, never as a line of one", () => {
     const out = render(LOOP, { rows: ROWS, head: { k: "K", v: "V" } }, NO_TABLES, LISTS);
-    expect(out).toEqual(["K|V", "a|1", "b|2"]);
+    expect(bare(out)).toEqual(["K|V", "a|1", "b|2"]);
   });
 
   it("draws NOTHING when the scope carries no head, and the items are untouched", () => {
     // What makes one template answer both: a payload that headed nothing leaves the list starting at its first row.
-    expect(render(LOOP, { rows: ROWS }, NO_TABLES, LISTS)).toEqual(["a|1", "b|2"]);
+    expect(bare(render(LOOP, { rows: ROWS }, NO_TABLES, LISTS))).toEqual(["a|1", "b|2"]);
   });
 
   it("joins the MEASUREMENT even though it is not iterated, so a long header still fits", () => {
@@ -151,7 +158,7 @@ describe(`${HEAD} inside a loop`, () => {
     // the column beside it and every row below would be one width, the header another.
     const LONG = "a header longer than any value";
     const out = render(LOOP, { rows: ROWS, head: { k: LONG, v: "V" } }, NO_TABLES, LISTS);
-    for (const line of out) expect(line.indexOf("|")).toBe(LONG.length);
+    for (const line of bare(out)) expect(line.indexOf("|")).toBe(LONG.length);
   });
 
   it("stays OUT of the measurement where the loop draws no head, whatever it carries", () => {
@@ -159,7 +166,7 @@ describe(`${HEAD} inside a loop`, () => {
     // a column padded to a width no item occupies is a gap the author cannot account for.
     const LONG = "a header longer than any value";
     const out = render([`${EACH} rows`, LINE, END], { rows: ROWS, head: { k: LONG, v: "V" } }, NO_TABLES, LISTS);
-    expect(out).toEqual(["a|1", "b|2"]);
+    expect(bare(out)).toEqual(["a|1", "b|2"]);
   });
 
   it("honours a rule among its lines, which the loop's own rule cannot place", () => {
@@ -170,17 +177,17 @@ describe(`${HEAD} inside a loop`, () => {
       NO_TABLES,
       LISTS
     );
-    expect(out).toEqual(["K|V", RULE_MARK, "a|1", "b|2"]);
+    expect(bare(out)).toEqual(["K|V", RULE_MARK, "a|1", "b|2"]);
   });
 
   it("refuses a head that is a LIST, rather than spreading its indices as field names", () => {
-    expect(render(LOOP, { rows: ROWS, head: ["K", "V"] }, NO_TABLES, LISTS)).toEqual(["a|1", "b|2"]);
+    expect(bare(render(LOOP, { rows: ROWS, head: ["K", "V"] }, NO_TABLES, LISTS))).toEqual(["a|1", "b|2"]);
   });
 
   it("prints a near-miss as a line of the item, the way every other matcher here does", () => {
     // No space after the word, so it is not the directive: the author sees it repeated per row and fixes it.
     const out = render([`${EACH} rows`, `${HEAD}${LINE}`, END], { rows: ROWS, head: { k: "K", v: "V" } }, NO_TABLES, LISTS);
-    expect(out).toEqual([`${HEAD}a|1`, `${HEAD}b|2`]);
+    expect(bare(out)).toEqual([`${HEAD}a|1`, `${HEAD}b|2`]);
   });
 });
 
@@ -212,7 +219,7 @@ describe("an @each declaration", () => {
     ]);
   });
 
-  it("caps a column to a fraction of the width", () => {
+  it("caps a column to a fraction of the width, and STACKS what no longer fits", () => {
     const line = `[${ref("wide")}]`;
     const wide = "a-very-long-value-here";
     const scope = { rows: [{ state: "ok", wide, text: "tail" }] };
@@ -220,7 +227,12 @@ describe("an @each declaration", () => {
     const capped = render([`${EACH} rows cap="1/10"`, line, END], scope, NO_TABLES, lists);
     const uncapped = render([`${EACH} rows`, line, END], scope, NO_TABLES, lists);
     expect(uncapped[0]).toContain(wide);
-    expect(capped[0].length).toBeLessThan(uncapped[0].length);
+    // The cap governs the width of a ROW, never how much of the value survives: every row fits the cell, and the
+    // value comes out of them whole. A cap that cut would pass the first assertion and fail the second.
+    const rows = capped[0].split(CELL_MARK)[1].split(STACK_MARK);
+    expect(rows.length).toBeGreaterThan(1);
+    for (const row of rows) expect(printedWidth(row)).toBe(Math.floor(LIMIT / 10));
+    expect(rows.join("").split(" ").join("")).toBe(wide);
   });
 });
 

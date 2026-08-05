@@ -1,7 +1,8 @@
 // ${field} and ${field:tablename}: one expression, resolved against the scope.
 
 import type { PadCtx } from "../layout/columns.js";
-import { fitCell, longestKey, padCell } from "../layout/measure.js";
+import { longestKey, padCell } from "../layout/measure.js";
+import { markCell, stackCell } from "../layout/wrap.js";
 import { CHIP_CHROME, RESET_MARK, TAG_SOURCE, chip } from "../style.js";
 import {
   SUBST_RE,
@@ -29,9 +30,9 @@ function value(expr: string, scope: Scope, tables: Tables, pad?: PadCtx): string
   // keeps that exit: an absent value there has no word to fall back on.
   if (table?.kind === TEXT_TABLE) {
     const word = tableWord(table, val == null ? "" : stringify(val).trim());
-    return cell == null ? word : padCell(fitCell(word, cell), cell);
+    return cell == null ? word : stackCell(word, cell);
   }
-  if (val == null) return cell == null ? "" : " ".repeat(cell);
+  if (val == null) return cell == null ? "" : stackCell("", cell);
   const text0 = stringify(val);
   if (table !== undefined) {
     // The enum resolves on the TRIMMED value, so column padding upstream can never lose a chip.
@@ -41,14 +42,15 @@ function value(expr: string, scope: Scope, tables: Tables, pad?: PadCtx): string
       const label = aligned
         ? Math.max(longestKey(table.entries), cell == null ? 0 : cell - CHIP_CHROME)
         : 0;
-      return chip(tag, padCell(key.toUpperCase(), label));
+      const chipped = chip(tag, padCell(key.toUpperCase(), label));
+      return cell == null ? chipped : markCell(chipped);
     }
     // Off the map: bare text, no chip, but padded to the same cell so the following columns keep their offset.
-    if (cell != null) return padCell(fitCell(key, cell), cell);
+    if (cell != null) return stackCell(key, cell);
   }
-  // fitCell only ever bites under a capped column (see measure.ts): everywhere else the cell was measured over the
-  // values, so nothing exceeds it.
-  return cell == null ? text0 : padCell(fitCell(text0, cell), cell);
+  // stackCell only ever folds under a capped column (see wrap.ts): everywhere else the cell was measured over the
+  // values, so nothing exceeds it and the value comes back padded and whole.
+  return cell == null ? text0 : stackCell(text0, cell);
 }
 
 /** The name an expression spends, `${label}` and `${label:tone}` alike. */
@@ -60,41 +62,66 @@ const fieldOf = (expr: string): string => expr.split(":")[0].trim();
 const LEAD_TAG_RE = new RegExp(TAG_SOURCE, "g");
 
 /**
- * What SURVIVES a dropped lead: the tag closers the lead does not open itself. A separator writes a closed span
- * (`{{dim}}  │  {{/}}`) and goes down whole with its column, but a closer standing at the head of the lead belongs to
- * the column BEFORE it, and dropping that one would leak the tone across the rest of the line.
+ * The furniture between two columns, cut into the three things it carries: closers of the column before, the separator,
+ * openers of the column after. A template writes all three as one string, so position names none of them and what the
+ * run closes ITSELF does.
+ *
+ * A closer it does not open always survives, or the tone it ends leaks over the rest of the line.
  */
-function unmatchedCloses(lead: string): string {
-  let depth = 0;
-  let kept = "";
-  for (const m of lead.matchAll(LEAD_TAG_RE)) {
-    if (m[0] !== RESET_MARK) depth++;
-    else if (depth > 0) depth--;
-    else kept += RESET_MARK;
+function sift(run: string, prev: boolean, next: boolean): string {
+  if (prev && next) return run;
+  const parts: { s: string; tag: boolean }[] = [];
+  let at = 0;
+  for (const m of run.matchAll(LEAD_TAG_RE)) {
+    if (m.index > at) parts.push({ s: run.slice(at, m.index), tag: false });
+    parts.push({ s: m[0], tag: true });
+    at = m.index + m[0].length;
   }
-  return kept;
+  if (at < run.length) parts.push({ s: run.slice(at), tag: false });
+  // Paired off left to right: what the stack keeps opens something this run never closes, and a closer meeting an empty
+  // stack closes something it never opened. All the rest is the separator, matched spans and text alike.
+  const opened: number[] = [];
+  const role = parts.map(() => "body");
+  parts.forEach((p, i) => {
+    if (!p.tag) return;
+    if (p.s !== RESET_MARK) opened.push(i);
+    else if (opened.length > 0) opened.pop();
+    else role[i] = "close";
+  });
+  for (const i of opened) role[i] = "open";
+  const pick = (want: string): string =>
+    parts
+      .filter((_, i) => role[i] === want)
+      .map((p) => p.s)
+      .join("");
+  return pick("close") + (prev ? pick("body") : "") + (next ? pick("open") : "");
 }
 
 /**
- * A line with its expressions resolved, and its HOLLOW ones removed along with the text leading up to them. That lead
- * is everything since the previous expression, which is where a template writes a column's separator, so a column the
- * data never had takes its own furniture down with it.
+ * A line with its expressions resolved, and its HOLLOW ones removed along with the text that FOLLOWS them, up to the
+ * next expression, which is where a template writes a column's separator.
  *
- * The lead therefore has to be BALANCED markup: a template that splits a tag across two columns loses the closer with
- * the column.
+ * That side and not the other, so the separator written FIRST is the one always left standing: box.view hangs a frange
+ * off it and thin bars past it, which taking the side before makes impossible. The furniture has to be BALANCED markup
+ * either way: a template splitting a tag across two columns loses the closer with the column.
  */
 export function subst(text: string, scope: Scope, tables: Tables, pad?: PadCtx): string {
+  const found = [...text.matchAll(SUBST_RE)];
+  const shown = found.map((m) => !(pad?.hollow?.has(fieldOf(m[1])) ?? false));
+  // Whether anything from here on still prints: a separator with no column left after it has nothing to separate, and
+  // dangles at the end of the row unless it goes down too.
+  const rest = shown.map((_, i) => shown.slice(i).includes(true));
   let out = "";
   let from = 0;
-  for (const m of text.matchAll(SUBST_RE)) {
+  // The column a run comes AFTER. The head of the line has none, and stands.
+  let prev = true;
+  found.forEach((m, i) => {
     const at = m.index;
-    if (pad?.hollow?.has(fieldOf(m[1]))) {
-      out += unmatchedCloses(text.slice(from, at));
-      from = at + m[0].length;
-      continue;
-    }
-    out += text.slice(from, at) + value(m[1], scope, tables, pad);
+    out += sift(text.slice(from, at), prev && rest[i], shown[i]);
+    if (shown[i]) out += value(m[1], scope, tables, pad);
+    prev = shown[i];
     from = at + m[0].length;
-  }
-  return out + text.slice(from);
+  });
+  // Whatever trails the last column is that column's, and goes down with it.
+  return out + sift(text.slice(from), prev, true);
 }

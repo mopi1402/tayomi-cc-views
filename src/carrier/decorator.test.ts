@@ -150,6 +150,30 @@ write(second, viewFile(ITEM, LOUD), rowsView("B[${label}|${content}]"));
 const WIDTH = 60;
 // The item.view fixture declares cap="1/3", so this is where a label cell stops.
 const CAP = Math.floor(WIDTH / 3);
+
+/**
+ * The rows one folded label occupies, read from the separator down to the first line leaving the label column empty:
+ * how many a value folds into is the arithmetic under test, so nothing here may count them.
+ */
+const labelRows = (plain: string): string[] => {
+  const shown = plain.split("\n");
+  const rows: string[] = [];
+  for (let i = shown.findIndex((l) => l.includes(SEP)); shown[i]?.slice(0, CAP).trim() !== ""; i++) {
+    rows.push(shown[i]);
+  }
+  return rows;
+};
+
+/**
+ * Those rows' label column, whitespace out: what SURVIVED the fold. WHERE the boundaries land is the greedy fill's
+ * business, pinned in wrap.test.ts.
+ */
+const labelText = (rows: string[]): string =>
+  rows
+    .map((r) => r.slice(0, CAP))
+    .join("")
+    .split(/\s+/)
+    .join("");
 const options = { viewsPath: [first, second], width: WIDTH };
 
 const DECORATED = lines(decorator(ITEM), "| Item | Info |", DELIM, "| Decorator | one line above |");
@@ -262,32 +286,37 @@ describe("a decorated payload", () => {
     expect(two!.indexOf(">")).toBe(one!.indexOf(">"));
   });
 
-  it("caps the label column at a third of the width, on an ellipsis", () => {
+  it("caps the label column at a third of the width, and FOLDS what does not fit", () => {
     const long = "an unreasonably long label that would eat the row";
     const msg = decorated(decorator(ITEM), `| ${long} | x |`);
     const plain = transform(msg, undefined, true, undefined, options).replace(ANSI_RE, "");
-    const line = plain.split("\n").find((l) => l.includes("…"));
-    expect(line).toBeDefined();
-    // Exactly the cap: a column clamped tighter would be a regression too.
-    expect(line!.indexOf(SEP)).toBe(CAP);
-    expect(line).toContain("x");
+    const rows = labelRows(plain);
+    expect(rows.length).toBeGreaterThan(1);
+    // Exactly the cap: a column clamped tighter would be a regression too. The separator is furniture and belongs to
+    // the first row alone, so what pins the rows below is the label column they hold open.
+    expect(rows[0].indexOf(SEP)).toBe(CAP);
+    // The whole label, and never a character of it standing in for the rest.
+    expect(labelText(rows)).toBe(long.split(" ").join(""));
+    expect(plain).not.toContain("…");
+    expect(rows[0]).toContain("x");
   });
 
-  it("cuts a capped bold label without leaking markup or leaving the style open", () => {
+  it("folds a capped bold label without leaking markup or leaving the style open", () => {
     const msg = decorated(decorator(ITEM), "| aaaaaaaaaaaaaaaaa**bold and more** | tail |");
     const out = transform(msg, undefined, true, undefined, options);
     expect(out).not.toContain("{{");
     expect(out).not.toContain("*");
     const plain = out.replace(ANSI_RE, "");
-    const line = plain.split("\n").find((l) => l.includes("…"));
-    expect(line).toBeDefined();
-    expect(line!.indexOf(SEP)).toBe(CAP);
-    expect(line).toContain("tail");
-    // The cut lands inside the bold span: its style must be CLOSED before the template's own separator, and the
-    // LABEL's own colour has to come back with it, or the ellipsis onwards prints plain.
-    const cell = out.split("\n").find((l) => l.includes("…"));
+    const rows = labelRows(plain);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows[0].indexOf(SEP)).toBe(CAP);
+    expect(labelText(rows)).toBe("aaaaaaaaaaaaaaaaaboldandmore");
+    expect(rows[0]).toContain("tail");
+    // The fold lands inside the bold span: its style must be CLOSED before the template's own separator, and the
+    // LABEL's colour come back with it, or the rest of the row prints plain.
+    const cell = out.split("\n").find((l) => l.includes(SEP));
     expect(cell!.indexOf(RESET)).toBeLessThan(cell!.indexOf(SEP));
-    expect(cell).toContain(`${RESET}${CYAN}…`);
+    expect(cell).toContain(`${RESET}${CYAN}`);
   });
 
   it("hands a styled CELL its own colour back after a bold span, mid-label", () => {
@@ -312,8 +341,8 @@ describe("a decorated payload", () => {
       options
     );
     expect(out).toContain(`${RESET}${CYAN}${BOLD} here`);
-    // The label is capped, so what follows is the cut and not the rest of the word.
-    expect(out).toContain(`here${RESET}${CYAN} b`);
+    // The label is capped, so what follows the word is the fold and not the rest of the row.
+    expect(out).toContain(`here${RESET}${CYAN}`);
   });
 });
 

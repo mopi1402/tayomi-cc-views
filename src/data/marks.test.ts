@@ -3,7 +3,14 @@
 // every frame.
 
 import { describe, it, expect } from "vitest";
-import { CONTROL_MARKS, RESUME_MARK, SPAN_MARK, dropControl, hasControlMark } from "./marks.js";
+import {
+  CONTROL_MARKS,
+  RESUME_MARK,
+  SPAN_MARK,
+  WRAP_MARKS,
+  dropControl,
+  hasControlMark,
+} from "./marks.js";
 import { displayWidth } from "../layout/width.js";
 
 const C0_CEILING = 0x20;
@@ -34,6 +41,17 @@ describe("the reserved control marks", () => {
     // enrolled without the other would pass every rule above while the screen kept a stray code.
     expect(CONTROL_MARKS).toContain(RESUME_MARK);
     expect(CONTROL_MARKS).toContain(SPAN_MARK);
+  });
+
+  it("avoid every code JS reads as WHITESPACE, which a trim would eat on the way in", () => {
+    // What decides which codes are free: a value is trimmed before it is measured, so a mark spelled \t, \n, \v, \f or
+    // \r is a channel silently cut at either end of the string it delimits.
+    for (const mark of CONTROL_MARKS) expect(mark.trim()).toBe(mark);
+  });
+
+  it("enrol the WRAPPER's own marks, which the render strips on the strength of that list", () => {
+    // A mark on the sweep list and off this one leaves the sweep working and every other rule here blind to it.
+    for (const mark of WRAP_MARKS) expect(CONTROL_MARKS).toContain(mark);
   });
 
   it("come OFF a message's text, the one direction a code must never travel", () => {

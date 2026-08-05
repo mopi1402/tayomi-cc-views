@@ -38,6 +38,17 @@ export const VOID_MARK = control(6);
  */
 export const TAIL_MARK = control(7);
 
+/**
+ * Brackets a cell of measured width, at both ends, so the wrapper knows where the columns beside it resume.
+ *
+ * Codes 9 to 13 are skipped here and below: JS counts every one of them as whitespace, and a value passes through
+ * `.trim()` on its way in, so a mark chosen there is a cell that silently loses its rows.
+ */
+export const CELL_MARK = control(8);
+
+/** Between two rows of such a cell. */
+export const STACK_MARK = control(14);
+
 export const CONTROL_MARKS: readonly string[] = [
   RULE_MARK,
   HANG_MARK,
@@ -46,6 +57,20 @@ export const CONTROL_MARKS: readonly string[] = [
   SPAN_MARK,
   VOID_MARK,
   TAIL_MARK,
+  CELL_MARK,
+  STACK_MARK,
+];
+
+/**
+ * The marks the WRAPPER alone reads, and none of them may reach a terminal: the render strips this list whole once the
+ * layout is settled. A mark left off it is an invisible code on screen and a width nobody can account for.
+ */
+export const WRAP_MARKS: readonly string[] = [
+  HANG_MARK,
+  VOID_MARK,
+  TAIL_MARK,
+  CELL_MARK,
+  STACK_MARK,
 ];
 
 export function hasControlMark(s: string): boolean {

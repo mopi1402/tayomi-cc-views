@@ -53,8 +53,9 @@
 # Two to four columns, like columns.view and for the same reason: the carrier hands this
 # view whatever the table had, and a middle column it did not declare would be dropped in
 # silence. They are separated by BLANKS and not by a bar, which is this view's whole
-# contract, and a column no row carries takes its own blanks down with it (the hollow rule,
-# src/layout/columns.ts), so a two-column table draws exactly what it always drew.
+# contract, and a column no row carries takes the blanks written AFTER it down with it (the
+# hollow rule, src/layout/columns.ts), so a two-column table draws exactly what it always
+# drew.
 #
 # @head draws once above the elements, from the table's own header line and only when that
 # line says something, with a rule of its own under it: the loop's own @rule falls BETWEEN

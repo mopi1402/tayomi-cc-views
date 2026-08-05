@@ -1,7 +1,8 @@
 // One view, rendered: the composition of the three halves that must not know each other (where the template lives, how
 // the block's data parses, how a line draws).
 
-import { HANG_MARK, TAIL_MARK, VOID_MARK } from "../layout/marks.js";
+import { STACK_MARK, WRAP_MARKS } from "../data/marks.js";
+import { wrapLine } from "../layout/wrap.js";
 import { dropInert, fillTone, markCode, renderTags, toneClass } from "../style.js";
 import { nameField, type Scope } from "../scope.js";
 import { FIELD_TONE, FIELD_TYPE } from "../data/language.js";
@@ -84,10 +85,14 @@ export function traceView(
   const read = new Set<string>();
   full.__read = read;
   let out: string[];
+  const limit = maxBoxWidth(options);
   try {
     // Width and search path resolved ONCE here and handed down as values: the layers below never import platform/ and
     // never probe for a file.
-    out = renderBody(body, full, tables, objectLists, maxBoxWidth(options), dir);
+    out = renderBody(body, full, tables, objectLists, limit, dir);
+    // A template declaring no container passes no wrapper, and a stacked cell has to be dealt somewhere or its rows
+    // print side by side. Only a line CARRYING one goes through: the rest still flows at the terminal's own hand.
+    out = out.flatMap((l) => (l.includes(STACK_MARK) ? wrapLine(l, limit) : [l]));
   } finally {
     // Both are the ENGINE's and `full` may BE the caller's own object, so neither is left on it: a second render of the
     // same data would count `__read` among the fields that ARRIVED, and a stale width hands the next view its
@@ -112,6 +117,6 @@ export function traceView(
   // These marks exist for the layers above and must never reach a terminal. Inert goes LAST, after renderTags, so what
   // it protected is text by then.
   const drawn = renderTags(fillTone(markCode(out.join("\n")), cls));
-  const bare = [HANG_MARK, VOID_MARK, TAIL_MARK].reduce((s, m) => s.split(m).join(""), dropInert(drawn));
+  const bare = WRAP_MARKS.reduce((s, m) => s.split(m).join(""), dropInert(drawn));
   return { out: bare, read };
 }

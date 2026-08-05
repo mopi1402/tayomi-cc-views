@@ -48,6 +48,11 @@
 # glyph a continuation row is REDRAWN with, so it has to be the same one. Consecutive rows
 # join it into a single frange down the block.
 #
+# It is written FIRST, right after the label, which is what it sets off from the rest, and
+# the separators past it are the thin one the two other table views draw. That the first is
+# the one always left standing is the hollow rule's doing (see below), so a two-column
+# table, which is what this view is for, keeps the bar and drops the two thin ones.
+#
 # The bullet is the AUTHOR's, written in the cell, never furniture this file adds: `- ` on
 # a note and `□ R1 ·` on a reminder are the same column, and a template drawing its own
 # would impose one on the section that wanted the other. The content cell is the LAST
@@ -55,19 +60,21 @@
 #
 # Two to four columns, like the two other table views and for the same reason: the carrier
 # hands this view whatever the table had, and a middle column it did not declare would be
-# dropped in silence. The middles sit between the label and the bar, and a column no row
-# carries takes its own lead down with it (the hollow rule, src/layout/columns.ts), so a
-# two-column table draws exactly a label, a bar and a line.
+# dropped in silence. The middles sit past the bar, between the label and the text, and a
+# column no row carries takes the furniture written AFTER it down with it (the hollow rule,
+# src/layout/columns.ts), so a two-column table draws exactly a label, a bar and a line.
 #
 # cap="1/3" keeps a long label from pushing the text to the margin: past a third of the
-# width it is cut on an ellipsis, markup-aware, so a tag is never cut open.
+# width it FOLDS, one row per line, in step with the text beside it. It costs the row
+# height and never a character, an ellipsis being a piece of the data the reader cannot
+# get back.
 @tone dim
 @fields rows label mid1 mid2 content
 @box
 @head {{box_title}}${head.label}{{/}}
 @right ${head.content}
 @each rows cap="1/3" bullet=""
-{{b}}{{tone}}${label}{{/}}  ${mid1}  ${mid2}  {{tone}}▎{{/}} ${#bullet}${content}
+{{b}}{{tone}}${label}{{/}}  {{tone}}▎{{/}} ${mid1}  {{tone}}│{{/}}  ${mid2}  {{tone}}│{{/}}  ${#bullet}${content}
 
 @end
 @endbox

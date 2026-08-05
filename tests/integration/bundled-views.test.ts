@@ -578,6 +578,7 @@ describe("the lines view the package ships", () => {
 // of what follows pins that reading, which nothing else in the engine can see.
 describe("the box view the package ships", () => {
   const GUTTER = "▎"; // the same glyph quote.view spends, because wrap.ts redraws that one
+  const THIN = "│"; // what the columns PAST the frange are split by, the glyph columns.view draws
   const TITLE = "TL;DR";
   const BADGE = "session 3";
   const DASH = "─";
@@ -685,14 +686,17 @@ describe("the box view the package ships", () => {
     expect(at(render(box("@{view:box}", `| ${LONG} | |`, ...ROWS)))).toEqual(at(render(MSG)));
   });
 
-  it("takes every width the carrier hands it, the middles between the label and the bar", () => {
+  it("takes every width the carrier hands it, the bar right after the label", () => {
+    // The frange sets the LABEL off from the rest, so it falls at the second column whatever the arity.
     for (let n = MIN_COLUMNS; n <= MAX_COLUMNS; n++) {
       const cells = Array.from({ length: n }, (_, i) => `c${i + 1}`);
       const row = `|${cells.map((c) => ` ${c} |`).join("")}`;
       const head = `|${cells.map(() => " |").join("")}`;
       const delim = `|${cells.map(() => " --- |").join("")}`;
       const drawn = barred(render(lines("@{view:box}", head, delim, row, "")));
-      expect(drawn[0]).toContain(`${cells.slice(0, -1).join("  ")}  ${GUTTER} ${cells[n - 1]}`);
+      // The frange right after the label, and the thin split columns.view draws between the columns past it.
+      const sep = (i: number): string => (i === 1 ? `  ${GUTTER} ` : `  ${THIN}  `);
+      expect(drawn[0]).toContain(cells.map((c, i) => (i === 0 ? c : sep(i) + c)).join(""));
     }
   });
 
@@ -761,6 +765,21 @@ describe("the quote view the package ships", () => {
     // several would leave every row after the first with no bar at all.
     const plain = plainly(render(quote("@{view:quote}", "premiere moitie", "seconde moitie")));
     expect(plain).toBe(`${GUTTER} premiere moitie seconde moitie`);
+  });
+
+  it("FOLDS a sentence wider than the screen, the bar redrawn on every row it takes", () => {
+    // What `@box bare` buys. Left to the terminal's own soft wrap, the second row starts at the margin with no bar, and
+    // the block stops reading as one quote exactly when it grows long enough to need to.
+    const long = "une remarque assez longue pour depasser la largeur donnee ici et devoir se replier sur trois rangs entiers";
+    const drawn = render(quote("@{view:quote}", long)).split("\n").filter((l) => l.trim() !== "");
+    expect(drawn.length).toBeGreaterThan(1);
+    for (const row of drawn) {
+      expect(plainly(row).startsWith(GUTTER)).toBe(true);
+      expect(printedWidth(row)).toBeLessThanOrEqual(options.width);
+      expect(seqs(row)).toEqual([DIM, RESET]); // the ink of the bar, reopened and closed per row
+    }
+    // Folded, never cut: the sentence comes back whole out of the rows it was dealt into.
+    expect(drawn.map((r) => plainly(r).slice(GUTTER.length).trim()).join(" ")).toBe(long);
   });
 
   it("refuses a TABLE payload outright, the mirror of the columns view refusing a quote", () => {

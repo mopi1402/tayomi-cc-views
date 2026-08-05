@@ -7,9 +7,9 @@
 
 import { describe, it, expect } from "vitest";
 import { RESET_MARK, RESUME_MARK, SPAN_MARK, chip, tagMark } from "../style.js";
-import { HANG_MARK, TAIL_MARK, VOID_MARK } from "./marks.js";
+import { CELL_MARK, HANG_MARK, STACK_MARK, TAIL_MARK, VOID_MARK } from "./marks.js";
 import { printedWidth } from "./measure.js";
-import { wrapLine } from "./wrap.js";
+import { foldText, stackCell, wrapLine } from "./wrap.js";
 
 /** The section bar a template draws down its left margin; wrap.ts keeps it private. */
 const BAR = "▎";
@@ -238,5 +238,147 @@ describe("a declared tail", () => {
   it("changes nothing for a line that declares none, which is every other view", () => {
     const rows = wrapLine(`${BAR} ${HANG_MARK}alpha beta gamma delta`, LIMIT);
     expect(rows.some((r) => printedWidth(r) < LIMIT)).toBe(true);
+  });
+});
+
+// The other half of the fold, and the one that answers for the DATA: a column too narrow for its value costs rows and
+// never characters. Everything here would pass on a module that cut, except the reassembly.
+describe("a stacked cell", () => {
+  const CELL = 6;
+  const VALUE = "far too long to fit";
+  const stacked = stackCell(VALUE, CELL);
+  /** The value read back off the rows it was dealt into, the one assertion a cut cannot satisfy. */
+  const survives = (rows: string[], width: number): string =>
+    rows
+      .map((r) => r.slice(0, r.length - (printedWidth(r) - width)))
+      .join("")
+      .split(/\s+/)
+      .join("");
+
+  it("comes back PADDED and bracketed when the value fits, with no row to deal out", () => {
+    const out = stackCell("ok", CELL);
+    expect(printedWidth(out)).toBe(CELL);
+    // Bracketed all the same: the marks say WHERE the column is, and only the stack mark says there are rows to deal.
+    expect(out).toBe(CELL_MARK + "ok".padEnd(CELL) + CELL_MARK);
+    expect(out).not.toContain(STACK_MARK);
+  });
+
+  it("brackets its rows when the value does not, every one of them the width of the column", () => {
+    expect(stacked.startsWith(CELL_MARK)).toBe(true);
+    expect(stacked.endsWith(CELL_MARK)).toBe(true);
+    const rows = stacked.split(CELL_MARK)[1].split(STACK_MARK);
+    expect(rows.length).toBeGreaterThan(1);
+    for (const row of rows) expect(printedWidth(row)).toBe(CELL);
+    expect(survives(rows, CELL)).toBe(VALUE.split(" ").join(""));
+  });
+
+  it("is dealt ONE row per line, the columns after it blank on every row but the first", () => {
+    const rows = wrapLine(`${stacked}  tail`, LIMIT);
+    expect(rows).toHaveLength(stacked.split(STACK_MARK).length);
+    expect(rows[0]).toContain("tail");
+    for (const row of rows.slice(1)) expect(row).not.toContain("tail");
+  });
+
+  it("folds IN STEP with the prose beside it, never one after the other", () => {
+    // The whole reason the rows travel on the line: dealt by the substituter instead, the cell's continuations would
+    // stack up after the prose's, and the two columns would read as two paragraphs.
+    const rows = wrapLine(`${stacked}  alpha beta gamma delta epsilon zeta`, LIMIT);
+    expect(rows[1].slice(0, CELL).trim()).not.toBe("");
+    expect(rows[1].slice(CELL).trim()).not.toBe("");
+  });
+
+  it("holds its column open with blanks once its rows run out, so nothing slides left", () => {
+    const rows = wrapLine(`${stackCell("ab", CELL)}${stacked}  x`, LIMIT);
+    const short = stackCell("ab", CELL);
+    expect(short).not.toContain(STACK_MARK); // it fits: one row, and the cell beside it is the taller
+    for (const row of rows) expect(row.indexOf(row.trim()[0])).toBeGreaterThanOrEqual(0);
+    expect(rows.length).toBeGreaterThan(1);
+    // The second row's tall cell sits where the first row's did, the short cell before it having become blanks.
+    expect(rows[1].slice(0, CELL).trim()).toBe("");
+  });
+
+  it("FOLDS even where the line would fit, its rows being measured side by side", () => {
+    // The early return reads a width, and a stacked line measures as wide as all of its rows laid end to end. Left to
+    // that reading a short line would print every row of the cell on one screen row, which is the defect the marks
+    // exist to prevent.
+    const line = `${stackCell("abcdefgh", CELL)}|`;
+    expect(printedWidth(line)).toBeLessThan(LIMIT);
+    expect(wrapLine(line, LIMIT).length).toBeGreaterThan(1);
+  });
+
+  it("carries the SEPARATOR that follows it onto every row of the entry", () => {
+    // The furniture between two columns belongs to the prefix, never to the text that flows: left in the flow it is
+    // drawn on the first row of an entry and lost on every other, and the rule the table is read by is cut in half.
+    // The glyph here is columns.view's, which is NOT the gutter bar: a keep-list naming one of the two left the other
+    // falling with the label beside it.
+    const PIPE = "│";
+    const rows = wrapLine(`${stacked}  ${PIPE}  alpha beta gamma`, LIMIT);
+    expect(rows.length).toBeGreaterThan(1);
+    // At the same column on every row, or the rule walks down the screen.
+    expect(new Set(rows.map((r) => r.indexOf(PIPE))).size).toBe(1);
+    expect(rows.every((r) => r.includes(PIPE))).toBe(true);
+  });
+
+  it("carries EVERY separator down, and not only the first one after it", () => {
+    // The columns between the folded one and the prose are cells like any other, so their separators belong to the
+    // prefix too. Read as flowing text they were drawn on the entry's first row alone.
+    const PIPE = "│";
+    const sep = `  ${PIPE}  `;
+    const line = `${stacked}${sep}${stackCell("135", 3)}${sep}${stackCell("ok", 2)}${sep}a note`;
+    const rows = wrapLine(line, LIMIT);
+    expect(rows.length).toBeGreaterThan(1);
+    for (const row of rows) expect(row.split(PIPE).length - 1).toBe(3);
+    // At the same three columns on every row, or a rule walks down the screen.
+    const at = (r: string): number[] => [...r].flatMap((c, i) => (c === PIPE ? [i] : []));
+    for (const row of rows) expect(at(row)).toEqual(at(rows[0]));
+    // The columns the entry does not repeat are BLANK under their value, never a repetition of it.
+    expect(rows[1].split(PIPE)[1].trim()).toBe("");
+  });
+
+  it("carries no mark onto the rows it is dealt into", () => {
+    const rows = wrapLine(`${stacked}  tail`, LIMIT);
+    for (const row of rows) {
+      expect(row).not.toContain(CELL_MARK);
+      expect(row).not.toContain(STACK_MARK);
+    }
+  });
+});
+
+// A fold is a boundary drawn through markup, and both halves have to stand on their own.
+describe("a style the fold crosses", () => {
+  it("is closed on the row that opens it and reopened on the next", () => {
+    const rows = foldText(`${tagMark("b")}alpha beta gamma delta${RESET_MARK}`, 10);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows[1]).toContain(tagMark("b"));
+  });
+
+  it("leaves no row unwinding a frame it never opened", () => {
+    // The failure this catches is silent and one row long: a closer landing on a row whose opener stayed above it ends
+    // the style the ROW was drawn in, and everything after it on that row prints plain.
+    const rows = foldText(`${chip("b", "OK")} alpha beta gamma delta`, 10);
+    for (const row of rows) {
+      const opens = [...row].filter((c) => c === SPAN_MARK).length;
+      const closes = [...row].filter((c) => c === RESUME_MARK).length;
+      expect(closes).toBeLessThanOrEqual(opens);
+    }
+  });
+
+  it("keeps every character, whatever the markup around it", () => {
+    // The markup a row gains from the seal is exactly what the two cases above are about, so it comes OFF here: what
+    // is left is the text, and the text has to be all of it.
+    const bare = (s: string): string =>
+      s
+        .replace(/\{\{[^}]*\}\}/g, "")
+        .split(SPAN_MARK)
+        .join("")
+        .split(RESUME_MARK)
+        .join("");
+    const rows = foldText(`${tagMark("b")}alpha beta${RESET_MARK} gamma delta`, 10);
+    expect(rows.map(bare).join(" ").split(/\s+/).filter(Boolean)).toEqual([
+      "alpha",
+      "beta",
+      "gamma",
+      "delta",
+    ]);
   });
 });

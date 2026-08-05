@@ -32,7 +32,8 @@ export interface PadCtx {
 }
 
 /**
- * The declared fields NOT ONE item carries, whose separator would be furniture around nothing.
+ * The declared fields NOT ONE item carries, whose separator would be furniture around nothing. WHICH of its two
+ * separators such a column takes is substitute.ts's business.
  *
  * Measured over the WHOLE list and never per item: a field one row happens to omit keeps its cell on every row, so
  * ragged data still lines up. Only a column the data never had at all disappears, which is how one template draws a

@@ -9,6 +9,7 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_KEY } from "../data/language.js";
 import type { PadCtx } from "../layout/columns.js";
+import { CELL_MARK, STACK_MARK } from "../layout/marks.js";
 import { printedWidth } from "../layout/measure.js";
 import { CHIP_CHROME, chip } from "../style.js";
 import { subst } from "./substitute.js";
@@ -26,6 +27,13 @@ const TABLES: Tables = {
 const LONGEST_KEY = "fail".length;
 /** What columns.ts would measure for a mapped column: its longest key plus the chip. */
 const CELL = LONGEST_KEY + CHIP_CHROME;
+
+/**
+ * A cell as it LEAVES this module: a measured column travels bracketed whether or not its value stacked, or a
+ * continuation row cannot tell where that column is. Zero width apiece, and the render strips them.
+ */
+const cell = (s: string): string => CELL_MARK + s + CELL_MARK;
+const bare = (s: string): string => s.split(CELL_MARK).join("");
 
 const plain = (text: string, scope: Scope): string => subst(text, scope, TABLES);
 const padded = (text: string, scope: Scope, pad: PadCtx): string =>
@@ -106,15 +114,17 @@ describe("inside a list, where the columns align", () => {
   const pad: PadCtx = { widths: { s: CELL }, tail: "text" };
 
   it("pads the chip's label to the cell, so the column after it holds its offset", () => {
-    expect(padded("${s:states}", { s: "ok" }, pad)).toBe(chip("success", "OK".padEnd(LONGEST_KEY)));
+    expect(padded("${s:states}", { s: "ok" }, pad)).toBe(
+      cell(chip("success", "OK".padEnd(LONGEST_KEY)))
+    );
   });
 
   it("pads an OFF-MAP value to the same cell, chipless but aligned", () => {
-    expect(padded("${s:states}", { s: "other" }, pad)).toBe("other".padEnd(CELL));
+    expect(padded("${s:states}", { s: "other" }, pad)).toBe(cell("other".padEnd(CELL)));
   });
 
   it("spends the cell in SPACES when the item has no such field", () => {
-    expect(padded("${s}", {}, pad)).toBe(" ".repeat(CELL));
+    expect(padded("${s}", {}, pad)).toBe(cell(" ".repeat(CELL)));
   });
 
   it("leaves the prose tail unpadded, in a list as out of one", () => {
@@ -132,7 +142,7 @@ describe("inside a list, where the columns align", () => {
     const wide = printedWidth(WARNING) + 3;
     const ctx: PadCtx = { widths: { type: wide }, tail: "text" };
     const declared = padded("${type:kinds}", { type: "warning" }, ctx);
-    expect(declared.startsWith(WARNING)).toBe(true);
+    expect(bare(declared).startsWith(WARNING)).toBe(true);
     expect(printedWidth(declared)).toBe(wide);
     // The reserved entry takes a cell like any other: a row with no value still aligns.
     expect(printedWidth(padded("${type:kinds}", {}, ctx))).toBe(wide);
@@ -141,42 +151,68 @@ describe("inside a list, where the columns align", () => {
 
 describe("a capped column", () => {
   const CAP = 6;
-  const ELLIPSIS = "…";
   const pad: PadCtx = { widths: { s: CAP } };
+  /** The rows a stacked cell carries, as the wrapper will deal them out. */
+  const rows = (cell: string): string[] => cell.split(CELL_MARK)[1].split(STACK_MARK);
 
-  it("cuts a value wider than its cell on an ellipsis, never past the cell", () => {
+  it("STACKS a value wider than its cell instead of cutting it", () => {
     const out = padded("${s}", { s: "far too long to fit" }, pad);
-    expect(out).toHaveLength(CAP);
-    expect(out.endsWith(ELLIPSIS)).toBe(true);
+    expect(out.startsWith(CELL_MARK)).toBe(true);
+    expect(out.endsWith(CELL_MARK)).toBe(true);
+    // Every word is still there, which is the whole reason the cell stacks.
+    expect(rows(out).join("").split(/\s+/).filter(Boolean)).toEqual([
+      "far",
+      "too",
+      "long",
+      "to",
+      "fit",
+    ]);
   });
 
-  it("leaves a value that fits exactly alone", () => {
-    expect(padded("${s}", { s: "abcdef" }, pad)).toBe("abcdef");
+  it("pads every row of a stacked cell to the column, so the columns beside it keep their offset", () => {
+    const out = padded("${s}", { s: "far too long to fit" }, pad);
+    for (const row of rows(out)) expect(printedWidth(row)).toBe(CAP);
+  });
+
+  it("BRACKETS a value that fits exactly, with no row to deal out", () => {
+    const out = padded("${s}", { s: "abcdef" }, pad);
+    expect(out).toBe(cell("abcdef"));
+    // The brackets say WHERE the column is; only this mark says the wrapper has rows to deal.
+    expect(out).not.toContain(STACK_MARK);
   });
 });
 
 describe("a hollow column", () => {
   // The rule that lets ONE template draw a variable number of columns: a field the list never carried takes down the
-  // text leading up to it, which is exactly where a separator is written.
+  // text that FOLLOWS it, which is exactly where a separator is written.
   const SEP = "  |  ";
   const LINE = `\${a}${SEP}\${b}${SEP}\${c}`;
   const ctx = (...hollow: string[]): PadCtx => ({ tail: "c", widths: {}, hollow: new Set(hollow) });
 
-  it("takes the separator written just before it down with it", () => {
-    expect(padded(LINE, { a: "1", c: "3" }, ctx("b"))).toBe(`1${SEP}3`);
+  it("takes the separator written just AFTER it, leaving the FIRST of the line standing", () => {
+    // Which side it takes decides which separator a two-column table is left with, and only this one lets a template
+    // give its first one a shape of its own: box.view's frange, thin bars past it.
+    const line = `\${a} A \${b} B \${c}`;
+    expect(padded(line, { a: "1", c: "3" }, ctx("b"))).toBe("1 A 3");
   });
 
   it("leaves the line whole when nothing is hollow", () => {
     expect(padded(LINE, { a: "1", b: "2", c: "3" }, ctx())).toBe(`1${SEP}2${SEP}3`);
   });
 
-  it("takes several in a row, and the trailing text still lands", () => {
-    expect(padded(LINE + " END", { a: "1", c: "3" }, ctx("b", "c"))).toBe("1 END");
+  it("takes several in a row, and the text trailing the LAST of them too", () => {
+    // Nothing prints after `a`, so nothing is left to separate: the run takes the separator that would have introduced
+    // it, and the tail of the line belongs to the column that never drew.
+    expect(padded(LINE + " END", { a: "1", c: "3" }, ctx("b", "c"))).toBe("1");
+  });
+
+  it("leaves the text trailing the line alone where the last column prints", () => {
+    expect(padded(LINE + " END", { a: "1", c: "3" }, ctx("b"))).toBe(`1${SEP}3 END`);
   });
 
   it("is nothing without a hollow set: an absent field pads its cell as it always did", () => {
     expect(padded(LINE, { a: "1", c: "3" }, { tail: "c", widths: { b: 4 } })).toBe(
-      `1${SEP}    ${SEP}3`
+      `1${SEP}${cell("    ")}${SEP}3`
     );
   });
 
@@ -185,7 +221,7 @@ describe("a hollow column", () => {
   });
 
   it("keeps a closer the dropped run does not open, which belongs to the column before", () => {
-    // `{{tone}}${a}{{/}}` puts that closer at the head of the NEXT column's lead. Dropping it with the rest would leave
+    // `{{tone}}${a}{{/}}` puts that closer in the run the hollow column takes. Dropping it with the rest would leave
     // the tone open across the whole line, the one way this rule could repaint a row.
     const line = `{{c}}\${a}{{/}}{{dim}}${SEP}{{/}}\${b}{{dim}}${SEP}{{/}}\${c}`;
     expect(padded(line, { a: "1", c: "3" }, ctx("b"))).toBe(`{{c}}1{{/}}{{dim}}${SEP}{{/}}3`);
@@ -194,5 +230,12 @@ describe("a hollow column", () => {
   it("drops a separator it DOES open and close, leaving no stray closer behind", () => {
     const line = `\${a}{{dim}}${SEP}{{/}}\${b}`;
     expect(padded(line, { a: "1" }, { tail: "b", widths: {}, hollow: new Set(["b"]) })).toBe("1");
+  });
+
+  it("takes the OPENER of the run before it, which dressed the column that never drew", () => {
+    // The mirror of the closer above, and why the run is SIFTED rather than kept or dropped whole: lines.view writes
+    // one weight per cell, so the run before a hollow column carries that cell's opener.
+    const line = `\${a}{{/}} {{b}}\${b}{{/}} {{b}}\${c}`;
+    expect(padded(line, { a: "1", c: "3" }, ctx("b"))).toBe("1{{/}} {{/}}{{b}}3");
   });
 });
