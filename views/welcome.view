@@ -13,7 +13,7 @@
 # reader learns WHICH engine drew the box when two of them could have.
 @box
 @head {{box_title}}Welcome!{{/}}
-@right @tayomi/cc-views v1.0.27
+@right @tayomi/cc-views v1.0.28
 
 # The health-check line is STATIC on purpose: an empty view:welcome block
 # renders this box word for word, so the agent has nothing to improvise and
