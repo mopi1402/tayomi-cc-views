@@ -5,7 +5,20 @@
 // the line in silence.
 
 import { describe, it, expect } from "vitest";
-import { BOX, DEFAULT_KEY, EACH, FIELDS, MAP, TEXT, TONE } from "../data/language.js";
+import {
+  BOX,
+  DEFAULT_KEY,
+  EACH,
+  END,
+  ENGINE_REF,
+  FIELDS,
+  INDEX_REF,
+  ITEM_REF,
+  MAP,
+  RIGHT,
+  TEXT,
+  TONE,
+} from "../data/language.js";
 import { parseTemplate } from "./parse.js";
 import { STYLE_TABLE, TEXT_TABLE } from "../scope.js";
 import { tagMark } from "../style.js";
@@ -165,5 +178,22 @@ describe("the label column", () => {
 
   it("needs whitespace before the declaration, so a glued one is not a label", () => {
     expect(parseTemplate(`${EACH} rowslabel="WIDE"`).labelWidth).toBe(0);
+  });
+});
+
+describe("spendsSlots", () => {
+  const ref = (name: string): string => `\${${name}}`;
+
+  it("is false for a body reaching only for the engine, so a health check draws on nothing", () => {
+    expect(parseTemplate(`${RIGHT} ${ref(ENGINE_REF)}`).spendsSlots).toBe(false);
+    expect(parseTemplate(ref(INDEX_REF)).spendsSlots).toBe(false);
+  });
+
+  it("is true for the ITEM, which names no field and is data all the same", () => {
+    expect(parseTemplate(`${EACH} rows\n${ref(ITEM_REF)}\n${END}`).spendsSlots).toBe(true);
+  });
+
+  it("is true for an ordinary field", () => {
+    expect(parseTemplate(ref("said")).spendsSlots).toBe(true);
   });
 });

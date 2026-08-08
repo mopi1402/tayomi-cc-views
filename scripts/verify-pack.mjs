@@ -15,6 +15,10 @@ const fail = (msg) => {
   console.error(`\nverify-pack: FAIL, ${msg}`);
   process.exit(1);
 };
+/** Spelled here rather than imported: this script drives the INSTALLED copy, whose word is the one under test. */
+const VERSION_FLAG = "--version";
+/** A bin that reached for stdin instead of answering would otherwise hang this script forever. */
+const ASK_MS = 20_000;
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-verify-"));
 try {
@@ -175,10 +179,10 @@ try {
   if (!widePlain.includes("╭")) fail("no box frame in the output");
   if (!widePlain.includes("Welcome!")) fail("the title did not render");
   if (widePlain.includes("```")) fail("the raw fence reached the screen");
-  // The badge names the engine AND its version, and the number is a copy in a file that cannot
-  // import it. Read off the SCREEN drawn by the installed tarball, so it answers for the whole
-  // chain at once: sync-version wrote it, the whitelist shipped it, and this box is the one place
-  // a user can tell which of two engines drew their message.
+  // The badge names the engine AND its version, asked of the CODE that drew the box (${#engine}).
+  // Read off the SCREEN drawn by the installed tarball, so it answers for the whole chain at once:
+  // sync-version wrote the constant, the whitelist shipped it, and this box is the one place a user
+  // can tell which of two engines drew their message.
   const badge = `${pkg.name} v${pkg.version}`;
   if (!widePlain.includes(badge)) fail(`the box does not name "${badge}", so its version is stale`);
   for (const label of SECTIONS) {
@@ -268,6 +272,20 @@ try {
   if (!published.directives?.length) fail(`${CLI} dict published no directive`);
   if (!published.views?.some((v) => v.name === "welcome")) {
     fail(`${CLI} dict resolved no welcome view from the installed package`);
+  }
+
+  // BOTH binaries answer the same question, which is the whole point: the one an author runs and the
+  // one a hook spawns. The second is checked with stdin left open, since answering it after the read
+  // would hang exactly where a user asks it.
+  for (const [what, cmd, args] of [
+    [CLI, shim, [VERSION_FLAG]],
+    ["the hook bin", "node", [bin, VERSION_FLAG]],
+  ]) {
+    const asked = spawnSync(cmd, args, { cwd: proj, env: cliEnv, encoding: "utf8", timeout: ASK_MS });
+    if (asked.status !== 0) fail(`${what} ${VERSION_FLAG} exited ${asked.status}: ${asked.stderr}`);
+    if (asked.stdout.trim() !== badge) {
+      fail(`${what} ${VERSION_FLAG} said ${JSON.stringify(asked.stdout.trim())}, not "${badge}"`);
+    }
   }
 
   console.log(wide);

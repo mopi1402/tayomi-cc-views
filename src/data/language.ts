@@ -167,3 +167,7 @@ export const FOLD_REF = PSEUDO + FOLD;
 /** The closing furniture. Drawn while the line fits; a line that FOLDS drops it and squares every row to the width. */
 const TAIL = "tail";
 export const TAIL_REF = PSEUDO + TAIL;
+
+/** The running engine's badge. A view is READ, so a number typed into one names the file, never the code that drew it. */
+const ENGINE = "engine";
+export const ENGINE_REF = PSEUDO + ENGINE;

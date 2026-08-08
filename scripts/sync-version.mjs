@@ -1,8 +1,8 @@
-// The ONE version, carried into the two manifests that cannot import it: a plugin manifest is static JSON read before
-// any of our code runs, so it has to spell the number rather than ask for it.
+// The ONE version, carried into the three files that cannot import it: a plugin manifest is static JSON read before any
+// of our code runs, and src/data/engine.ts is the number itself, spelled rather than read so it survives a bundler.
 //
-// This WRITES and check-skill.mjs GATES. Deliberately no --check mode here, since a second reader of the same rule is
-// the drift the rule exists to stop.
+// This WRITES and the GATES live elsewhere, one each: check-skill.mjs for the manifests, src/data/engine.test.ts for
+// the constant. Deliberately no --check mode here, since a second reader of the same rule is the drift it exists to stop.
 //
 // Run via `pnpm sync:version` after bumping package.json.
 
@@ -14,7 +14,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_DIR = ".claude-plugin";
 const PLUGIN = path.join(PLUGIN_DIR, "plugin.json");
 const MARKETPLACE = path.join(PLUGIN_DIR, "marketplace.json");
-const WELCOME = path.join("views", "welcome.view");
+const ENGINE = path.join("src", "data", "engine.ts");
 const INDENT = 2;
 
 const read = (rel) => JSON.parse(fs.readFileSync(path.join(ROOT, rel), "utf8"));
@@ -22,7 +22,7 @@ const read = (rel) => JSON.parse(fs.readFileSync(path.join(ROOT, rel), "utf8"));
 const write = (rel, value) =>
   fs.writeFileSync(path.join(ROOT, rel), `${JSON.stringify(value, null, INDENT)}\n`);
 
-const { name, version } = read("package.json");
+const { version } = read("package.json");
 const changed = [];
 
 const plugin = read(PLUGIN);
@@ -42,23 +42,20 @@ if (mine.length > 0) {
   changed.push(MARKETPLACE);
 }
 
-// The health check's badge. A .view is read, never imported, so this is the same copy as the
-// manifests above; it is also the only line telling a reader WHICH engine drew the box, which is
-// the whole point of the view when two of them could have (docs/caveats.md).
+// The number the engine ANSWERS with, and what every badge on screen derives from.
 //
-// Anchored on the package's own name so it can only ever touch the badge that already names us,
-// and it REFUSES rather than write nothing: a silent no-match is precisely the drift this file
-// exists to stop, and it would ship a box claiming a version from two releases ago.
-const badge = new RegExp(`^@right ${name.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&")}.*$`, "m");
-const welcome = fs.readFileSync(path.join(ROOT, WELCOME), "utf8");
-if (!badge.test(welcome)) {
-  console.error(`sync-version: no "@right ${name}" line in ${WELCOME}`);
+// It REFUSES rather than write nothing: a silent no-match is precisely the drift this file exists
+// to stop, and it would ship an engine claiming a version from two releases ago.
+const constant = /^(export const ENGINE_VERSION = ")([^"]*)(";)$/m;
+const engine = fs.readFileSync(path.join(ROOT, ENGINE), "utf8");
+if (!constant.test(engine)) {
+  console.error(`sync-version: no ENGINE_VERSION line in ${ENGINE}`);
   process.exit(1);
 }
-const badged = welcome.replace(badge, `@right ${name} v${version}`);
-if (badged !== welcome) {
-  fs.writeFileSync(path.join(ROOT, WELCOME), badged);
-  changed.push(WELCOME);
+const stamped = engine.replace(constant, `$1${version}$3`);
+if (stamped !== engine) {
+  fs.writeFileSync(path.join(ROOT, ENGINE), stamped);
+  changed.push(ENGINE);
 }
 
 if (changed.length === 0) {

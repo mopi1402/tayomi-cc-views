@@ -8,9 +8,16 @@
 // bundle (two main() in one process steal each other's stdin).
 
 import { isDirectExecution } from "@tayomi/utils";
+import { VERSION_FLAG, engineBadge } from "../data/engine.js";
 import { runMessageDisplayHook } from "../hook/runner.js";
 
 async function main(): Promise<void> {
+  // Answered here and not in the runner: this is the copy a hook SPAWNS, and asking it costs nothing only while the
+  // question is settled before stdin is read, which otherwise blocks on a terminal.
+  if (process.argv.includes(VERSION_FLAG)) {
+    process.stdout.write(`${engineBadge()}\n`);
+    process.exit(0);
+  }
   await runMessageDisplayHook();
   process.exit(0);
 }

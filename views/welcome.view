@@ -8,12 +8,12 @@
 # A titled, framed box. @right is a badge SET INTO the top rule, near its right
 # corner; @head is the title row, the first line inside the border, above the
 # full-width rule. The box sizes itself to its widest line.
-# The version is written by scripts/sync-version.mjs at every bump, never by
-# hand: a .view cannot import the number, and this line is the only place a
-# reader learns WHICH engine drew the box when two of them could have.
+# ${#engine} is the RUNNING engine's badge, asked of the code rather than typed
+# here: a view is read by whichever engine resolves it, so a number spelled in
+# this file would name the file and not the copy that drew the box.
 @box
 @head {{box_title}}Welcome!{{/}}
-@right @tayomi/cc-views v1.0.28
+@right ${#engine}
 
 # The health-check line is STATIC on purpose: an empty view:welcome block
 # renders this box word for word, so the agent has nothing to improvise and

@@ -3,9 +3,11 @@
 // A leaf beside style.ts, because its two consumers must not depend on each other: the substituter (template/) and the
 // column measurer (layout/) both read a field and coerce it to a string, so neither can own the accessors.
 
+import { engineBadge } from "./data/engine.js";
 import {
   BULLET_REF,
   DEFAULT_KEY,
+  ENGINE_REF,
   FOLD_REF,
   HANG_REF,
   INDEX_REF,
@@ -63,6 +65,17 @@ export function tableWord(table: Table, key: string): string {
 // Shared, because the column measurer reads the SAME expressions to learn which @map a column renders through.
 export const SUBST_RE = /\$\{([^}]+)\}/g;
 
+const refBase = (ref: string): string => ref.split(":")[0].split(".")[0];
+
+/** A substitution reaching for the engine's own bookkeeping, so a view spending only these still draws on empty data. */
+export const readsBookkeeping = (ref: string): boolean => refBase(ref).startsWith(INDEX_REF);
+
+/** The field a substitution reaches for, or null when it names none: the bookkeeping, or the item under an @each. */
+export function slotField(ref: string): string | null {
+  const base = refBase(ref);
+  return base === "" || readsBookkeeping(ref) ? null : base;
+}
+
 const PSEUDO: Record<string, (scope: Scope) => unknown> = {
   [ITEM_REF]: (s) => s.__item,
   [INDEX_REF]: (s) => s.__index,
@@ -74,6 +87,7 @@ const PSEUDO: Record<string, (scope: Scope) => unknown> = {
   [HANG_REF]: () => HANG_MARK,
   [FOLD_REF]: () => VOID_MARK,
   [TAIL_REF]: () => TAIL_MARK,
+  [ENGINE_REF]: () => engineBadge(),
 };
 
 /**

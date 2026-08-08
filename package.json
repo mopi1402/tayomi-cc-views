@@ -47,7 +47,7 @@
     "check:skill": "node scripts/check-skill.mjs",
     "check:steering": "node scripts/check-steering.mjs",
     "sync:version": "node scripts/sync-version.mjs",
-    "version": "node scripts/sync-version.mjs && git add .claude-plugin views/welcome.view"
+    "version": "node scripts/sync-version.mjs && git add .claude-plugin src/data/engine.ts"
   },
   "dependencies": {
     "@tayomi/utils": "^0.1.0"

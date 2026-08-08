@@ -106,10 +106,14 @@ claude plugin update tayomi@tayomi
 The chain ends on a bump, and a bump is a claim: `plugin update` copies a directory, it never checks which engine that directory installed. So read the version INSIDE the copy rather than trusting the manifest you just edited.
 
 ```bash
-grep '"version"' ~/.claude/plugins/cache/tayomi/tayomi/<version>/node_modules/@tayomi/cc-views/package.json
+node ~/.claude/plugins/cache/tayomi/tayomi/<version>/node_modules/@tayomi/cc-views/dist/bin/messagedisplay.js --version
 ```
 
 One line, and the whole chain answers at once: the prerelease reached the registry, the workspace installed it, `plugin update` copied it. The wrong version here tells you which of the three failed, and the directory's own timestamp (`ls -ldT` on it) says whether the copy happened at all.
+
+Ask the BINARY rather than grepping a manifest beside it: the number it prints comes from the code that draws (`src/data/engine.ts`), so it answers for the engine that would run and not for a file lying next to it. `cc-views --version` does the same for an ordinary install.
+
+On screen, `@{view:welcome}` carries that same number in its badge, read off `${#engine}`. This is the one measurement that survives two engines racing for the same message: any number typed INTO a view names the view's file, never the copy that drew it, and a view resolves through directories the engine does not own.
 
 Nothing here proves the RESTART, and no check should: a session already running keeps the engine it loaded, you are the one who restarts it, and restarting again costs three seconds against two commands. When in doubt, restart rather than measure.
 

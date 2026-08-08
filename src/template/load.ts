@@ -10,6 +10,7 @@ import fs from "node:fs";
 import { createRequire as requireFrom } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ENGINE_NAME } from "../data/engine.js";
 import { VIEWS_DIR, VIEWS_PATH_ENV, VIEW_EXT } from "../data/markup.js";
 import { parseTemplate, type Template } from "./parse.js";
 
@@ -29,14 +30,13 @@ const MAX_HOPS = 5;
 
 // Asking Node where the package is INSTALLED is the one question that keeps a right answer from inside a host's bundle,
 // where a path relative to this module has none: a bundler rewrites import.meta.url into its own output, so the walk
-// would measure the HOST's tree. load.test.ts pins this against package.json.
-const PKG_NAME = "@tayomi/cc-views";
+// would measure the HOST's tree.
 
 /** Whether `dir` is the root of THIS package, judged on the manifest lying in it. */
 function isPackageRoot(dir: string): boolean {
   try {
     const manifest: unknown = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
-    return (manifest as { name?: unknown }).name === PKG_NAME;
+    return (manifest as { name?: unknown }).name === ENGINE_NAME;
   } catch {
     return false;
   }
@@ -59,7 +59,9 @@ export function bundledViewsDir(): string {
   // By NAME first, which answers for an ordinary install AND from inside a host's bundle, since the package still lies
   // in the host's node_modules either way.
   try {
-    const resolved = packageViewsAbove(path.dirname(requireFrom(import.meta.url).resolve(PKG_NAME)));
+    const resolved = packageViewsAbove(
+      path.dirname(requireFrom(import.meta.url).resolve(ENGINE_NAME)),
+    );
     if (resolved) return resolved;
   } catch {
     // Not resolvable from here (no node_modules to reach). The walk below still answers for a checkout of this repo,

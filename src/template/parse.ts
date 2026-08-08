@@ -18,7 +18,14 @@ import {
   declSource,
 } from "../data/language.js";
 import { printedWidth } from "../layout/measure.js";
-import { STYLE_TABLE, SUBST_RE, TEXT_TABLE, type Table, type Tables } from "../scope.js";
+import {
+  STYLE_TABLE,
+  SUBST_RE,
+  TEXT_TABLE,
+  readsBookkeeping,
+  type Table,
+  type Tables,
+} from "../scope.js";
 import type { ObjectLists } from "./view-data.js";
 
 // Every pattern composes from the keyword table, so renaming a directive is one edit there.
@@ -55,7 +62,8 @@ export interface Template {
   // Does the body spend a SLOT? It separates a static template from one waiting for data, and it is the only honest way
   // to ask whether a render came out hollow: a template drawing literal furniture always puts ink on screen.
   //
-  // Bookkeeping refs (`${#}`, `${#label}`) count, deliberately, and so does an include NAMING a field.
+  // A bookkeeping ref (`${#}`, `${#engine}`) does NOT count: it resolves against the engine, so a view spending only
+  // those still draws on an empty block. An include NAMING a field does count.
   spendsSlots: boolean;
 }
 
@@ -120,6 +128,7 @@ export function parseTemplate(text: string): Template {
   // Over the BODY alone: a comment documenting a slot is not a template spending one, and comments are exactly where an
   // author writes the shape out to explain it.
   const spendsSlots =
-    body.join("\n").match(SUBST_RE) !== null || body.some((line) => USE_FIELD_RE.test(line));
+    [...body.join("\n").matchAll(SUBST_RE)].some(([, ref]) => !readsBookkeeping(ref)) ||
+    body.some((line) => USE_FIELD_RE.test(line));
   return { tables, objectLists, body, labelWidth, tone, spendsSlots };
 }

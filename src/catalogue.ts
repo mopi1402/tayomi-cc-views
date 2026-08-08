@@ -23,7 +23,6 @@ import {
 import {
   FIELD_TONE,
   FIELD_TYPE,
-  INDEX_REF,
   MARKER_FORM,
   PAYLOAD_FIELDS,
   PAYLOAD_QUOTE,
@@ -43,7 +42,7 @@ import {
   VIEWS_DIR,
   VIEW_EXT,
 } from "./data/markup.js";
-import { SUBST_RE } from "./scope.js";
+import { SUBST_RE, slotField } from "./scope.js";
 import { TAG_SUFFIXES, builtinTagNames, tagNames } from "./style.js";
 import {
   bundledViewsDir,
@@ -166,12 +165,6 @@ function directives(): DirectiveDoc[] {
       readIn: [...readIn],
     };
   });
-}
-
-/** The field a substitution reaches for, or null when it reaches for the engine's own bookkeeping instead. */
-function slotField(ref: string): string | null {
-  const base = ref.split(":")[0].split(".")[0];
-  return base === "" || base.startsWith(INDEX_REF) ? null : base;
 }
 
 /**

@@ -4,9 +4,11 @@
 // undefined rather than throwing, and a renamed bookkeeping field would blank a column with no error anywhere.
 
 import { describe, it, expect } from "vitest";
+import { engineBadge } from "./data/engine.js";
 import {
   BULLET_REF,
   DEFAULT_KEY,
+  ENGINE_REF,
   FOLD_REF,
   HANG_REF,
   INDEX_REF,
@@ -51,6 +53,11 @@ describe("lookup", () => {
     expect(lookup({}, FOLD_REF)).toBe(VOID_MARK);
     expect(lookup({}, TAIL_REF)).toBe(TAIL_MARK);
     expect(new Set([HANG_MARK, VOID_MARK, TAIL_MARK]).size).toBe(3);
+  });
+
+  it("resolves the engine badge from the CODE, which no scope and no view can shadow", () => {
+    expect(lookup({}, ENGINE_REF)).toBe(engineBadge());
+    expect(lookup({ [ENGINE_REF]: "forged" }, ENGINE_REF)).toBe(engineBadge());
   });
 
   it("gives an unlabelled line the label column in SPACES, so it starts where items do", () => {
@@ -98,7 +105,9 @@ describe("what a lookup records", () => {
   });
 
   it("counts NO pseudo-field, which resolves against the bookkeeping and not the data", () => {
-    expect(seen([ITEM_REF, INDEX_REF, LABEL_REF, BULLET_REF, HANG_REF, FOLD_REF, TAIL_REF])).toEqual([]);
+    expect(
+      seen([ITEM_REF, INDEX_REF, LABEL_REF, BULLET_REF, HANG_REF, FOLD_REF, TAIL_REF, ENGINE_REF]),
+    ).toEqual([]);
   });
 
   it("records nothing at all when the caller asked for no account", () => {
