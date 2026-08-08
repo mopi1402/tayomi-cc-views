@@ -1,6 +1,6 @@
 {
   "name": "@tayomi/cc-views",
-  "version": "1.0.28",
+  "version": "1.0.29",
   "type": "module",
   "description": "Template-driven terminal rendering for Claude Code's MessageDisplay hook: data blocks in, coloured views on screen, zero tokens spent on presentation.",
   "license": "MIT",
