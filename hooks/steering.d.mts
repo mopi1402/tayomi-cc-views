@@ -7,10 +7,16 @@
  * nothing to say. `root` answers only where the INSTALLED engine nearest the project ships no text of its
  * own, a version too old to carry one included.
  *
+ * Carries `hookSpecificOutput` for the briefing, `systemMessage` where the plugin and the installed engine
+ * say different versions, or both.
+ *
  * `env` carries both inputs, the opt-out and the project to look the install up under, defaulted to the
  * process's own so a real run needs it as little as the suite needs the process.
  */
-export function steeringPayload(root: string, env?: NodeJS.ProcessEnv): string | null;
+export function steeringPayload(
+  root: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<string | null>;
 
 /** This file's own plugin root: it lives in `hooks/`, one hop under it. */
 export function pluginRoot(): string;
