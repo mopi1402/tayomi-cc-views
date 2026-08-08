@@ -4,8 +4,11 @@
 
 /**
  * The hook's answer for a plugin rooted at `root`, as the JSON Claude Code reads, or null when there is
- * nothing to say. `env` is the opt-out's only input, defaulted to the process's own so a real run needs it
- * as little as the suite needs the process.
+ * nothing to say. `root` answers only where the INSTALLED engine nearest the project ships no text of its
+ * own, a version too old to carry one included.
+ *
+ * `env` carries both inputs, the opt-out and the project to look the install up under, defaulted to the
+ * process's own so a real run needs it as little as the suite needs the process.
  */
 export function steeringPayload(root: string, env?: NodeJS.ProcessEnv): string | null;
 

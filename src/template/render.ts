@@ -1,8 +1,8 @@
 // One view, rendered: the composition of the three halves that must not know each other (where the template lives, how
 // the block's data parses, how a line draws).
 
-import { STACK_MARK, WRAP_MARKS } from "../data/marks.js";
-import { wrapLine } from "../layout/wrap.js";
+import { WRAP_MARKS } from "../data/marks.js";
+import { holdsCells, wrapLine } from "../layout/wrap.js";
 import { dropInert, fillTone, markCode, renderTags, toneClass } from "../style.js";
 import { nameField, type Scope } from "../scope.js";
 import { FIELD_TONE, FIELD_TYPE } from "../data/language.js";
@@ -90,9 +90,12 @@ export function traceView(
     // Width and search path resolved ONCE here and handed down as values: the layers below never import platform/ and
     // never probe for a file.
     out = renderBody(body, full, tables, objectLists, limit, dir);
-    // A template declaring no container passes no wrapper, and a stacked cell has to be dealt somewhere or its rows
-    // print side by side. Only a line CARRYING one goes through: the rest still flows at the terminal's own hand.
-    out = out.flatMap((l) => (l.includes(STACK_MARK) ? wrapLine(l, limit) : [l]));
+    // A template declaring no container passes no wrapper, so the fold happens here or nowhere. A stacked cell has to
+    // be dealt or its rows print side by side, and a line holding COLUMNS has to be folded even when nothing stacked:
+    // its overflow is the tail, which is measured by nothing and therefore bounded by nothing. Left to the terminal,
+    // that tail comes back at column ZERO, under the label column and past the bar. Only a line carrying neither still
+    // flows at the terminal's own hand, having no column for it to land in the wrong one.
+    out = out.flatMap((l) => (holdsCells(l) ? wrapLine(l, limit) : [l]));
   } finally {
     // Both are the ENGINE's and `full` may BE the caller's own object, so neither is left on it: a second render of the
     // same data would count `__read` among the fields that ARRIVED, and a stale width hands the next view its

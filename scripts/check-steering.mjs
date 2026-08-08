@@ -30,6 +30,8 @@ const NAME_MARK = ":";
 // Read OUT of the hook, never restated: a switch this file spelled on its own could gate a name nothing acts on.
 const OPT_OUT_DECL = /const OPT_OUT_ENV = "([^"]+)"/;
 const ENV_FAMILY = /^CC_VIEWS_[A-Z_]+$/;
+const PKG_DECL = /const PKG_NAME = "([^"]+)"/;
+const MANIFEST = "package.json";
 
 // The colour paragraphs, found by a word each opens rather than by a line number.
 const TONES_ANCHOR = "Tones:";
@@ -135,6 +137,15 @@ if (optOut === undefined) {
 } else {
   if (!ENV_FAMILY.test(optOut)) fail(`${HOOK_FILE} names \`${optOut}\`, outside this package's env family`);
   if (!read(README).includes(optOut)) fail(`${README} documents no \`${optOut}\`, a switch nobody can find`);
+}
+
+// 3c. The name the hook looks the install up under is THIS package's. A typo there never fails: the walk simply finds
+// nothing and the plugin's own copy answers forever, which is the drift the lookup exists to end.
+const pkgName = PKG_DECL.exec(read(HOOK_FILE))?.[1];
+if (pkgName === undefined) {
+  fail(`${HOOK_FILE} declares no PKG_NAME, so it can no longer prefer the installed engine's text`);
+} else if (pkgName !== readJson(MANIFEST).name) {
+  fail(`${HOOK_FILE} looks up \`${pkgName}\`, which is not \`${readJson(MANIFEST).name}\``);
 }
 
 // 4. A human reads ABOUT the file rather than a copy of it: the one an adopter pastes is always the stale one.

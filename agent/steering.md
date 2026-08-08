@@ -1,5 +1,7 @@
-Draw what must not be missed, never ordinary prose. Put the decorator line IMMEDIATELY above ordinary
-markdown, with no blank line between them.
+Draw what must not be missed, never ordinary prose. Enumerable facts of one shape (options, layers,
+versions, counts) are such a draw: they go under `columns` or `lines`, and prose keeps the reasoning,
+never the enumeration. Put the decorator line IMMEDIATELY above ordinary markdown, with no blank line
+between them.
 
 Rows split into columns, two to four:
 
@@ -28,7 +30,8 @@ cell continues the section above:
 | NEXT | bump the patch version, or wait for the queue refactor? |
 ```
 
-One alert band:
+One alert band, for the one fact a reader must not skim past: a risk, a blocked release, the number
+that changes the decision. Never two in an answer, since a screen carrying three bands carries none:
 
 ```
 @{view:banner}

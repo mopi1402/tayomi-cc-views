@@ -212,6 +212,12 @@ export function stackCell(s: string, width: number): string {
   return markCell((rows.length === 0 ? [s] : rows).map((r) => padCell(r, width)).join(STACK_MARK));
 }
 
+/**
+ * Whether the wrapper has to see this line at all: it holds MEASURED columns, whose offsets live in this module alone.
+ * Stacked rows are bracketed as a cell by stackCell, so this one mark answers for both.
+ */
+export const holdsCells = (line: string): boolean => line.includes(CELL_MARK);
+
 export function wrapLine(line: string, limit: number): string[] {
   // A cell that has already FOLDED must be dealt whatever the line measures: its rows count as if they stood side by
   // side, so the line "fits" exactly when it is about to print every one of them on the same screen row.

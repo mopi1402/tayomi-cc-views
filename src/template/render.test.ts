@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { VIEW_EXT } from "../data/markup.js";
 import { hasControlMark } from "../data/marks.js";
+import { printedWidth } from "../layout/measure.js";
 import { ANSI_RE, renderTags, tagMark } from "../style.js";
 import { renderView, traceView } from "./render.js";
 import { parseTemplate } from "./parse.js";
@@ -323,6 +324,36 @@ describe("injected fields", () => {
   it("win over a field of the same name the block wrote", () => {
     view("${said}");
     expect(plain(render({ said: "model" }, undefined, { said: "display" }))).toContain("display");
+  });
+});
+
+// The FOLD this composition owns alone: a template declaring no container passes no wrapper of its own, so a line
+// holding columns is folded here or nowhere at all. Left to the terminal, a column has nothing to land back in.
+describe("a rendered line that holds columns", () => {
+  const BAR = "│";
+  const COLUMNS = [
+    `${LANG.FIELDS} ${LANG.FIELD_ROWS} ${LANG.FIELD_LABEL} ${LANG.FIELD_CONTENT}`,
+    `${LANG.EACH} ${LANG.FIELD_ROWS}`,
+    `\${${LANG.FIELD_LABEL}}  ${BAR}  \${${LANG.FIELD_CONTENT}}`,
+    LANG.END,
+  ].join("\n");
+  /** Wider than the render above on its own, so the last column must fold whatever the label beside it does. */
+  const PROSE = "the prose a last column carries, far too long for the width this suite renders at";
+  const SHORT = "short";
+  const row = (label: string): object => ({
+    [LANG.FIELD_ROWS]: [{ [LANG.FIELD_LABEL]: label, [LANG.FIELD_CONTENT]: PROSE }],
+  });
+
+  it("folds under its own column even where no cell of it stacked", () => {
+    // The defect this pins: only a STACKED cell reached the wrapper, so a row whose label fitted went to the terminal
+    // whole. The last column is padded by nothing and bounded by nothing, so it ran past the limit and the TERMINAL
+    // folded it, which puts the remainder at column zero, under the label and past the bar.
+    view(COLUMNS);
+    const lines = plain(render(row(SHORT))).split("\n");
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) expect(printedWidth(line)).toBeLessThanOrEqual(WIDTH);
+    // The bar on every continuation is the whole difference between this fold and the one a terminal makes.
+    for (const line of lines.slice(1)) expect(line).toContain(BAR);
   });
 });
 
