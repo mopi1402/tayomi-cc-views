@@ -1,6 +1,7 @@
 // ${field} and ${field:tablename}: one expression, resolved against the scope.
 
 import type { PadCtx } from "../layout/columns.js";
+import { ruleFill } from "../layout/box.js";
 import { longestKey, padCell } from "../layout/measure.js";
 import { markCell, stackCell } from "../layout/wrap.js";
 import { CHIP_CHROME, RESET_MARK, TAG_SOURCE, chip } from "../style.js";
@@ -21,10 +22,14 @@ import {
 function value(expr: string, scope: Scope, tables: Tables, pad?: PadCtx): string {
   const [rawField, rawTable] = expr.split(":");
   const field = rawField.trim();
-  const val = lookup(scope, field);
   // The prose tail is emitted verbatim: never padded, in a list or out of one.
   const aligned = pad != null && field !== pad.tail;
   const cell = aligned ? pad!.widths[field] : undefined;
+  // On a RULE line a measured field draws its column and the tail draws nothing, the framer filling from there. Ahead
+  // of the lookup so no read is recorded; anything else falls through, keeping a rule free to carry a prefix.
+  if (pad?.fill === true && cell != null) return markCell(ruleFill(cell));
+  if (pad?.fill === true && field === pad.tail) return "";
+  const val = lookup(scope, field);
   const table = rawTable ? tables[rawTable.trim()] : undefined;
   // A TEXT table answers for the value that never arrived, so its lookup runs BEFORE the absent-value exit below. @map
   // keeps that exit: an absent value there has no word to fall back on.

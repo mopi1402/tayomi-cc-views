@@ -84,8 +84,10 @@ const RULE_PREFIX = `${RULE} `;
 // Matched by string rather than by regex: an optional trailing group around [\s\S]* is flagged as backtracking-prone.
 const isRuleLine = (line: string): boolean => line === RULE || line.startsWith(RULE_PREFIX);
 
+// A field written INTO a rule names its column, never its value: that is what draws a rule ACROSS the columns.
 const ruleLine = (line: string, scope: Scope, tables: Tables, pad?: PadCtx): string =>
-  RULE_MARK + subst(line.slice(RULE_PREFIX.length), scope, tables, pad);
+  RULE_MARK +
+  subst(line.slice(RULE_PREFIX.length), scope, tables, pad && { ...pad, fill: true });
 
 // The matcher that READS a declaration and the strip that decides whether anything is LEFT OVER are the same fact,
 // which keeps a malformed cap="soon" a near-miss rather than a cap.
@@ -331,6 +333,14 @@ export function renderBody(
       const label = labelDecl?.[1];
       const bullet = bulletDecl?.[1];
       const labelCol = scope.__labelWidth ?? 0;
+      // An item with nothing in its FIRST column opens no entry, it continues the one above, so no rule may part them.
+      // Read off the NEXT item: a template writes its rule after the row it closes.
+      const continues = (next: unknown): boolean =>
+        fields != null &&
+        fields.length > 0 &&
+        next != null &&
+        typeof next === "object" &&
+        stringify((next as Record<string, unknown>)[fields[0]] ?? "").trim() === "";
       items.forEach((item: unknown, idx: number) => {
         const itemScope: Scope = {
           ...scope,
@@ -350,12 +360,11 @@ export function renderBody(
         if (bullet != null) {
           itemScope.__bullet = subst(bullet, itemScope, tables) + HANG_MARK;
         }
+        const joined = continues(items[idx + 1]);
         for (const l of inner) {
-          out.push(
-            readsHere(IN_EACH, RULE) && isRuleLine(l)
-              ? ruleLine(l, itemScope, tables, pad)
-              : subst(l, itemScope, tables, pad)
-          );
+          const rule = readsHere(IN_EACH, RULE) && isRuleLine(l);
+          if (rule && joined) continue;
+          out.push(rule ? ruleLine(l, itemScope, tables, pad) : subst(l, itemScope, tables, pad));
         }
       });
     } else {

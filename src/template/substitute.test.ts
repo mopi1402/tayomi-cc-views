@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import { DEFAULT_KEY } from "../data/language.js";
 import type { PadCtx } from "../layout/columns.js";
 import { CELL_MARK, STACK_MARK } from "../layout/marks.js";
+import { ruleFill } from "../layout/box.js";
 import { printedWidth } from "../layout/measure.js";
 import { CHIP_CHROME, chip } from "../style.js";
 import { subst } from "./substitute.js";
@@ -237,5 +238,28 @@ describe("a hollow column", () => {
     // one weight per cell, so the run before a hollow column carries that cell's opener.
     const line = `\${a}{{/}} {{b}}\${b}{{/}} {{b}}\${c}`;
     expect(padded(line, { a: "1", c: "3" }, ctx("b"))).toBe("1{{/}} {{/}}{{b}}3");
+  });
+});
+
+// The same expressions on a RULE line, where a field names its COLUMN and never its value.
+describe("a rule line, where a field names its column", () => {
+  const CELL_W = 6;
+  const ruled: PadCtx = { widths: { s: CELL_W }, tail: "text", fill: true };
+
+  it("draws a measured column as a length of the rule, at that column's own width", () => {
+    expect(padded("${s}", { s: "ignored" }, ruled)).toBe(cell(ruleFill(CELL_W)));
+    expect(printedWidth(padded("${s}", { s: "ignored" }, ruled))).toBe(CELL_W);
+  });
+
+  it("draws the same length whatever the item holds", () => {
+    expect(padded("${s}", { s: "a" }, ruled)).toBe(padded("${s}", {}, ruled));
+  });
+
+  it("draws NOTHING for the tail, which the framer fills from there to the edge", () => {
+    expect(padded("${text}", { text: "prose" }, ruled)).toBe("");
+  });
+
+  it("still resolves a field the context never measured, so `@rule ${#}` keeps its prefix", () => {
+    expect(padded("${other}", { other: "CHECKS" }, ruled)).toBe("CHECKS");
   });
 });

@@ -29,6 +29,8 @@ export interface PadCtx {
   tail?: string;
   /** The declared fields NO item of this list carries. See hollowFields. */
   hollow?: ReadonlySet<string>;
+  /** A RULE line: a field names its COLUMN, so each measured cell draws the rule at its width and the tail draws none. */
+  fill?: boolean;
 }
 
 /**

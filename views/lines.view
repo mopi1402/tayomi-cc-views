@@ -47,8 +47,8 @@
 # rule. That is the point rather than a limitation: a rule running past the body it divides
 # is furniture louder than what it separates.
 #
-# An empty label does NOT continue the element above, the way it does in columns.view: a
-# rule lands between the two. Write the long content on one row instead, and let it wrap.
+# An empty label CONTINUES the element above, as in columns.view and box.view: an item
+# opening no entry is not one a divider may part, so the loop draws no rule before it.
 #
 # Two to four columns, like columns.view and for the same reason: the carrier hands this
 # view whatever the table had, and a middle column it did not declare would be dropped in

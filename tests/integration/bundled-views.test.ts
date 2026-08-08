@@ -314,6 +314,10 @@ describe("the banner reached through a marked quote", () => {
 describe("the columns view the package ships", () => {
   /** The glyph `box.ts` draws its sides with, and the dim it wears, both spelled here on purpose. */
   const BAR = "│";
+  /** Dashes and the bars they run past: a divider carrying the columns through rather than cutting them. */
+  const DASH = "─";
+  const isRule = (line: string): boolean =>
+    line.length > 0 && [...line].every((g) => g === DASH || g === BAR);
   const DIM = "2";
   const TEAL = "38;5;37"; // what the template's own @tone resolves to, an INDEXED colour and so free of the weight
   const YELLOW = "1;33";
@@ -329,19 +333,31 @@ describe("the columns view the package ships", () => {
     const out = render(MSG);
     const plain = plainly(out);
     expect(plain).toBe(`Status  ${BAR}  all green`);
-    // Every glyph the box would add, absent: this view draws furniture and nothing else.
-    for (const frame of ["╭", "╰", "─"]) expect(plain).not.toContain(frame);
+    // The container is BARE, so no outline. No rule either, for its own reason: one entry has nothing to divide.
+    for (const frame of ["╭", "╰", DASH]) expect(plain).not.toContain(frame);
     // The bar and nothing else. Where a column is read DOWNWARDS, what names it is its header, so the ink sits there
     // and a body row carries none of its own.
     expect(seqs(out)).toEqual([DIM, RESET]);
   });
 
+  it("rules BETWEEN its entries and never after the last one", () => {
+    // Without it, two entries whose content folded read as one block of four rows. A rule after the LAST would
+    // divide nothing, and the bare container's blank-run collapsing is what takes it back off.
+    const three = table("@{view:columns}", ROW, "| Build | compiles |", "| Deploy | red |");
+    expect(plainly(render(three)).split("\n").map(isRule)).toEqual([false, true, false, true, false]);
+  });
+
   it("pads the label column so the bars line up, and continues an empty label", () => {
-    const plain = plainly(render(table("@{view:columns}", ROW, "| Build | compiles |", "| | and more |")));
-    const at = plain.split("\n").map((l) => l.indexOf(BAR));
-    expect(new Set(at).size).toBe(1); // one column for every bar
+    const rows = plainly(
+      render(table("@{view:columns}", ROW, "| Build | compiles |", "| | and more |"))
+    ).split("\n");
+    // ONE column for every bar, rule rows included: the vertical runs the whole height, never cut and never moved.
+    const at = rows.map((l) => l.indexOf(BAR));
+    expect(new Set(at).size).toBe(1);
     expect(at[0]).toBeGreaterThan(0);
-    expect(plain.split("\n")[2].trimStart().startsWith(BAR)).toBe(true); // no label on the third row
+    // A blank label CONTINUES the entry above, so no rule may part the two.
+    expect(rows[rows.length - 1].trimStart().startsWith(BAR)).toBe(true);
+    expect(isRule(rows[rows.length - 2])).toBe(false);
   });
 
   /** A payload of `n` columns, its cells numbered so the ORDER they land in is readable. */
@@ -376,7 +392,9 @@ describe("the columns view the package ships", () => {
     const msg = lines("@{view:columns}", "| Largeur | Verdict |", "| --- | --- |", "| 4 | tient |", "");
     const drawn = plainly(render(msg)).split("\n");
     expect(drawn[0]).toBe(`Largeur  ${BAR}  Verdict`);
-    expect(drawn[1]).toBe(`4        ${BAR}  tient`);
+    // Its own rule, since the loop's falls BETWEEN entries and would leave the header glued to the first.
+    expect(isRule(drawn[1])).toBe(true);
+    expect(drawn[2]).toBe(`4        ${BAR}  tient`);
     expect(seqs(render(msg)).slice(0, 2)).toEqual([BOLD, TEAL]);
   });
 
@@ -560,11 +578,12 @@ describe("the lines view the package ships", () => {
     expect(plainly(warned)).toBe(plainly(render(MSG))); // colour is the ONLY difference
   });
 
-  it("gives an empty label its own element, where columns.view would continue the row above", () => {
-    // The documented cost of ruling inside the loop, pinned so it cannot change in silence.
+  it("continues the element above on an empty label, the way columns.view and box.view do", () => {
+    // This was the documented COST of ruling inside the loop, and it is paid off: an item opening no entry is not one
+    // a divider may part.
     const rows = plainly(render(table("@{view:lines}", ROWS[0], "| | and more |"))).split("\n");
-    expect(rows[1].startsWith(DASH)).toBe(true);
-    expect(rows[2].trim()).toBe("and more");
+    expect(rows[1].startsWith(DASH)).toBe(false);
+    expect(rows[1].trim()).toBe("and more");
   });
 
   it("refuses a QUOTE payload outright, exactly as the columns view does", () => {

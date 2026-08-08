@@ -4,7 +4,7 @@
 
 import { RESET_MARK, tagMark } from "../style.js";
 import { RULE_MARK, isRule } from "./marks.js";
-import { printedWidth } from "./measure.js";
+import { printedText, printedWidth } from "./measure.js";
 import { wrapLine } from "./wrap.js";
 
 // Every width below is DERIVED from these pieces rather than counted by hand, so the day the corners go square no
@@ -62,8 +62,17 @@ export function collapseBlanks(lines: string[]): string[] {
 
 const border = (edge: string): string => `${tagMark(edge)}${V}${RESET_MARK}`;
 
-/** A rule with a prefix sets it off from its dashes; one without runs from the border. */
-const ruleGap = (w: number): string => (w > 0 ? PAD : "");
+/**
+ * A rule with a prefix sets it off from its dashes; one without runs from the border. A prefix already ending ON the
+ * rule's own line runs straight into the fill: a space there would notch a line whose job is to be unbroken.
+ */
+const RUNS_ON = new RegExp(`${H}$`);
+const ruleGap = (text: string, w: number): string =>
+  w > 0 && !RUNS_ON.test(printedText(text)) ? PAD : "";
+
+/** A measured cell drawn as a length of the rule. Closed, so a hollow column drops it whole and leaves nothing open. */
+export const ruleFill = (width: number): string =>
+  width <= 0 ? "" : `${tagMark("box_rule")}${H.repeat(width)}${RESET_MARK}`;
 
 const contentTotal = (line: string): number => printedWidth(line) + BOX_CHROME;
 
@@ -71,7 +80,7 @@ const contentTotal = (line: string): number => printedWidth(line) + BOX_CHROME;
 function rulePrefix(line: string): { text: string; width: number } {
   const carried = line.slice(RULE_MARK.length);
   const w = printedWidth(carried);
-  const gap = ruleGap(w);
+  const gap = ruleGap(carried, w);
   return { text: carried + gap, width: w + printedWidth(gap) };
 }
 

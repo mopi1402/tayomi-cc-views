@@ -284,6 +284,17 @@ describe("@rule", () => {
     expect(out).toEqual(["a", RULE_MARK, "b", RULE_MARK]);
   });
 
+  it("is not drawn before an item CONTINUING the entry above, its first column empty", () => {
+    const rows = [
+      { k: "a", v: "1" },
+      { k: "", v: "still a" },
+      { k: "b", v: "2" },
+    ];
+    const row = `${ref("k")}|${ref("v")}`;
+    const out = render([`${EACH} rows`, row, RULE, END], { rows }, NO_TABLES, { rows: ["k", "v"] });
+    expect(bare(out)).toEqual(["a|1", " |still a", RULE_MARK, "b|2", RULE_MARK]);
+  });
+
   it("takes its prefix from the ITEM's scope inside a loop, not from the block's", () => {
     const out = render([`${EACH} note`, ref(ITEM_REF), `${RULE} ${ref(INDEX_REF)}`, END], {
       note: ["a", "b"],

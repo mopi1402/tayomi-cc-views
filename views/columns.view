@@ -64,9 +64,35 @@
 # The fenced form works too, for a message with no table to give: a `rows:` list whose
 # every item is `- <label> <the rest of the line>`. There every declared field is assigned,
 # so nothing is hollow and all four columns draw.
+#
+# A RULE between entries, because the bar alone runs unbroken: two folded entries beside
+# each other otherwise read as one block of four rows.
+#
+# It runs PAST the bars rather than through them, which is why the line is written out
+# instead of being a bare `@rule`. A field inside a rule names its COLUMN, so each cell is
+# drawn as a length of rule at that column's measured width, and `──│──` puts the bar back
+# at the very column `  │  ` holds above it, in the bar's own tone: one vertical, unbroken
+# and one colour from top to bottom, with the rule the lighter of the two. MIRROR the body
+# line, separator for separator.
+#
+# ${content} draws nothing there (the framer fills from the last crossing to the edge) and
+# is written anyway: a hollow column takes the run that FOLLOWS it, so the tail's presence
+# is what keeps the last separator standing when mid1 and mid2 are dropped.
+#
+# `@box bare` runs the body machinery with none of the chrome, which buys two things: the
+# engine FILLS the rule to the widest line, and the blank-run collapsing drops the one that
+# would trail the last entry, so a rule written under EVERY row comes out BETWEEN them. The
+# table then sizes to its content, and a short table gets a short rule.
+#
+# An empty label still continues the entry above, and no rule parts the two. That law is the
+# engine's, not this file's, so lines.view and box.view answer the same way.
 @tone teal
 @fields rows label mid1 mid2 content
+@box bare
 @each rows cap="1/3"
 @head {{b}}{{tone}}${label}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid1}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid2}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${content}{{/}}
+@head @rule ${label}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid1}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid2}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${content}
 ${label}{{dim}}  │  {{/}}${mid1}{{dim}}  │  {{/}}${mid2}{{dim}}  │  {{/}}${content}
+@rule ${label}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid1}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid2}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${content}
 @end
+@endbox

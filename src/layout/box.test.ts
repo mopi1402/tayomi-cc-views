@@ -13,6 +13,7 @@ import { HANG_MARK } from "./marks.js";
 import { printedWidth } from "./measure.js";
 
 const DASH = "─";
+const BAR = "│";
 const TL = "╭";
 const TR = "╮";
 const BL = "╰";
@@ -268,6 +269,14 @@ describe("a bare container", () => {
     const rows = flowBody(["a body line", ruleOf("LABEL"), "another"], LIMIT);
     expect(rows[1].startsWith("LABEL ")).toBe(true);
     expect(dashesIn(rows[1])).toBe(printedWidth("a body line") - printedWidth("LABEL "));
+  });
+
+  it("runs a prefix ALREADY drawing the rule straight on into the fill, with no gap", () => {
+    // A rule crossing its own columns arrives as a prefix ending on the line itself: a space would notch it.
+    const crossed = `${DASH}${DASH}${BAR}${DASH}${DASH}`;
+    const rows = flowBody(["a body line", ruleOf(crossed), "another"], LIMIT);
+    expect(rows[1]).not.toContain(`${DASH}${DASH} `);
+    expect(dashesIn(rows[1])).toBe(printedWidth("a body line") - printedWidth(BAR));
   });
 
   it("wraps a body line at the limit, with no chrome to subtract from it", () => {
