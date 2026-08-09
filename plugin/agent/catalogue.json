@@ -1,0 +1,452 @@
+{
+  "directives": [
+    {
+      "word": "@map",
+      "kind": "declaration",
+      "takes": "<name> <value>=<tag> ...",
+      "opens": [],
+      "closedBy": null,
+      "readIn": []
+    },
+    {
+      "word": "@text",
+      "kind": "declaration",
+      "takes": "<name> <value>=\"...\" ...",
+      "opens": [],
+      "closedBy": null,
+      "readIn": []
+    },
+    {
+      "word": "@fields",
+      "kind": "declaration",
+      "takes": "<list> <field> ...",
+      "opens": [],
+      "closedBy": null,
+      "readIn": []
+    },
+    {
+      "word": "@tone",
+      "kind": "declaration",
+      "takes": "<tag>",
+      "opens": [],
+      "closedBy": null,
+      "readIn": []
+    },
+    {
+      "word": "@box",
+      "kind": "opener",
+      "takes": "[bare]",
+      "opens": [
+        "box",
+        "box-bare"
+      ],
+      "closedBy": "@endbox",
+      "readIn": [
+        "top"
+      ]
+    },
+    {
+      "word": "@head",
+      "kind": "line",
+      "takes": "<text>",
+      "opens": [],
+      "closedBy": null,
+      "readIn": [
+        "box",
+        "each"
+      ]
+    },
+    {
+      "word": "@right",
+      "kind": "line",
+      "takes": "<text>",
+      "opens": [],
+      "closedBy": null,
+      "readIn": [
+        "box"
+      ]
+    },
+    {
+      "word": "@foot",
+      "kind": "line",
+      "takes": "<field>",
+      "opens": [],
+      "closedBy": null,
+      "readIn": [
+        "box"
+      ]
+    },
+    {
+      "word": "@frame",
+      "kind": "line",
+      "takes": "<field> <value>=<tag> ...",
+      "opens": [],
+      "closedBy": null,
+      "readIn": [
+        "box"
+      ]
+    },
+    {
+      "word": "@rule",
+      "kind": "line",
+      "takes": "[<text>]",
+      "opens": [],
+      "closedBy": null,
+      "readIn": [
+        "top",
+        "each"
+      ]
+    },
+    {
+      "word": "@each",
+      "kind": "opener",
+      "takes": "<field> [label=\"...\"] [bullet=\"...\"] [cap=\"n/d\"]",
+      "opens": [
+        "each"
+      ],
+      "closedBy": "@end",
+      "readIn": [
+        "top"
+      ]
+    },
+    {
+      "word": "@aside",
+      "kind": "opener",
+      "takes": "<view> [center|top|bottom]",
+      "opens": [
+        "aside"
+      ],
+      "closedBy": "@endaside",
+      "readIn": [
+        "top"
+      ]
+    },
+    {
+      "word": "@use",
+      "kind": "line",
+      "takes": "<view> [from <field>]",
+      "opens": [],
+      "closedBy": null,
+      "readIn": [
+        "top"
+      ]
+    },
+    {
+      "word": "@end",
+      "kind": "terminator",
+      "takes": "",
+      "opens": [],
+      "closedBy": null,
+      "readIn": []
+    },
+    {
+      "word": "@endbox",
+      "kind": "terminator",
+      "takes": "",
+      "opens": [],
+      "closedBy": null,
+      "readIn": []
+    },
+    {
+      "word": "@endaside",
+      "kind": "terminator",
+      "takes": "",
+      "opens": [],
+      "closedBy": null,
+      "readIn": []
+    }
+  ],
+  "containers": {
+    "top": [
+      "@box",
+      "@aside",
+      "@rule",
+      "@each",
+      "@use"
+    ],
+    "box": [
+      "@head",
+      "@right",
+      "@foot",
+      "@frame"
+    ],
+    "box-bare": [],
+    "aside": [],
+    "each": [
+      "@rule",
+      "@head"
+    ]
+  },
+  "block": {
+    "carriers": [
+      {
+        "kind": "fenced",
+        "opens": "```view:<view>",
+        "closedBy": "```",
+        "carries": "the data lines below it, to the closing fence",
+        "attributes": [],
+        "withoutPayload": null
+      },
+      {
+        "kind": "decorator",
+        "opens": "@{view:<view>}",
+        "closedBy": null,
+        "carries": "the plain markdown on the NEXT line, which still reads where this engine does not run",
+        "attributes": [
+          {
+            "name": "type",
+            "takes": "<kind>",
+            "does": "the KIND of content, and it may select a typed view file"
+          },
+          {
+            "name": "tone",
+            "takes": "<tag>",
+            "does": "the LOOK only, and it outranks the kind"
+          }
+        ],
+        "withoutPayload": "a blank line under it, or the end of the message"
+      }
+    ],
+    "lines": [
+      {
+        "form": "<field>: <value>",
+        "does": "a scalar field, the value opaque to end of line"
+      },
+      {
+        "form": "<field>:",
+        "does": "opens a list field"
+      },
+      {
+        "form": "- <value>",
+        "does": "appends an item to the list the key above opened"
+      },
+      {
+        "form": "  <field>: <value>",
+        "does": "a pair of the mapping that key holds, ONE level and no deeper"
+      },
+      {
+        "form": "anything else",
+        "does": "ignored: no line of a block is ever refused"
+      }
+    ]
+  },
+  "payloads": {
+    "table": {
+      "fields": [
+        "rows",
+        "head",
+        "label",
+        "mid1",
+        "mid2",
+        "content"
+      ],
+      "selectedBy": "a first line starting with |",
+      "marker": null
+    },
+    "quote": {
+      "fields": [
+        "content",
+        "type"
+      ],
+      "selectedBy": "a first line starting with >",
+      "marker": "[!TOKEN]"
+    }
+  },
+  "tags": {
+    "names": [
+      "/",
+      "aqua",
+      "b",
+      "blue",
+      "blue_bg",
+      "box_rule",
+      "box_title",
+      "brown",
+      "chip",
+      "chip_bg",
+      "code",
+      "cyan",
+      "cyan_bg",
+      "dim",
+      "dim_bg",
+      "error",
+      "error_bg",
+      "fail",
+      "fail_bg",
+      "gold",
+      "green",
+      "green_bg",
+      "high",
+      "high_bg",
+      "info",
+      "info_bg",
+      "key",
+      "key_bg",
+      "lime",
+      "low",
+      "low_bg",
+      "magenta",
+      "magenta_bg",
+      "med",
+      "mint",
+      "navy",
+      "orange",
+      "pass",
+      "pass_bg",
+      "pink",
+      "purple",
+      "red",
+      "red_bg",
+      "salmon",
+      "success",
+      "success_bg",
+      "teal",
+      "title",
+      "title_bg",
+      "tone",
+      "tone_bg",
+      "violet",
+      "warn",
+      "warn_bg",
+      "warning",
+      "warning_bg",
+      "yellow",
+      "yellow_bg"
+    ],
+    "suffixes": [
+      "_cap",
+      "_bg"
+    ]
+  },
+  "views": [
+    {
+      "name": "banner",
+      "file": "views/banner.view",
+      "static": false,
+      "payload": "quote",
+      "spends": [
+        "content",
+        "type"
+      ],
+      "tone": "chip",
+      "tables": {
+        "kinds": "text"
+      },
+      "lists": {}
+    },
+    {
+      "name": "box",
+      "file": "views/box.view",
+      "static": false,
+      "payload": "table",
+      "spends": [
+        "content",
+        "head",
+        "label",
+        "mid1",
+        "mid2",
+        "rows"
+      ],
+      "tone": "dim",
+      "tables": {},
+      "lists": {
+        "rows": [
+          "label",
+          "mid1",
+          "mid2",
+          "content"
+        ]
+      }
+    },
+    {
+      "name": "columns",
+      "file": "views/columns.view",
+      "static": false,
+      "payload": "table",
+      "spends": [
+        "content",
+        "label",
+        "mid1",
+        "mid2",
+        "rows"
+      ],
+      "tone": "teal",
+      "tables": {},
+      "lists": {
+        "rows": [
+          "label",
+          "mid1",
+          "mid2",
+          "content"
+        ]
+      }
+    },
+    {
+      "name": "hr",
+      "file": "views/hr.view",
+      "static": true,
+      "payload": null,
+      "spends": [],
+      "tone": null,
+      "tables": {},
+      "lists": {}
+    },
+    {
+      "name": "lines",
+      "file": "views/lines.view",
+      "static": false,
+      "payload": "table",
+      "spends": [
+        "content",
+        "label",
+        "mid1",
+        "mid2",
+        "rows"
+      ],
+      "tone": "teal",
+      "tables": {},
+      "lists": {
+        "rows": [
+          "label",
+          "mid1",
+          "mid2",
+          "content"
+        ]
+      }
+    },
+    {
+      "name": "quote",
+      "file": "views/quote.view",
+      "static": false,
+      "payload": "quote",
+      "spends": [
+        "content"
+      ],
+      "tone": "dim",
+      "tables": {},
+      "lists": {}
+    },
+    {
+      "name": "tayo",
+      "file": "views/tayo.view",
+      "static": true,
+      "payload": null,
+      "spends": [],
+      "tone": null,
+      "tables": {},
+      "lists": {}
+    },
+    {
+      "name": "welcome",
+      "file": "views/welcome.view",
+      "static": true,
+      "payload": null,
+      "spends": [
+        "message"
+      ],
+      "tone": null,
+      "tables": {},
+      "lists": {}
+    }
+  ]
+}

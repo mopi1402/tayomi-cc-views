@@ -43,12 +43,14 @@
     "verify:pack": "pnpm build && node scripts/verify-pack.mjs",
     "gen:catalogue": "node scripts/gen-catalogue.mjs",
     "check:catalogue": "node scripts/gen-catalogue.mjs --check",
-    "verify": "pnpm lint && pnpm typecheck && pnpm check:sidecars && pnpm check:vocabulary && pnpm test && pnpm verify:pack && pnpm check:catalogue && pnpm check:skill && pnpm check:steering",
+    "assemble:plugin": "node scripts/assemble-plugin.mjs",
+    "check:plugin": "node scripts/assemble-plugin.mjs --check",
+    "verify": "pnpm lint && pnpm typecheck && pnpm check:sidecars && pnpm check:vocabulary && pnpm test && pnpm verify:pack && pnpm check:catalogue && pnpm check:skill && pnpm check:steering && pnpm check:plugin",
     "prepublishOnly": "pnpm verify",
     "check:skill": "node scripts/check-skill.mjs",
     "check:steering": "node scripts/check-steering.mjs",
     "sync:version": "node scripts/sync-version.mjs",
-    "version": "node scripts/sync-version.mjs && git add .claude-plugin src/data/engine.ts"
+    "version": "node scripts/sync-version.mjs && node scripts/assemble-plugin.mjs && git add .claude-plugin src/data/engine.ts plugin"
   },
   "dependencies": {
     "@tayomi/utils": "^0.1.0"

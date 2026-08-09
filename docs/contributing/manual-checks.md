@@ -121,6 +121,8 @@ Nothing here proves the RESTART, and no check should: a session already running 
 
 `skills/write-view` is out of the tarball on purpose, so nothing above tests it. No publish needed: a marketplace source can be a directory.
 
+What that source copies is `plugin/`, an ASSEMBLED directory (manifest, hooks, briefing, skill) and never the repo root: an install copies the source whole, ignoring nothing, and the repo root ships `node_modules` and every dev artefact around it. `scripts/assemble-plugin.mjs` writes it, `pnpm check:plugin` gates it in `pnpm verify`, and a version bump reassembles it. If you edited `hooks/`, `agent/`, `skills/` or the plugin manifest by hand, run `pnpm assemble:plugin` before the update below, or the copy answers with the files of the last assembly.
+
 ```bash
 # from the repo root. The slash is load-bearing: a bare "." is refused.
 claude plugin marketplace add ./

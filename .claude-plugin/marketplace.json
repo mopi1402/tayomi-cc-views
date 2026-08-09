@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "cc-views",
-      "source": "./",
+      "source": "./plugin",
       "description": "The skill that writes a .view template for this engine.",
       "version": "2.0.0"
     }

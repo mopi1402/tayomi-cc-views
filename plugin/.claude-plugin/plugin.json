@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "cc-views",
+  "version": "2.0.0",
+  "description": "Write a .view template for @tayomi/cc-views: pick a bundled view, write the template and the block that feeds it, and verify with cc-views check.",
+  "author": {
+    "name": "Pierre Moati",
+    "url": "https://github.com/mopi1402"
+  },
+  "repository": "git+https://github.com/mopi1402/tayomi-cc-views.git",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "terminal",
+    "rendering",
+    "template",
+    "view"
+  ],
+  "skills": [
+    "./skills/write-view"
+  ]
+}
