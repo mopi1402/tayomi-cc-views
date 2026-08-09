@@ -50,12 +50,17 @@ const NOTE_CLOSE = "-->";
 /**
  * The install the session would DRAW with, or null when none is in reach. The NEAREST one answers, because it is the
  * one node resolves; walking past it would answer for a copy the running engine never agreed to.
+ *
+ * The engine's OWN checkout counts as one, and it is the case a contributor lives in: nothing is installed there, the
+ * copy that draws is the working tree, and the drift it hides is exactly the one that wastes an afternoon, a bump
+ * landing with no `plugin update` behind it.
  */
 function installedRoot(env) {
   let dir = env[PROJECT_DIR_ENV] ?? process.cwd();
   for (let hop = 0; hop < MAX_HOPS; hop++) {
     const installed = path.join(dir, MODULES_DIR, PKG_NAME);
     if (fs.existsSync(installed)) return installed;
+    if (manifest(path.join(dir, MANIFEST)).name === PKG_NAME) return dir;
     const up = path.dirname(dir);
     if (up === dir) break;
     dir = up;
@@ -74,14 +79,20 @@ function installedSteering(env) {
   return fs.existsSync(candidate) ? candidate : null;
 }
 
-/** A manifest's version, or null for anything unreadable: a warning is never worth a broken session start. */
-function manifestVersion(file) {
+/** A manifest's fields, or nothing at all for anything unreadable: a warning is never worth a broken session start. */
+function manifest(file) {
   try {
-    const version = JSON.parse(fs.readFileSync(file, "utf8")).version;
-    return typeof version === "string" && version !== "" ? version : null;
+    const read = JSON.parse(fs.readFileSync(file, "utf8"));
+    return read !== null && typeof read === "object" ? read : {};
   } catch {
-    return null;
+    return {};
   }
+}
+
+/** A manifest's version, or null where it names none. */
+function manifestVersion(file) {
+  const version = manifest(file).version;
+  return typeof version === "string" && version !== "" ? version : null;
 }
 
 /** Release order on the RELEASE half alone: a prerelease sorts under its own release, which is close enough to name a lag. */

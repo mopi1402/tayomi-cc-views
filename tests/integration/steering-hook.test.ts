@@ -188,6 +188,13 @@ describe("the version drift the hook reports", () => {
     return opened;
   }
 
+  /** A directory whose OWN manifest says `name`, an engine checkout at `PKG_NAME` and a plain consumer at anything else. */
+  function checkoutOf(name: string, version: string): string {
+    const opened = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-checkout-"));
+    fs.writeFileSync(path.join(opened, MANIFEST), JSON.stringify({ name, version }));
+    return opened;
+  }
+
   /** The message shown to the USER, or null where the hook reports none. */
   async function warned(plugin: string | null, engine: string | null): Promise<string | null> {
     const root = pluginSaying(plugin);
@@ -210,6 +217,53 @@ describe("the version drift the hook reports", () => {
 
   it("says nothing where they agree, so a good install never carries a warning", async () => {
     expect(await warned("1.0.29", "1.0.29")).toBeNull();
+  });
+
+  it("counts the engine's OWN checkout, which installs nothing and is where a bump is made", async () => {
+    // The session a contributor opens: the copy that draws is the working tree, so a bump landing with no
+    // `plugin update` behind it is silent in the one repo where it was just typed.
+    const root = pluginSaying("1.0.29");
+    const opened = checkoutOf("@tayomi/cc-views", "1.0.30");
+    try {
+      const { systemMessage } = JSON.parse(
+        (await steeringPayload(root, { [PROJECT_DIR_ENV]: opened })) as string,
+      ) as { systemMessage: string };
+      expect(systemMessage).toContain("1.0.29");
+      expect(systemMessage).toContain("1.0.30");
+      expect(systemMessage).toContain("plugin update");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(opened, { recursive: true, force: true });
+    }
+  });
+
+  it("says nothing for a checkout of anything ELSE, which every consumer's own manifest is", async () => {
+    // The near miss the walk must not take: a project has a package.json too, and its version names another package.
+    const root = pluginSaying("1.0.29");
+    const opened = checkoutOf("some-consumer", "9.9.9");
+    try {
+      await expect(steeringPayload(root, { [PROJECT_DIR_ENV]: opened })).resolves.toBeNull();
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(opened, { recursive: true, force: true });
+    }
+  });
+
+  it("prefers the INSTALL over the checkout it sits in, the sandbox under this repo being one", async () => {
+    // Both answer at the same hop, and the installed copy is the one node resolves, so it is the one that draws.
+    const root = pluginSaying("1.0.29");
+    const opened = projectSaying("1.0.27");
+    fs.writeFileSync(path.join(opened, MANIFEST), JSON.stringify({ name: "@tayomi/cc-views", version: "1.0.30" }));
+    try {
+      const { systemMessage } = JSON.parse(
+        (await steeringPayload(root, { [PROJECT_DIR_ENV]: opened })) as string,
+      ) as { systemMessage: string };
+      expect(systemMessage).toContain("1.0.27");
+      expect(systemMessage).not.toContain("1.0.30");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(opened, { recursive: true, force: true });
+    }
   });
 
   it("says nothing where either number is unreadable, a bundled engine being the normal case", async () => {
