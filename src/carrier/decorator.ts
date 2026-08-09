@@ -8,6 +8,9 @@
 // TWO payload shapes, decided by the zone's FIRST line and nowhere else. A leading pipe is a table, reaching the
 // template as `rows`. A leading `>` is a blockquote, reaching it as `content`, its optional `[!WARNING]` marker as
 // `type`. Why a quote rather than a paragraph: docs/architecture/architecture.md, "The decorator's trade".
+//
+// A table of TWO columns is ALSO read as named fields, so a sectioned view can be spent from a decorator. That reading
+// runs where the template is known (view-data.ts): this carrier hands over rows, the derived fields land UNDER them.
 
 import {
   FIELD_CONTENT,
@@ -29,8 +32,16 @@ import {
   TABLE_MARK,
 } from "../data/markup.js";
 import { renderView, type Dressing } from "../template/render.js";
+import { namedFields } from "../template/view-data.js";
 import { inert, spanClose, spanOpen } from "../style.js";
-import { fenceAt, fenceSpans } from "./fences.js";
+import { fenceAt, fenceSpans, type Fence } from "./fences.js";
+import {
+  failedOutcome,
+  okOutcome,
+  strictLine,
+  type DisplayHost,
+  type Outcome,
+} from "../host.js";
 import type { RenderOptions } from "../options.js";
 import type { Scope } from "../scope.js";
 
@@ -130,13 +141,13 @@ type DecoratedRow = Record<string, string>;
  * The two ENDS are anchored, first cell to `label` and last to `content`, so widening a table never renames the columns
  * a two-column template was written against; whatever sits between them takes the numbered middle names.
  */
-function rowFields(cells: string[]): DecoratedRow {
+function rowFields(cells: string[], read: (raw: string) => string): DecoratedRow {
   const row: DecoratedRow = {
-    [FIELD_LABEL]: cell(cells[0]),
-    [FIELD_CONTENT]: cell(cells[cells.length - 1]),
+    [FIELD_LABEL]: read(cells[0]),
+    [FIELD_CONTENT]: read(cells[cells.length - 1]),
   };
   cells.slice(1, -1).forEach((raw, i) => {
-    row[middleField(i + 1)] = cell(raw);
+    row[middleField(i + 1)] = read(raw);
   });
   return row;
 }
@@ -164,6 +175,14 @@ function cell(raw: string): string {
 }
 
 /**
+ * The same cell as WRITTEN: unescaped and trimmed, nothing guarded and nothing styled. What leaves the engine for a
+ * host or a reader, where cell() above is the RENDER's own reading and its marks must never travel.
+ */
+function bareCell(raw: string): string {
+  return raw.replace(ESCAPED_PIPE_RE, "|").trim();
+}
+
+/**
  * The payload parsed as rows, or null when it is not a shape this supports: a pipe table of two to four columns, header
  * row MANDATORY (its cells may be empty), delimiter row, at least one data row.
  *
@@ -174,29 +193,44 @@ function cell(raw: string): string {
  * without escaping, and rejoining it into the last column is the only reading that loses none of the line. Refusing it
  * printed the whole block raw, which reads as garbage and teaches an author who will never see the screen.
  */
-function parseRows(lines: string[]): { rows: DecoratedRow[]; head?: DecoratedRow } | null {
+interface ParsedTable {
+  rows: DecoratedRow[];
+  head?: DecoratedRow;
+}
+
+function parseRows(lines: string[]): { styled: ParsedTable; bare: ParsedTable } | null {
   if (lines.length < 3) return null;
   const arity = ARITIES.find((n) => ROW_RES.get(n)!.test(lines[0]));
   if (arity === undefined) return null;
   if (!DELIM_RES.get(arity)!.test(lines[1])) return null;
   const rowRe = ROW_RES.get(arity)!;
   const tailRe = TAIL_RES.get(arity)!;
-  const rows: DecoratedRow[] = [];
+  const cellsOf: string[][] = [];
   for (const line of lines.slice(2)) {
     // Strict first, so a well-formed row never reaches the greedy tail and a bare pipe stays a column boundary.
     const m = line.match(rowRe) ?? line.match(tailRe);
     if (!m) return null;
-    rows.push(rowFields(m.slice(1, arity + 1)));
+    cellsOf.push(m.slice(1, arity + 1));
   }
   // Kept the moment ONE cell holds a word: `| | |` is what markdown forces on a table that wants no header, so an
   // all-blank one yields nothing. Judged on the RAW cells, before neutralising, since a control mark is not a word.
   const headCells = lines[0].match(rowRe)!.slice(1, arity + 1);
-  const head = headCells.some((c) => c.trim() !== "") ? rowFields(headCells) : undefined;
-  return head === undefined ? { rows } : { rows, head };
+  // ONE walk of the cells, read twice: styled for the render, bare for whoever the engine hands the payload to.
+  const table = (read: (raw: string) => string): ParsedTable => {
+    const rows = cellsOf.map((cells) => rowFields(cells, read));
+    const head = headCells.some((c) => c.trim() !== "") ? rowFields(headCells, read) : undefined;
+    return head === undefined ? { rows } : { rows, head };
+  };
+  return { styled: table(cell), bare: table(bareCell) };
 }
 
 interface Payload {
   data: Scope;
+  /**
+   * The same payload as WRITTEN, cell for cell: what leaves the engine for a host or a reader. `data` above is styled
+   * and guarded for the RENDER alone, and its marks must never travel.
+   */
+  bare: Scope;
   /**
    * The kind the PAYLOAD named. Set here means the carrier leaves `dressing.type` unset, and that IS the whole
    * implementation of "the marker beats the attribute": render.ts overrides the field only when the dressing carries
@@ -222,19 +256,15 @@ function parseQuote(zone: string[]): Payload | null {
   }
   const marked = body[0].trim().match(MARKER_RE);
   const type = marked === null ? undefined : marked[1].toLowerCase();
-  const content = inertText(
-    (marked === null ? body : body.slice(1))
-      .map((l) => l.trim())
-      .filter((l) => l !== "")
-      .join(" ")
-  );
-  return {
-    data:
-      type === undefined
-        ? { [FIELD_CONTENT]: content }
-        : { [FIELD_TYPE]: type, [FIELD_CONTENT]: content },
-    type,
-  };
+  const joined = (marked === null ? body : body.slice(1))
+    .map((l) => l.trim())
+    .filter((l) => l !== "")
+    .join(" ");
+  const pack = (content: string): Scope =>
+    type === undefined
+      ? { [FIELD_CONTENT]: content }
+      : { [FIELD_TYPE]: type, [FIELD_CONTENT]: content };
+  return { data: pack(inertText(joined)), bare: pack(joined), type };
 }
 
 /**
@@ -255,9 +285,12 @@ const SHAPES: Shape[] = [
     parse: (zone) => {
       const table = parseRows(zone);
       if (table === null) return null;
-      const data: Scope = { [FIELD_ROWS]: table.rows };
-      if (table.head !== undefined) data[FIELD_HEAD] = table.head;
-      return { data };
+      const pack = (t: ParsedTable): Scope => {
+        const data: Scope = { [FIELD_ROWS]: t.rows };
+        if (t.head !== undefined) data[FIELD_HEAD] = t.head;
+        return data;
+      };
+      return { data: pack(table.styled), bare: pack(table.bare) };
     },
   },
   {
@@ -279,58 +312,161 @@ function runEnd(shape: Shape | undefined, lines: string[], from: number, stop: n
 }
 
 /**
+ * The first line past what a REFUSED decorator's shape can CLAIM: the lines that still OPEN its own kind. The run's
+ * `end` is wider, since a quote run swallows prose and zones that must stay on screen to be rescanned.
+ */
+function claimedEnd(lines: string[], at: number): number {
+  const shape = shapeOf(lines[at + 1])!; // a refusal means a payload announced its shape on this line
+  let end = at + 1;
+  while (end < lines.length && shape.opens(lines[end])) end++;
+  return end;
+}
+
+/** One decorated ZONE, as this carrier reads it before anything is drawn. */
+interface Zone {
+  deco: Decorator;
+  /** What the payload parsed to. Null for a zone with NO payload, which is how a static view is summoned. */
+  payload: Payload | null;
+  /** A payload that ANNOUNCED a shape and then refused to parse: a near-miss, so the zone shows exactly as written. */
+  refused: boolean;
+  /** The first line PAST the zone. */
+  end: number;
+}
+
+/**
+ * The zone anchored on line `at`, or null where that line anchors none. ONE reading for the render and the reader, so
+ * a gate and the screen can never disagree about where a zone starts, what it carries, or where it stops.
+ */
+function zoneAt(lines: string[], fences: Fence[], starts: number[], at: number): Zone | null {
+  const deco = parseDecorator(lines[at]);
+  // A decorator inside a code fence is being SHOWN, not written. Nothing here has an escape of its own.
+  if (deco === null || fenceAt(fences, starts[at]) !== undefined) return null;
+  const below = at + 1;
+  // NO payload engages with no data at all: a static view (welcome, the health check) is summoned by its line alone.
+  const has = hasPayload(lines, below, lines.length);
+  const shape = has ? shapeOf(lines[below]) : undefined;
+  const end = runEnd(shape, lines, below, lines.length);
+  const payload = shape === undefined ? null : shape.parse(lines.slice(below, end));
+  return { deco, payload, refused: shape !== undefined && payload === null, end };
+}
+
+/** What one decorated PASS produced: the text, and the strict view's outcome when a zone here is what decided it. */
+export interface Decorated {
+  out: string;
+  outcome: Outcome | null;
+}
+
+/**
  * Render every decorated zone of a message, each through its named template (and type), the decorator line consumed.
  * Fail-open per zone: an unknown template, an unsupported payload shape, or any render error leaves the zone EXACTLY as
- * written, so the screen shows what the transcript holds.
+ * written. The one exception is the host's STRICT view: refused, hollow or thrown, it shows the host's line instead.
  */
 export function renderDecorated(
   text: string,
   dirs: string | string[],
-  options?: RenderOptions
-): string {
-  if (!text.includes(DECORATOR_HINT)) return text;
+  options?: RenderOptions,
+  host?: DisplayHost,
+  cwd?: string
+): Decorated {
+  if (!text.includes(DECORATOR_HINT)) return { out: text, outcome: null };
   const lines = text.split("\n");
   const fences = fenceSpans(text);
   const starts = lineStarts(lines);
+  const strict = host?.strict;
+  const strictView = strict?.view;
+  let outcome: Outcome | null = null;
   const out: string[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const deco = parseDecorator(lines[i]);
-    // A decorator inside a code fence is being SHOWN, not written. Nothing here has an escape of its own.
-    if (deco === null || fenceAt(fences, starts[i]) !== undefined) {
+    const zone = zoneAt(lines, fences, starts, i);
+    if (zone === null) {
       out.push(lines[i]);
       continue;
     }
-    // NO payload engages with no data at all: a static view (welcome, the health check) is summoned by its line alone.
-    const has = hasPayload(lines, i + 1, lines.length);
-    const shape = has ? shapeOf(lines[i + 1]) : undefined;
-    const end = runEnd(shape, lines, i + 1, lines.length);
-    const payload = shape === undefined ? null : shape.parse(lines.slice(i + 1, end));
     // Judged on the SHAPE, never on whether anything follows. A payload announcing itself and then refusing to parse
     // is a near-miss the author must see; prose announces nothing, claims no line, and leaves a static view summoned
     // as a line alone would. A view that spends slots throws below on no data, so arity decides, not a table here.
-    if (shape !== undefined && payload === null) {
+    if (zone.refused) {
+      // Except under the STRICT name: a near-miss is still its zone, and raw markdown is what this view was promised
+      // never to show. The whole zone goes with the line, or the payload would follow the host's line raw.
+      if (zone.deco.view === strictView && strict !== undefined) {
+        outcome = failedOutcome(`view ${zone.deco.view}: payload refused`);
+        out.push(strictLine(strict));
+        // Only the lines its shape can CLAIM go with the replacement: the run also swallows prose and zones that were
+        // never the payload's, and those are rescanned exactly as the non-strict path rescans them.
+        i = claimedEnd(lines, i) - 1;
+        continue;
+      }
       out.push(lines[i]);
-      continue; // the payload lines follow untouched: raw markdown, valid anyway
+      continue; // a refused payload's lines follow untouched: raw markdown, valid anyway
     }
+    const { deco, payload, end } = zone;
     try {
-      const data = payload === null ? {} : payload.data;
+      const data: Scope = payload === null ? {} : payload.data;
       // See Payload.type: the unset field IS the precedence rule.
       const dressing = payload?.type === undefined ? deco : { ...deco, type: undefined };
-      const rendered = renderView(deco.view, data, dirs, undefined, options, dressing);
+      // The host is handed the PARSED zone as WRITTEN (`bare`), in the grammar a block hands over and with lists
+      // unsplit: the styled cells and their marks are the render's alone.
+      const injected = host?.inject?.(deco.view, namedFields(payload === null ? {} : payload.bare), cwd);
+      const rendered = renderView(deco.view, data, dirs, injected, options, dressing);
       // Raw over hollow, the narrowest of the three readings: render.ts owns the other two, and what is left here is
       // both of them passing while the fields all arrived BLANK (.tayomi/specs/fix/carrier-guards.md).
       if (rendered.trim() === "") {
+        if (deco.view === strictView && strict !== undefined) {
+          outcome = failedOutcome(`view ${deco.view}: rendered hollow`);
+          out.push(strictLine(strict));
+          i = end - 1;
+          continue;
+        }
         out.push(lines[i]);
         continue;
       }
+      if (deco.view === strictView) outcome = okOutcome();
       // The render's own trailing blank is dropped, so the zone keeps the line structure the raw table had around it.
       out.push(...rendered.replace(TRAILING_BLANKS_RE, "").split("\n"));
       i = end - 1;
-    } catch {
+    } catch (e) {
+      if (deco.view === strictView && strict !== undefined) {
+        outcome = failedOutcome(e);
+        // The zone goes with the line it replaces, or the raw markdown this view was promised never to show would
+        // follow it.
+        out.push(strictLine(strict));
+        i = end - 1;
+        continue;
+      }
       out.push(lines[i]); // fail-open: the decorator stays, the table follows raw
     }
   }
-  return out.join("\n");
+  return { out: out.join("\n"), outcome };
+}
+
+/** One decorated zone as a READER sees it: the view it names, what its carrier read, and where the zone begins. */
+export interface DecoratedZone {
+  view: string;
+  data: Scope;
+  /** The character offset of the decorator line, so zones of both carriers can be put back in the order written. */
+  at: number;
+}
+
+/**
+ * Every decorated zone of a message, in order, with what the CARRIER read: nothing rendered and no template loaded.
+ * Every anchored zone is reported, so an unreadable payload is visible as its view carrying NOTHING, not an absence.
+ */
+export function decoratedZones(text: string): DecoratedZone[] {
+  if (!text.includes(DECORATOR_HINT)) return [];
+  const lines = text.split("\n");
+  const fences = fenceSpans(text);
+  const starts = lineStarts(lines);
+  const zones: DecoratedZone[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const zone = zoneAt(lines, fences, starts, i);
+    if (zone === null) continue;
+    // The payload as WRITTEN: a reader compares words an author typed, and the styled cells are the render's alone.
+    zones.push({ view: zone.deco.view, data: zone.payload?.bare ?? {}, at: starts[i] });
+    // A REFUSED run is rescanned line by line, exactly as the render rescans it: the run may have swallowed a
+    // decorator of its own, which the screen draws and a reader must therefore report.
+    if (!zone.refused) i = zone.end - 1;
+  }
+  return zones;
 }
 
 /**

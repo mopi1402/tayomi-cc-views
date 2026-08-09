@@ -9,39 +9,25 @@ import { BLOCK_HINT, BLOCK_RE, cutUnclosedBlock } from "./carrier/scan.js";
 import {
   DECORATOR_HINT,
   cutStreamingDecorated,
+  decoratedZones,
   renderDecorated,
 } from "./carrier/decorator.js";
-import { renderTags } from "./style.js";
+import { CRLF, NL } from "./data/markup.js";
 import { defaultViewsPath } from "./template/load.js";
 import { renderView } from "./template/render.js";
+import { parseData } from "./template/view-data.js";
+import {
+  failedOutcome,
+  okOutcome,
+  strictLine,
+  type DisplayHost,
+  type Outcome,
+} from "./host.js";
 import type { RenderOptions } from "./options.js";
-import type { Scope } from "./scope.js";
 
-// Flattened ONCE at the entry rather than in each carrier: every matcher here anchors on a line boundary, so a CR the
-// entry lets through is a tolerance each of them must spell, and the one that forgets fails open on a well-formed
-// block (both carriers did). A LONE trailing CR is left alone: it is the front half of a CRLF still arriving.
-const CRLF = /\r\n/g;
-const NL = "\n";
-
-/**
- * What the HOST supplies to the engine, and the only channel by which anything outside this subsystem reaches a render.
- * Every member is optional: with no host at all the engine still renders every block from the block's own text.
- */
-export interface DisplayHost {
-  /** Extra scope for facts the model did not write. */
-  inject?(view: string, body: string, cwd?: string): Scope | undefined;
-  /**
-   * The ONE view that must never fail open to its raw markdown, and the line shown in its place. Without it, a failing
-   * view shows its raw block like any other.
-   */
-  strict?: { view: string; failedLine: string };
-  /**
-   * The strict view's outcome, reported ONCE per message and only on the final delta. Gated here rather than by the
-   * host because transform() recomputes over the WHOLE message on every delta: ungated it would fire again and again,
-   * making the outcome a function of how the host chunked the stream.
-   */
-  onRendered?(ok: boolean, error: string | null): void;
-}
+// The behaviour seam itself lives at the root (host.ts), because both carriers answer to it and the chain has no
+// cycles. Re-exported here, where every caller has always reached for it.
+export type { DisplayHost };
 
 /** Render the view blocks of a message. With no `host`, every block renders from its own text and nothing else. */
 export function transform(
@@ -51,9 +37,12 @@ export function transform(
   cwd?: string,
   options?: RenderOptions
 ): string {
-  const text = full.replace(CRLF, NL);
+  // Flattened ONCE at the entry: every matcher anchors on a line boundary, and both carriers failed open on a CR left
+  // through. A LONE trailing CR stays, the front half of a CRLF still arriving. viewZones flattens the same at ITS entry.
+  const text = full.split(CRLF).join(NL);
+  const dirs = options?.viewsPath ?? defaultViewsPath();
   const strictView = host?.strict?.view;
-  let outcome: { ok: boolean; error: string | null } | null = null;
+  let outcome: Outcome | null = null;
   // Measured on THIS text, before the pass that rewrites it. The decorator measures again on its own input: these
   // offsets no longer name the same characters once the blocks below have been replaced by their renders.
   const fences = fenceSpans(text);
@@ -62,29 +51,21 @@ export function transform(
     const fence = fenceAt(fences, at);
     if (fence !== undefined && !fence.carrier) return m;
     try {
+      // The host is handed the block PARSED, never its text: the same shape a decorated zone hands over, with lists
+      // unsplit since @fields is the template's business.
       const rendered =
-        renderView(
-          name,
-          bodyText,
-          options?.viewsPath ?? defaultViewsPath(),
-          host?.inject?.(name, bodyText, cwd),
-          options
-        ) + "\n";
-      if (name === strictView) outcome = { ok: true, error: null };
+        renderView(name, bodyText, dirs, host?.inject?.(name, parseData(bodyText), cwd), options) +
+        "\n";
+      if (name === strictView) outcome = okOutcome();
       return rendered;
     } catch (e) {
       if (name === strictView && host?.strict !== undefined) {
-        outcome = { ok: false, error: e instanceof Error ? e.message : String(e) };
-        // A host is a program, not a message: it may spend the palette.
-        return renderTags(host.strict.failedLine) + "\n"; // never the raw block nor its fences
+        outcome = failedOutcome(e);
+        return strictLine(host.strict) + "\n"; // never the raw block nor its fences
       }
       return m; // fail-open: show the raw block
     }
   });
-  if (outcome !== null && final === true) {
-    const { ok, error } = outcome as { ok: boolean; error: string | null };
-    host?.onRendered?.(ok, error);
-  }
   // Withholding is the NON-FINAL flush's business: a cut promises that a later flush reveals what it holds back, and on
   // the last delta no later flush exists (a block that never closes used to be cut away here and never came back).
   // Withheld first, rendered second, so a half-formed payload can never render.
@@ -93,7 +74,38 @@ export function transform(
     out = cutStreamingDecorated(out);
   }
   // NO tag pass here, and the absence is the rule: only a template resolves a tag.
-  return renderDecorated(out, options?.viewsPath ?? defaultViewsPath(), options);
+  const decorated = renderDecorated(out, dirs, options, host, cwd);
+  // ONE outcome per message, reported after BOTH passes: the strict view may arrive on either carrier. The cast is
+  // TypeScript's, an assignment made inside the callback above is not tracked here.
+  const fenced = outcome as Outcome | null;
+  // Where BOTH carriers decided, the zone written LAST wins. Pass order must not decide it: the decorator pass merely
+  // RUNS second, and letting it win would mask a fenced failure behind a decorated success.
+  const verdict =
+    fenced !== null && decorated.outcome !== null && strictView !== undefined
+      ? lastStrictIsDecorated(text, strictView)
+        ? decorated.outcome
+        : fenced
+      : (decorated.outcome ?? fenced);
+  if (verdict !== null && final === true) host?.onRendered?.(verdict.ok, verdict.error);
+  return decorated.out;
+}
+
+/**
+ * Which carrier wrote the LAST zone naming the strict view, both measured over the message as WRITTEN: the render
+ * passes each measure their own rewritten text, so their offsets never share a ruler.
+ */
+function lastStrictIsDecorated(text: string, strictView: string): boolean {
+  const fences = fenceSpans(text);
+  let fencedAt = -1;
+  for (const m of text.matchAll(BLOCK_RE)) {
+    if (m[1] !== strictView) continue;
+    const fence = fenceAt(fences, m.index);
+    if (fence !== undefined && !fence.carrier) continue;
+    fencedAt = m.index;
+  }
+  let decoratedAt = -1;
+  for (const zone of decoratedZones(text)) if (zone.view === strictView) decoratedAt = zone.at;
+  return decoratedAt > fencedAt;
 }
 
 /**

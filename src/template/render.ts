@@ -9,7 +9,7 @@ import { FIELD_TONE, FIELD_TYPE } from "../data/language.js";
 import { renderBody } from "./directives.js";
 import { loadTemplate, viewsDir } from "./load.js";
 import { maxBoxWidth } from "../platform/tty-width.js";
-import { inertData, parseData } from "./view-data.js";
+import { inertData, namedFields, parseData } from "./view-data.js";
 import type { RenderOptions } from "../options.js";
 
 /** What a CARRIER learned about one zone, beyond the view's name and its data. Both OPTIONAL, both fail open. */
@@ -61,8 +61,12 @@ export function traceView(
   // Either pre-parsed data (callers, tests) or the raw block text (the hook). Parsed here so the view's @fields
   // directive drives the split, and neutralised here because raw block text came from the MESSAGE. A caller handing
   // pre-parsed data owns its own provenance.
-  const scope: Scope =
+  const parsed: Scope =
     typeof data === "string" ? (inertData(parseData(data, objectLists)) as Scope) : data;
+  // Rows read a SECOND way, HERE where the template is known: splitting a list is @fields' business, no carrier's.
+  // PRE-PARSED data alone: a fenced block's `rows` were split by @fields already, and deriving would move its render.
+  const scope: Scope =
+    typeof data === "string" ? parsed : (namedFields(parsed, objectLists) as Scope);
   // "Raw over hollow", first two readings (.tayomi/specs/fix/carrier-guards.md). Whether DATA arrived, never whether
   // the template printed: a view drawing literal furniture always puts ink on screen. A template spending no slot is
   // STATIC and renders on empty data, which keeps `@{view:welcome}` a health check. The carrier's KIND counts as data,

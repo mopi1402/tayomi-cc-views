@@ -252,6 +252,63 @@ describe("raw over hollow", () => {
   });
 });
 
+// The SECOND reading of a table payload, folded in HERE and nowhere else: SPLITTING a list is the template's own
+// declaration (@fields), so the derivation has to run where the template is known.
+describe("a two-column table read as named fields", () => {
+  /** The rows a carrier builds from a two-column table: first cell in the label anchor, last in the content one. */
+  const rows = (...pairs: [string, string][]): object => ({
+    [LANG.FIELD_ROWS]: pairs.map(([label, content]) => ({
+      [LANG.FIELD_LABEL]: label,
+      [LANG.FIELD_CONTENT]: content,
+    })),
+  });
+
+  it("names a field from the first cell, for a template that spends no rows at all", () => {
+    view("${headline}");
+    expect(plain(render(rows(["headline", "it shipped"])))).toContain("it shipped");
+  });
+
+  it("splits a table-carried list exactly as it splits a block-carried one", () => {
+    const body = `${LANG.FIELDS} note state text\n${LANG.EACH} note\n\${state}/\${text}\n${LANG.END}`;
+    view(body);
+    expect(plain(render(rows(["note", "- ok all good"])))).toContain("ok/all good");
+    // The same list written the OTHER way in, through the same declaration: one grammar, two carriers.
+    expect(plain(render("note:\n- ok all good"))).toContain("ok/all good");
+  });
+
+  it("leaves `rows` standing over whatever a row tried to name it", () => {
+    view(
+      [
+        `${LANG.FIELDS} ${LANG.FIELD_ROWS} ${LANG.FIELD_LABEL} ${LANG.FIELD_CONTENT}`,
+        `${LANG.EACH} ${LANG.FIELD_ROWS}`,
+        `\${${LANG.FIELD_LABEL}}=\${${LANG.FIELD_CONTENT}}`,
+        LANG.END,
+      ].join("\n")
+    );
+    const out = plain(render(rows([LANG.FIELD_ROWS, "stolen"], ["k", "v"])));
+    expect(out).toContain(`${LANG.FIELD_ROWS}=stolen`);
+    // `@each` measures its columns, so the shorter label draws padded to the width of the wider one.
+    expect(out).toContain(`${"k".padEnd(LANG.FIELD_ROWS.length)}=v`);
+  });
+
+  it("derives nothing from a FENCED body: the named reading is a carrier's table, never an @fields list", () => {
+    // `@fields rows label content` splits a fenced list into the same two-key rows a table builds. Deriving from
+    // those would move what an existing block renders, and the fenced author already writes named fields directly.
+    view(
+      [
+        `${LANG.FIELDS} ${LANG.FIELD_ROWS} ${LANG.FIELD_LABEL} ${LANG.FIELD_CONTENT}`,
+        "T=[${title}]",
+        `${LANG.EACH} ${LANG.FIELD_ROWS}`,
+        `\${${LANG.FIELD_LABEL}}=\${${LANG.FIELD_CONTENT}}`,
+        LANG.END,
+      ].join("\n")
+    );
+    const out = plain(render(`${LANG.FIELD_ROWS}:\n- title Hello`));
+    expect(out).toContain("title=Hello");
+    expect(out).not.toContain("T=[Hello]");
+  });
+});
+
 describe("the tone chain", () => {
   const slot = (): string => view(tagMark(TONE_SLOT) + "x");
   const coloured = (data: object, dressing?: object): string => {
@@ -290,6 +347,16 @@ describe("the tone chain", () => {
 
   it("keeps the neutral when nothing in the chain resolves", () => {
     expect(coloured({ tone: "not_a_palette_name" })).toBe(neutral());
+  });
+
+  it("takes NO tone from a two-column row, dressing being the decorator line's to say", () => {
+    // `| tone | warning |` among ordinary rows is content: were it derived, every existing table labelling a row
+    // `tone` or `type` would change colour on upgrade, with no author having asked for it.
+    const rows = (label: string): object => ({
+      [LANG.FIELD_ROWS]: [{ [LANG.FIELD_LABEL]: label, [LANG.FIELD_CONTENT]: "warning" }],
+    });
+    expect(coloured(rows(LANG.FIELD_TONE))).toBe(neutral());
+    expect(coloured(rows(LANG.FIELD_TYPE))).toBe(neutral());
   });
 });
 

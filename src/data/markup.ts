@@ -26,6 +26,13 @@ export const NEST_INDENT = "  ";
 export const TABLE_MARK = "|";
 export const QUOTE_MARK = ">";
 
+/**
+ * One line ending, and the pair every reader of a whole message flattens at its OWN entry (split CRLF, join NL): the
+ * pipeline and the zone reader must read the same bytes, or a gate parts from the screen on every CRLF transcript.
+ */
+export const NL = "\n";
+export const CRLF = `\r${NL}`;
+
 export const TAG_OPEN = "{{";
 export const TAG_CLOSE = "}}";
 

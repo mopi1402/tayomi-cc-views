@@ -158,6 +158,127 @@ describe("the host's injected scope", () => {
     const msg = block(NAME, "said: x");
     expect(render(msg, { inject: () => undefined })).toBe(render(msg));
   });
+
+  it("arrives PARSED, so a host never re-reads a body the engine already read", () => {
+    const seen: Record<string, unknown>[] = [];
+    const host: DisplayHost = {
+      inject: (_view, data) => {
+        seen.push(data);
+        return undefined;
+      },
+    };
+    render(block(NAME, "said: it works", "note:", "- one", "- two"), host);
+    expect(seen).toEqual([{ said: "it works", note: ["one", "two"] }]);
+  });
+});
+
+// The property the whole ticket rests on: a view carried by a decorated table draws EXACTLY what the same view
+// carried by a fenced block draws, injection included.
+describe("the two carriers, on one payload", () => {
+  const TLDR = "tldr_probe";
+  const HEADLINE = "it shipped";
+  const ITEMS = ["the suite is green", "the pack is signed"];
+  // NO closing newline, deliberately: a template ending on a blank line would leave the fenced render one blank
+  // longer than the decorated one and turn an exact comparison into an approximate one.
+  view(TLDR, ["${headline}", "@each notes", "- ${.}", "@end", "${elapsed}"].join("\n"));
+
+  const fenced = block(TLDR, `headline: ${HEADLINE}`, "notes:", ...ITEMS.map((i) => `- ${i}`));
+  const table = [
+    `${DECORATOR_HINT}${TLDR}${DECORATOR_CLOSE}`,
+    "| | |",
+    "| --- | --- |",
+    `| headline | ${HEADLINE} |`,
+    `| notes | - ${ITEMS[0]} |`,
+    `| | - ${ITEMS[1]} |`,
+    "",
+  ].join("\n");
+  const host: DisplayHost = { inject: () => ({ elapsed: "3s" }) };
+
+  it("draws the same bytes, injection included", () => {
+    expect(render(table, host)).toBe(render(fenced, host));
+  });
+
+  it("draws what the payload actually said, so the identity is not two blanks", () => {
+    const out = plain(render(table, host));
+    expect(out).toContain(HEADLINE);
+    for (const item of ITEMS) expect(out).toContain(`- ${item}`);
+    expect(out).toContain("3s");
+  });
+});
+
+describe("the strict view, whichever carrier drew it", () => {
+  const FAILED = "the view did not render";
+  const reporting = (seen: (boolean | string | null)[]): DisplayHost => ({
+    strict: { view: STRICT, failedLine: FAILED },
+    onRendered: (ok, error) => seen.push(ok, error),
+  });
+  /** The strict view, decorated, over a table it can read: `said` is named by the first cell. */
+  const decorated = (value: string): string =>
+    [
+      `${DECORATOR_HINT}${STRICT}${DECORATOR_CLOSE}`,
+      "| | |",
+      "| --- | --- |",
+      `| said | ${value} |`,
+      "",
+    ].join("\n");
+
+  it("reports the success of a decorated zone, once and on the final flush alone", () => {
+    const seen: (boolean | string | null)[] = [];
+    const host = reporting(seen);
+    render(decorated("it works"), host, false);
+    expect(seen).toEqual([]);
+    render(decorated("it works"), host, true);
+    expect(seen).toEqual([true, null]);
+  });
+
+  it("reports the failure of a decorated zone, with the engine's own words", () => {
+    const seen: (boolean | string | null)[] = [];
+    // A quote where the view reads `said`: nothing it draws could come from the payload, so render.ts refuses.
+    const msg = [`${DECORATOR_HINT}${STRICT}${DECORATOR_CLOSE}`, "> a band, and no field", ""].join("\n");
+    const out = render(msg, reporting(seen), true);
+    expect(plain(out)).toContain(FAILED);
+    expect(seen[0]).toBe(false);
+    expect(String(seen[1])).toContain(STRICT);
+  });
+
+  it("decides ONCE per message, on the zone written last", () => {
+    const seen: (boolean | string | null)[] = [];
+    const msg = block(STRICT, "not the data format") + decorated("it works");
+    render(msg, reporting(seen), true);
+    expect(seen).toEqual([true, null]);
+  });
+
+  it("is decided by WRITTEN order, never by pass order", () => {
+    // The decorator pass merely RUNS second: were the verdict its, this decorated success would mask the fenced
+    // failure the screen shows after it.
+    const seen: (boolean | string | null)[] = [];
+    const msg = decorated("it works") + block(STRICT, "not the data format");
+    render(msg, reporting(seen), true);
+    expect(seen[0]).toBe(false);
+    expect(String(seen[1])).toContain(STRICT);
+  });
+
+  it("hands inject the same field bytes on either carrier", () => {
+    // A brace is what the decorated render neutralises for the SCREEN, and a bold span is what it styles: the host
+    // reads data, so neither treatment may reach it, or the same zone reads differently by carrier.
+    const braced = "a **bold** {brace} in prose";
+    const seen: Record<string, unknown>[] = [];
+    const spy: DisplayHost = {
+      inject: (_view, data) => {
+        seen.push(data);
+        return undefined;
+      },
+    };
+    render(block(NAME, `said: ${braced}`), spy);
+    render(
+      [`${DECORATOR_HINT}${NAME}${DECORATOR_CLOSE}`, "| | |", "| --- | --- |", `| said | ${braced} |`, ""].join(
+        "\n"
+      ),
+      spy
+    );
+    expect(seen[1].said).toBe(seen[0].said);
+    expect(seen[0].said).toBe(braced);
+  });
 });
 
 describe("withholding what is still arriving", () => {

@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { transform, slice } from "../pipeline.js";
+import { transform, slice, type DisplayHost } from "../pipeline.js";
 import { handleMessageDisplay } from "../hook/runner.js";
 import { cutStreamingDecorated, DECORATOR_HINT } from "./decorator.js";
 import { VIEW_EXT } from "../template/load.js";
@@ -16,6 +16,8 @@ import { hasControlMark } from "../data/marks.js";
 import {
   EACH,
   END,
+  FIELD_CONTENT,
+  FIELD_ROWS,
   FIELDS,
   HEAD,
   MAX_COLUMNS,
@@ -146,6 +148,24 @@ write(first, viewFile(BANDED, "warning"), "TYPED FILE\n");
 write(second, viewFile(ITEM, ALERT), rowsView("!! ${label} ${content}"));
 write(first, viewFile(ITEM, LOUD), rowsView("A[${label}|${content}]"));
 write(second, viewFile(ITEM, LOUD), rowsView("B[${label}|${content}]"));
+
+// A SECTIONED view: it spends named fields and no `rows` at all, so everything it draws can only have come from the
+// first cell of a two-column table naming them.
+const NAMED = "named";
+const HEADLINE = "headline";
+const NOTES = "notes";
+write(
+  second,
+  viewFile(NAMED),
+  lines("${" + HEADLINE + "}", `${EACH} ${NOTES}`, "- ${.}", END)
+);
+// A view that CANNOT draw what a table hands it: `rows` arrives, it reads neither field, and render.ts refuses. What a
+// zone of the host's strict view failing looks like.
+const REFUSES = "refuses";
+write(second, viewFile(REFUSES), lines(`${FIELDS} left right`, "${left}  ${right}"));
+// A view whose render is BLANK when its one field is: what the strict hollow case drives.
+const HOLLOW = "hollow";
+write(second, viewFile(HOLLOW), "${said}\n");
 
 const WIDTH = 60;
 // The item.view fixture declares cap="1/3", so this is where a label cell stops.
@@ -435,6 +455,214 @@ describe("a table wider than two columns", () => {
       pipeRow(MIN_COLUMNS + 1, (i) => `c${i + 1}`)
     );
     expect(transform(msg, undefined, true, undefined, options)).toBe(msg);
+  });
+});
+
+// What lets a load-bearing view move onto the decorator without one byte of its template changing: the same table that
+// draws as rows ALSO reaches a sectioned template as the fields a fenced block would have written.
+describe("a two-column table as named fields", () => {
+  const draw = (...rows: string[]): string =>
+    transform(
+      lines(decorator(NAMED), EMPTY_HEADER, DELIM, ...rows),
+      undefined,
+      true,
+      undefined,
+      options
+    ).replace(ANSI_RE, "");
+
+  it("names a scalar from the first cell and fills it from the second", () => {
+    expect(draw(`| ${HEADLINE} | it shipped |`)).toContain("it shipped");
+  });
+
+  it("builds a LIST from item cells, a continuation row appending to it", () => {
+    const out = draw(`| ${HEADLINE} | it shipped |`, `| ${NOTES} | - one |`, "| | - two |");
+    expect(out).toContain("- one");
+    expect(out).toContain("- two");
+  });
+
+  it("still hands `rows` over untouched, which is what keeps every existing view drawing", () => {
+    // The same payload through the view that loops over rows: the derived fields are written UNDER them, so this
+    // renders exactly what it always rendered.
+    const rows = ["| Status | green |"];
+    const asRows = transform(
+      lines(decorator(ITEM), EMPTY_HEADER, DELIM, ...rows),
+      undefined,
+      true,
+      undefined,
+      options
+    );
+    expect(asRows.replace(ANSI_RE, "")).toContain(`Status${SEP}green`);
+  });
+
+  it("reads NO other arity: a three-column table is rows and nothing else", () => {
+    // Nothing derived, so the sectioned view is handed a payload it reads no field of, and the whole zone comes back
+    // as the author wrote it.
+    const msg = lines(
+      decorator(NAMED),
+      pipeRow(MIN_COLUMNS + 1, () => ""),
+      pipeRow(MIN_COLUMNS + 1, () => "---"),
+      `| ${HEADLINE} | mid | it shipped |`
+    );
+    expect(transform(msg, undefined, true, undefined, options)).toBe(msg);
+  });
+
+  it("takes a value carrying an unescaped pipe, the surplus rejoining its own field", () => {
+    // A sentence with a bar in it is ordinary prose, and refusing it would print the whole zone raw for a character no
+    // author thinks to escape.
+    expect(draw(`| ${HEADLINE} | shipped | at last |`)).toContain("shipped | at last");
+  });
+});
+
+describe("the host, on a decorated zone", () => {
+  const FAILED = "the view did not render";
+  const strict = (view: string): DisplayHost => ({ strict: { view, failedLine: FAILED } });
+
+  it("injects into it, for state the model never wrote", () => {
+    const INJECTED = "injected_deco";
+    write(second, viewFile(INJECTED), "${said} / ${elapsed}\n");
+    const out = transform(
+      decorated(decorator(INJECTED), "| said | x |"),
+      { inject: () => ({ elapsed: "3s" }) },
+      true,
+      undefined,
+      options
+    );
+    expect(out.replace(ANSI_RE, "")).toContain("x / 3s");
+  });
+
+  it("hands it the PARSED zone, in the grammar a fenced block hands over", () => {
+    const seen: Record<string, unknown>[] = [];
+    const host: DisplayHost = {
+      inject: (_view, data) => {
+        seen.push(data);
+        return undefined;
+      },
+    };
+    transform(
+      decorated(decorator(NAMED), `| ${HEADLINE} | it shipped |`, `| ${NOTES} | - one |`),
+      host,
+      true,
+      undefined,
+      options
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0][HEADLINE]).toBe("it shipped");
+    expect(seen[0][NOTES]).toEqual(["one"]);
+  });
+
+  it("shows the strict view's own line instead of the raw zone, decorator included", () => {
+    const out = transform(
+      decorated(decorator(REFUSES), KV_ROW),
+      strict(REFUSES),
+      true,
+      undefined,
+      options
+    );
+    expect(out.replace(ANSI_RE, "")).toContain(FAILED);
+    expect(out).not.toContain(DECORATOR_HINT);
+    expect(out).not.toContain("|");
+  });
+
+  it("shows it for a REFUSED payload too, and says so in the outcome", () => {
+    const seen: (boolean | string | null)[] = [];
+    const host: DisplayHost = {
+      ...strict(REFUSES),
+      onRendered: (ok, error) => seen.push(ok, error),
+    };
+    // A ragged table: one header cell where two is the floor, so the shape announces itself and refuses.
+    const msg = lines(decorator(REFUSES), "| ragged |", "| --- |", "| x |");
+    const out = transform(msg, host, true, undefined, options);
+    expect(out.replace(ANSI_RE, "")).toContain(FAILED);
+    expect(out).not.toContain(DECORATOR_HINT);
+    expect(out).not.toContain("|");
+    expect(seen[0]).toBe(false);
+    expect(String(seen[1])).toContain("refused");
+  });
+
+  it("shows it where the render comes back HOLLOW, every field blank", () => {
+    const seen: (boolean | string | null)[] = [];
+    const host: DisplayHost = {
+      ...strict(HOLLOW),
+      onRendered: (ok, error) => seen.push(ok, error),
+    };
+    const out = transform(
+      decorated(decorator(HOLLOW), "| said |  |"),
+      host,
+      true,
+      undefined,
+      options
+    );
+    expect(out.replace(ANSI_RE, "")).toContain(FAILED);
+    expect(out).not.toContain("|");
+    expect(seen[0]).toBe(false);
+    expect(String(seen[1])).toContain("hollow");
+  });
+
+  it("hands inject the bytes the author typed, no mark and no tag of the render in them", () => {
+    const seen: Record<string, unknown>[] = [];
+    // A brace is what the render's neutralising guards, and a bold span is what it STYLES: the host reads data, not a
+    // screen, so it must see neither the guard mark nor the emphasis rewritten into engine markup.
+    const braced = "a **bold** {brace} the render styles, never the host";
+    transform(
+      decorated(decorator(NAMED), `| ${HEADLINE} | ${braced} |`),
+      {
+        inject: (_view, data) => {
+          seen.push(data);
+          return undefined;
+        },
+      },
+      true,
+      undefined,
+      options
+    );
+    expect(seen[0][HEADLINE]).toBe(braced);
+    expect(hasControlMark(String(seen[0][HEADLINE]))).toBe(false);
+  });
+
+  it("claims only the lines its shape owns on a refusal, and what the run swallowed still draws", () => {
+    const seen: (boolean | string | null)[] = [];
+    const host: DisplayHost = {
+      ...strict(REFUSES),
+      onRendered: (ok, error) => seen.push(ok, error),
+    };
+    // A quote run holds every non-blank line, so it swallows the neighbouring zone and the prose: both must survive
+    // the strict replacement, or the failedLine deletes content that was never the zone's.
+    const msg = lines(decorator(REFUSES), "> a quote", decorator(STATIC), "tail prose");
+    const out = transform(msg, host, true, undefined, options);
+    expect(out.replace(ANSI_RE, "")).toContain(FAILED);
+    expect(out.replace(ANSI_RE, "")).toContain("the box is the template");
+    expect(out).toContain("tail prose");
+    expect(out).not.toContain("> a quote");
+    expect(seen[0]).toBe(false);
+  });
+
+  it("hands inject a COPY: an edit the host makes redraws nothing", () => {
+    const msg = decorated(decorator(NAMED), `| ${HEADLINE} | it shipped |`);
+    const untouched = transform(msg, undefined, true, undefined, options);
+    const tamper: DisplayHost = {
+      inject: (_view, data) => {
+        (data[FIELD_ROWS] as Record<string, string>[])[0][FIELD_CONTENT] = "TAMPERED";
+        return undefined;
+      },
+    };
+    expect(transform(msg, tamper, true, undefined, options)).toBe(untouched);
+  });
+
+  it("leaves every OTHER view failing open to its raw zone", () => {
+    const msg = decorated(decorator(REFUSES), KV_ROW);
+    expect(transform(msg, strict("someone_else"), true, undefined, options)).toBe(msg);
+  });
+
+  it("keeps the prose around a strict zone exactly where it was", () => {
+    const out = transform(
+      lines("intro", ...decorated(decorator(REFUSES), KV_ROW).split("\n"), "after"),
+      strict(REFUSES),
+      true,
+      undefined,
+      options
+    );
+    expect(out).toContain("intro");
+    expect(out).toContain("after");
   });
 });
 

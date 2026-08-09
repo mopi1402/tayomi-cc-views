@@ -14,7 +14,7 @@ Under all of them sits `src/data/`, a leaf every layer may read and that reads n
 - `carrier/` recognises the zones of a message.
 - `pipeline.ts` is the only piece that sees everything, and composes in the only safe order.
 
-`scope.ts` lives at the root, next to `style.ts`, because two layers that must not depend on each other both consume it: the substituter and the column measurer.
+`scope.ts` lives at the root, next to `style.ts`, because two layers that must not depend on each other both consume it: the substituter and the column measurer. `host.ts` sits there for the same reason and no other: the `DisplayHost` seam is spent by the pipeline AND by the decorator carrier under it, so declaring it in the pipeline would have a carrier importing upwards, and this chain has no cycles.
 
 Three rules complete the chain, enforced by a gate in the host repo: one `main()` per process (an edge module imported into a bundle once stole another hook's stdin), the edge is a leaf (nothing imports `hook/runner.ts`), and no cycles. The practical payoff: every storey can be tested without erecting the storeys above it.
 

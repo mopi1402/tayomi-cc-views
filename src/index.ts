@@ -28,6 +28,10 @@ export {
 // the engine draws): both must share this parser.
 export { parseData, type ObjectLists } from "./template/view-data.js";
 
+// The view zones of a message, both carriers, name and data per zone: what that gate JUDGES with, without drawing a
+// thing. No template is loaded, so a list arrives unsplit (`@fields` belongs to the template).
+export { viewZones, type ViewZone } from "./carrier/zones.js";
+
 // The scope a template resolves against, for a host that injects fields, and the lookup tables a template declares
 // (@map, @text) under the one name they share.
 export { stringify, type Scope, type Table, type Tables } from "./scope.js";

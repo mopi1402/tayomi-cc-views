@@ -5,7 +5,17 @@
 // judging the same block), so a shape that changes meaning here changes a verdict somewhere else.
 
 import { describe, it, expect } from "vitest";
-import { inertData, parseData } from "./view-data.js";
+import { inertData, namedFields, parseData } from "./view-data.js";
+import {
+  FIELD_CONTENT,
+  FIELD_HEAD,
+  FIELD_LABEL,
+  FIELD_ROWS,
+  FIELD_TONE,
+  FIELD_TYPE,
+  MIDDLE_FIELDS,
+} from "../data/language.js";
+import { ITEM_MARK } from "../data/markup.js";
 import { inert } from "../style.js";
 
 const EMPTY = {};
@@ -135,6 +145,147 @@ describe("inertData", () => {
 
   it("is NOT part of parseData: the gate hook reads the block as it was typed", () => {
     expect(parseData(`said: ${MARKUP}`)).toEqual({ said: MARKUP });
+  });
+});
+
+
+// The SECOND way in: a two-column table has to reach a template as the very fields a fenced block writes, or the
+// same view could not be spent from both carriers.
+describe("a two-column table read as named fields", () => {
+  /** A row as the CARRIER builds it: the first cell names, the last fills. Spelled from the anchors it lands in. */
+  const row = (label: string, content: string): Record<string, string> => ({
+    [FIELD_LABEL]: label,
+    [FIELD_CONTENT]: content,
+  });
+  /** One item cell, written the way an author types it under a bullet. */
+  const item = (text: string): string => `${ITEM_MARK} ${text}`;
+  const table = (...rows: Record<string, string>[]): Record<string, unknown> => ({
+    [FIELD_ROWS]: rows,
+  });
+  /** What the fold added, the payload's own fields taken back off. */
+  const derived = (
+    payload: Record<string, unknown>,
+    lists?: Record<string, string[]>
+  ): Record<string, unknown> => {
+    const out = { ...namedFields(payload, lists) };
+    for (const key of Object.keys(payload)) delete out[key];
+    return out;
+  };
+
+  it("takes the first cell as the NAME and the second as a scalar value", () => {
+    expect(derived(table(row("said", "it works")))).toEqual({ said: "it works" });
+  });
+
+  it("lowercases and trims the name, so a table may caption its rows in prose", () => {
+    expect(derived(table(row("  Said  ", "it works")))).toEqual({ said: "it works" });
+  });
+
+  it("appends an item to that field's list when the value opens with a dash", () => {
+    expect(derived(table(row("note", item("one")), row("note", item("two"))))).toEqual({
+      note: ["one", "two"],
+    });
+  });
+
+  it("continues the field above on an EMPTY first cell, the rule the whole engine prints by", () => {
+    expect(derived(table(row("note", item("one")), row("", item("two"))))).toEqual({
+      note: ["one", "two"],
+    });
+  });
+
+  it("lets a continuation overwrite a scalar, last written winning as it does in a block", () => {
+    expect(derived(table(row("said", "first"), row("", "second")))).toEqual({ said: "second" });
+  });
+
+  it("keeps a scalar against a LATER item, which the block also drops once no list is open", () => {
+    // `- x` under `note: prose` appends nothing in a block; the table's twin must not turn the prose into a list.
+    expect(derived(table(row("note", "prose"), row("", item("x"))))).toEqual({ note: "prose" });
+    expect(derived(table(row("note", "prose"), row("note", item("x"))))).toEqual({ note: "prose" });
+  });
+
+  it("derives NO dressing word: kind and tone ride the decorator line, said on purpose there", () => {
+    // A row labelled `type` or `tone` is ordinary content, and deriving it would repaint the whole view.
+    expect(
+      derived(table(row(FIELD_TYPE, "warning"), row(FIELD_TONE, "fail"), row("said", "x")))
+    ).toEqual({ said: "x" });
+  });
+
+  it("derives NO carrier-owned word either: a row labelled rows or head cannot occupy the slot", () => {
+    // The precedence below only protects a key the payload actually carries, and a table whose header row is blank
+    // carries no `head`: a derived one would stand unopposed, a STRING where a template reads the header row object.
+    expect(
+      derived(table(row(FIELD_ROWS, "stolen"), row(FIELD_HEAD, "stolen"), row("said", "x")))
+    ).toEqual({ said: "x" });
+  });
+
+  it("drops a continuation with no field above it to continue", () => {
+    expect(derived(table(row("", "orphan"), row("said", "x")))).toEqual({ said: "x" });
+  });
+
+  it("wants the space after the dash: a bare hyphen is a scalar, exactly as it is prose in a block", () => {
+    expect(derived(table(row("note", `${ITEM_MARK}one`)))).toEqual({ note: `${ITEM_MARK}one` });
+  });
+
+  it("splits an item through the view's own @fields, the reason this runs where the template is known", () => {
+    const lists = { note: ["state", "text"] };
+    expect(derived(table(row("note", item("ok all good"))), lists)).toEqual({
+      note: [{ state: "ok", text: "all good" }],
+    });
+    // The same list, UNDECLARED, stays plain strings: the split is the template's business and never this reader's.
+    expect(derived(table(row("note", item("ok all good"))))).toEqual({ note: ["ok all good"] });
+  });
+
+  it("SKIPS a row whose name is not a legal field name, and reads the rest", () => {
+    for (const illegal of ["2fields", "a field", "{{warn}}", ITEM_MARK]) {
+      expect(derived(table(row(illegal, "x"), row("said", "kept")))).toEqual({ said: "kept" });
+    }
+  });
+
+  it("leaves the field above a skipped row OPEN, an unreadable row being ignored and nothing more", () => {
+    expect(derived(table(row("said", "first"), row("2fields", "x"), row("", "second")))).toEqual({
+      said: "second",
+    });
+  });
+
+  it("never throws, whatever a row holds", () => {
+    for (const rows of [[], [row("", "")], [{}], [{ [FIELD_LABEL]: "a" }], ["a string"], null, 3]) {
+      expect(() => namedFields({ [FIELD_ROWS]: rows })).not.toThrow();
+    }
+  });
+});
+
+describe("what the named reading must NOT touch", () => {
+  it("reads NO other arity: a wider row has columns to keep and no cell to spare for a name", () => {
+    // A three-column row, spelled through the middle name the carrier gives it, so widening the ceiling moves this
+    // fixture with it rather than leaving a literal behind.
+    const payload = {
+      [FIELD_ROWS]: [
+        { [FIELD_LABEL]: "said", [MIDDLE_FIELDS[0]]: "middle", [FIELD_CONTENT]: "it works" },
+      ],
+    };
+    expect(namedFields(payload)).toEqual(payload);
+  });
+
+  it("reads nothing at all where the rows are plain strings, as a fenced list carries them", () => {
+    const payload = { [FIELD_ROWS]: ["one", "two"] };
+    expect(namedFields(payload)).toEqual(payload);
+  });
+
+  it("hands the very same object back when there is nothing to derive", () => {
+    const payload = { said: "x" };
+    expect(namedFields(payload)).toBe(payload);
+  });
+
+  it("writes UNDER the payload's own fields, never over them", () => {
+    // A table labelling a row `rows` or `head` changes nothing about what any existing view draws: that precedence is
+    // what lets the whole corpus move onto the decorator without one template changing.
+    const rows = [
+      { [FIELD_LABEL]: FIELD_ROWS, [FIELD_CONTENT]: "stolen" },
+      { [FIELD_LABEL]: FIELD_HEAD, [FIELD_CONTENT]: "stolen" },
+    ];
+    const head = { [FIELD_LABEL]: "L", [FIELD_CONTENT]: "C" };
+    const out = namedFields({ [FIELD_ROWS]: rows, [FIELD_HEAD]: head });
+    expect(out[FIELD_ROWS]).toBe(rows);
+    expect(out[FIELD_HEAD]).toBe(head);
   });
 });
 

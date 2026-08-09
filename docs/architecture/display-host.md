@@ -11,11 +11,24 @@ How a host wires the engine, from zero code to full behaviour. Grounded in `pipe
 
 ## `DisplayHost`: behaviour, not configuration
 
-Every member is optional; with no host at all the engine renders every block from the block's own text.
+Every member is optional; with no host at all the engine renders every zone from what the message itself carries. All three reach BOTH carriers: a view moving from a fenced block onto a decorator keeps every promise it was given.
 
-- `inject(view, body, cwd)`: extra scope merged into a view, for facts the model did not write (state the model must not be trusted to remember). Returning `undefined` means "nothing to add".
-- `strict: { view, failedLine }`: the ONE view that must never fail open to its raw markdown; on failure the `failedLine` shows instead.
-- `onRendered(ok, error)`: the strict view's outcome, reported ONCE per message, only on the final delta (an ungated report would fire on every recomputed flush).
+- `inject(view, data, cwd)`: extra scope merged into a view, for facts the model did not write (state the model must not be trusted to remember). Returning `undefined` means "nothing to add".
+- `strict: { view, failedLine }`: the ONE view that must never fail open to its raw markdown. A payload it refuses, a render that comes back hollow, a render that throws: each shows the `failedLine` in place of the zone, decorator line included, and says so in the outcome. (A refused payload gives up only the lines its shape can claim as its own: what a greedy run merely swallowed stays on screen and is rescanned.)
+- `onRendered(ok, error)`: the strict view's outcome, decided ONCE per message whichever carrier drew the view, reported only on the final delta (an ungated report would fire on every recomputed flush). Where BOTH carriers named the strict view in one message, the zone written LAST decides, the same last-writer rule one carrier keeps within itself.
+
+**Breaking, and it takes the package to its next MAJOR: `inject` receives the PARSED data, where it used to receive the block's raw text.** A decorated zone has no body text to hand over, and a host re-parsing a body the engine already parsed is the second reader this package exists to prevent. What arrives is the fields, in one grammar whichever carrier carried them, built from the payload as WRITTEN: the styled cells the render draws from never leave the engine, so a decorated value reads byte for byte as its fenced twin. A decorated zone also carries its carrier's own reading beside the derived fields (`rows`, and `head` where the table wrote one), which a fenced block does not have; a host comparing key SETS across carriers must expect that. Lists arrive UNSPLIT (`@fields` is the template's business and no carrier's), and the handed structure is separate from the one the render draws: an edit the host makes to it redraws nothing. A host that used to call `parseData(body)` on the way in now drops that call.
+
+## `viewZones`: what the message carried
+
+`viewZones(text)` returns `{ view, data }` for every view zone of a message, both carriers, in the order they were written. Nothing is rendered and no template is loaded, which is what makes it cheap enough for a gate hook: a Stop hook judging what the model put on screen reads the very zones the engine renders, instead of growing a parser of its own that diverges the day either changes.
+
+What it does NOT answer, by construction:
+
+- **A list arrives unsplit.** `@fields` is declared by the template, and no template is loaded here.
+- **A zone is reported whether or not it would DRAW.** An unknown view name, a template that reads none of the fields: both are a render's verdict, not a reader's.
+- **A payload the carrier could not read is reported carrying nothing** (`data: {}`), which is also what a decorator with no payload at all reports. Silence would be indistinguishable from a message that never named the view.
+- **A decorated cell reads byte for byte as its fenced twin.** The decorator carrier neutralises and styles where message text becomes a scope value (`architecture.md`), but those treatments are the RENDER's: what the reader reports is the payload as WRITTEN, so a gate comparing a value against the words an author typed never meets a mark or an engine tag. The zone's key set still differs: a decorated table carries `rows` (and `head`) beside the derived fields, a fenced block only what it wrote.
 
 ### The host factory
 
@@ -96,6 +109,7 @@ One consequence to plan for: the engine's own vocabulary GROWS over versions (th
 | `Dressing` | What a carrier learned about a zone beyond its data: `type` (the kind) and `tone` (the class filling the view's tone slot). Both optional, both fail open. |
 | `loadTemplate`, `viewsDir`, `bundledViewsDir`, `defaultViewsPath`, `VIEWS_PATH_ENV` | Template resolution, the plugin and bundled views dirs, and the default search path with its env var. A host composing its own `viewsPath` appends `bundledViewsDir()` to keep `welcome` resolvable. If you BUNDLE the engine, mark it external: see the next section. |
 | `parseData`, `ObjectLists` | The block-data parser. Exported because a host may have a SECOND reader of the same format (a gate judging the block the engine draws): both must share this parser or they diverge. |
+| `viewZones`, `ViewZone` | Every view zone a message carries, both carriers, name and data per zone, in the order written. No render, no template: the section above states its limits. |
 | `stringify`, `Scope`, `Table`, `Tables` | The scope a template resolves against, for hosts that inject, and the lookup tables it declares (`@map`, `@text`) under the one registry they share. |
 | `renderTags`, `renderCode`, `isTag`, `ANSI_RE` | The markup vocabulary, for a host colouring its own lines the same way. `renderCode` hands back a self-contained span: it opens on the `code` tag (yours, if you registered one) and closes on a reset, reading nothing else on the line as markup. |
 | `extendTags`, `TagReport` | The palette seam above: total, last registration wins, the report says what shadowed or skipped. |
@@ -129,4 +143,5 @@ The engine is fail-open EVERYWHERE: a failure never crashes and never blanks the
 - **Nothing renders at all, and the hook may never have run.** Check the hook's command path FIRST: a bare relative path (`./node_modules/.bin/...`) is not resolved for a hook command, so the hook never runs and nothing on screen says so. Use the placeholder Claude Code substitutes, `${CLAUDE_PROJECT_DIR}/...` in a project's settings, `${CLAUDE_PLUGIN_ROOT}/...` in a plugin's. `/hooks` lists what is registered, and `claude --debug` shows a hook firing and what it returned. (Confirmed here on 2026-07-31, Claude Code 2.1.220, by an A/B in a throwaway project: identical fresh sessions, the relative form rendered nothing, the placeholder form rendered.)
 - **Nothing renders, but the hook did run.** The message carries none of the engagement markers (` ```view: `, `@{view:`), so the engine returns `null` and the host's own rendering stands. That is by design: returning text would flatten the host's markdown.
 - **The box wraps at a surprising column.** Walk the width resolution order above: a number in options wins over the env var, which wins over any probe.
-- **The strict view shows one terse line.** That is `strict.failedLine`: the host declared this view must never fail open; `onRendered` carries the error text.
+- **The strict view shows one terse line.** That is `strict.failedLine`: the host declared this view must never fail open; `onRendered` carries the error text. It holds on both carriers, and on a decorated zone it replaces the decorator line and its payload together.
+- **A decorated table draws, but a field the template names is empty.** A two-column table also reads as NAMED FIELDS: the first cell names, the second fills, an empty first cell continues the field above, and a value opening `- ` appends an item to that field's list. So the name has to be a legal field name (a word, never opening on a digit), lowercased for you; a row whose first cell is anything else is skipped in silence, and a table of three or four columns carries `rows` alone.

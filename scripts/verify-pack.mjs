@@ -120,9 +120,19 @@ try {
 
   // 3b. The PUBLIC API, by package name. The only step going through `exports`: every other resolves a path, so a
   // broken entry leaves them green while an adopter's own import throws.
+  //
+  // `viewZones` is asked for BY VALUE and not merely imported: it is what a host's gate reads a message with, it is
+  // reached from another process entirely, and nothing else in this script would notice it falling out of the barrel.
   const api = spawnSync(
     process.execPath,
-    ["--input-type=module", "-e", `import { renderView } from "${pkg.name}"; if (typeof renderView !== "function") process.exit(2);`],
+    [
+      "--input-type=module",
+      "-e",
+      `import { renderView, viewZones } from "${pkg.name}";` +
+        `if (typeof renderView !== "function") process.exit(2);` +
+        `const zones = viewZones("@{view:banner}\\n> [!WARNING]\\n> packed\\n\\n");` +
+        `if (zones.length !== 1 || zones[0].view !== "banner" || zones[0].data.content !== "packed") process.exit(3);`,
+    ],
     { cwd: proj, encoding: "utf8" }
   );
   if (api.status !== 0) {
