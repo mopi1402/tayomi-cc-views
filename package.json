@@ -8,7 +8,8 @@
     "dist",
     "views",
     "agent",
-    "docs/CHEATSHEET.md"
+    "docs/CHEATSHEET.md",
+    "CHANGELOG.md"
   ],
   "exports": {
     ".": {
