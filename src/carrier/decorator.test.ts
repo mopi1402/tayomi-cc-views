@@ -413,6 +413,20 @@ describe("a table wider than two columns", () => {
     expect(transform(msg, undefined, true, undefined, options)).toBe(msg);
   });
 
+  it("TAKES a row a cell long, rejoining the surplus into the last column", () => {
+    // The opposite case of the one above, and the common one: an unescaped pipe in prose. Nothing is absent, so
+    // rejoining loses no character, where refusing printed the whole block raw at a reader who wrote none of it.
+    expect(plainly(...table(MIN_COLUMNS), "| c1 | avant | apres |")).toContain(
+      `c1${SEP}avant | apres`
+    );
+  });
+
+  it("rejoins EVERY surplus a row carries, and only ever into the last column", () => {
+    expect(
+      plainly(...table(MIN_COLUMNS + 1), "| c1 | c2 | un | deux | trois |")
+    ).toContain(`c1${SEP}c2${SEP}un | deux | trois`);
+  });
+
   it("refuses a delimiter of a different width than the header it sits under", () => {
     const msg = lines(
       decorator(WIDE),

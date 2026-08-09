@@ -113,6 +113,14 @@ const ARITIES: readonly number[] = Array.from(
 const ROW_RES = new Map(ARITIES.map((n) => [n, re(rowSource(n, CELL))]));
 const DELIM_RES = new Map(ARITIES.map((n) => [n, re(rowSource(n, DELIM_CELL))]));
 
+/** The LAST cell of a data row, greedy to the closing delimiter, so the bare pipes of a surplus stay in it as content. */
+const TAIL_CELL = String.raw`(.*)`;
+
+/** The same row with that tail in last position. A cell short still matches nothing here: too few pipes to reach it. */
+const tailSource = (n: number): string =>
+  `^[ \t]*${TABLE_SOURCE}${[...Array.from({ length: n - 1 }, () => CELL), TAIL_CELL].join(TABLE_SOURCE)}${TABLE_SOURCE}[ \t]*$`;
+const TAIL_RES = new Map(ARITIES.map((n) => [n, re(tailSource(n))]));
+
 /** That escape, unwritten: inside a cell the pipe is content, not a column boundary. */
 const ESCAPED_PIPE_RE = /\\\|/g;
 
@@ -159,8 +167,12 @@ function cell(raw: string): string {
  * The payload parsed as rows, or null when it is not a shape this supports: a pipe table of two to four columns, header
  * row MANDATORY (its cells may be empty), delimiter row, at least one data row.
  *
- * The HEADER fixes the arity and every line below must hold it, markdown's own rule. A ragged table is refused whole
- * rather than padded: guessing which column a missing cell belonged to is the invention the fail-open exists to avoid.
+ * The HEADER fixes the arity and every line below must hold it, markdown's own rule. A row a cell SHORT is refused whole
+ * rather than padded: guessing which column the missing one belonged to is the invention the fail-open exists to avoid.
+ *
+ * A row a cell LONG is the opposite case and is taken: nothing is absent, the extra pipe is a character the author wrote
+ * without escaping, and rejoining it into the last column is the only reading that loses none of the line. Refusing it
+ * printed the whole block raw, which reads as garbage and teaches an author who will never see the screen.
  */
 function parseRows(lines: string[]): { rows: DecoratedRow[]; head?: DecoratedRow } | null {
   if (lines.length < 3) return null;
@@ -168,9 +180,11 @@ function parseRows(lines: string[]): { rows: DecoratedRow[]; head?: DecoratedRow
   if (arity === undefined) return null;
   if (!DELIM_RES.get(arity)!.test(lines[1])) return null;
   const rowRe = ROW_RES.get(arity)!;
+  const tailRe = TAIL_RES.get(arity)!;
   const rows: DecoratedRow[] = [];
   for (const line of lines.slice(2)) {
-    const m = line.match(rowRe);
+    // Strict first, so a well-formed row never reaches the greedy tail and a bare pipe stays a column boundary.
+    const m = line.match(rowRe) ?? line.match(tailRe);
     if (!m) return null;
     rows.push(rowFields(m.slice(1, arity + 1)));
   }
