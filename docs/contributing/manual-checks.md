@@ -76,6 +76,12 @@ Step 3 is the one that wastes an afternoon. Claude Code runs a plugin's hook fro
 
 Skip any step and nothing on screen says so: the old engine keeps drawing.
 
+### The last time you need this chain to settle WHICH engine draws
+
+An engine that finds a strictly newer one on the machine's register stands down, so a checkout under development wins over the copy a plugin installed ("Two engines can draw the same message" in [caveats.md](../caveats.md)). That standing down lives in the engine that DOES it, which no already-installed copy can be taught after the fact: the chain above is how it gets there, once. Past that install, a newer engine takes the screen on its own and no publish stands between an edit and what you see.
+
+The chain still earns its place for everything else, since it is the only thing that proves the package, its `views/` and the plugin's own copy of both.
+
 ### There is no shortcut, and the reason is `viewsPath`
 
 A `.view` you have just written does not reach that consumer's screen by sitting in a directory near it. A host composing its own `viewsPath` BYPASSES `defaultViewsPath()` entirely, so the project's own `views/` (which the zero-config bin reads from the cwd) is not on the path at all: TAYOMI's plugin passes `[viewsDir(), bundledViewsDir()]` and looks nowhere else. For a view that ships inside the package, the chain above is the only way in.

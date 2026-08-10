@@ -38,9 +38,13 @@ Nothing fires when a transcript is displayed again, and nothing restores the dre
 
 ### Two engines can draw the same message
 
-More than one MessageDisplay hook can be registered, and both take effect. They CHAIN, the second receiving the first's output, and for one zone the FIRST to run wins, consuming the decorator or the fence. The order is not yours to choose, so a view BOTH engines carry can legitimately come out two different ways from one identical message. Nothing crosses over: a tag resolves only inside a view its own engine rendered. Measured 2026-07-31, both orders, streaming included: no duplication, no truncation.
+More than one MessageDisplay hook can be registered, and both take effect. They CHAIN, the second receiving the first's output, and for one zone the FIRST to run wins, consuming the decorator or the fence. Nothing crosses over: a tag resolves only inside a view its own engine rendered. Measured 2026-07-31, both orders, streaming included: no duplication, no truncation.
 
-> **Boundary:** Claude Code's dispatcher owns the order. Consuming the zone is deliberate here, and it is what stops two engines drawing it twice.
+The order is still not yours to choose, but which engine CONSUMES no longer follows from it. Each one announces itself on a machine-wide register (its path and its version, one file apiece), and an engine that finds a strictly newer peer there stands down: it answers nothing, and the delta reaches the newer one exactly as the model wrote it. So the newest installed engine draws whichever the dispatcher calls first, and a checkout under development wins over a copy a plugin installed months ago without a publish standing between them.
+
+Every failure to read that register means DRAW, never a silence: an unreadable directory, a malformed claim, a version that does not parse, a peer whose path is gone, a claim older than an hour. `CC_VIEWS_NO_YIELD` turns the mechanism off for a contributor who wants their own engine to draw regardless, and off means draw for the same reason.
+
+> **Boundary:** Claude Code's dispatcher owns the order, and the engine never reads its settings or its plugin manifests to learn who else is registered. Each engine answers for itself alone, which is the one claim that cannot go out of date. An engine too old to carry this cannot stand down, so it reaches a consumer by one install like any other change.
 
 ## Side effects
 

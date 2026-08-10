@@ -2,13 +2,15 @@
 // scenario here is one the live hook meets on ordinary turns: flushes landing out of order, a predecessor that never
 // lands, the final flush cleaning up, a payload that is not the protocol at all.
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { handleMessageDisplay, type MessageContext } from "./runner.js";
 import { readEarlier } from "../platform/stream-state.js";
+import { announce, peersDir } from "../platform/peers.js";
 import { ANSI_RE } from "../style.js";
+import { ENGINE_VERSION } from "../data/engine.js";
 import { BOX, EACH, END, ENDBOX, HEAD } from "../data/language.js";
 import { SCRATCH_DIR, VIEW_EXT } from "../data/markup.js";
 
@@ -27,6 +29,30 @@ fs.writeFileSync(path.join(views, "note" + VIEW_EXT), VIEW);
 // Its own state dir, so these tests never collide with another suite's messages.
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-runner-state-`));
 const options = { viewsPath: [views], width: 100, stateDir };
+
+// This edge consults the machine's engine register on every flush, and that register lives under the temp dir. Pointed
+// at an EMPTY one for every case here: a real engine installed on the developer's machine would otherwise stand this
+// whole suite down, and a green run would mean nothing.
+const registerHome = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-runner-peers-`));
+/** Told apart from this engine by version alone, and DERIVED from it so neither can drift into the other. */
+const NEWER = `${Number(ENGINE_VERSION.split(".")[0]) + 1}.0.0`;
+const OLDER = "0.0.1";
+
+beforeEach(() => {
+  fs.rmSync(path.join(registerHome, SCRATCH_DIR), { recursive: true, force: true });
+  vi.stubEnv("TMPDIR", registerHome);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+/** Another engine on the machine, with a real file behind it: a claim whose path is gone is one nobody believes. */
+function otherEngine(version: string): void {
+  const at = path.join(registerHome, `engine-${version}.js`);
+  fs.writeFileSync(at, "", "utf8");
+  announce(peersDir(), { path: at, version });
+}
 
 let n = 0;
 const msg = (): string => `runner-test-${process.pid}-${n++}`;
@@ -109,5 +135,25 @@ describe("handleMessageDisplay", () => {
     for (const junk of [null, 42, "text", [], { delta: 7, index: "x" }]) {
       expect(await handleMessageDisplay(junk, undefined, options)).toBeNull();
     }
+  });
+});
+
+describe("when another engine is registered on the machine", () => {
+  const block = "```view:note\nnote:\n- a\n```";
+
+  it("stands down for a NEWER one, so the delta reaches it untouched", async () => {
+    // Null is what this edge already answers for "nothing to say", and it is exactly what standing down means: the
+    // dispatcher hands the raw delta to the next hook in the chain, which is the newer engine.
+    otherEngine(NEWER);
+    expect(await handleMessageDisplay(payload(msg(), 0, block, true), undefined, options)).toBeNull();
+  });
+
+  it("draws for an OLDER one, which is the half a bare presence check would get wrong", async () => {
+    otherEngine(OLDER);
+    expect(shown(await handleMessageDisplay(payload(msg(), 0, block, true), undefined, options))).toContain("- a");
+  });
+
+  it("draws where it is alone, which is every screen this engine has ever drawn", async () => {
+    expect(shown(await handleMessageDisplay(payload(msg(), 0, block, true), undefined, options))).toContain("- a");
   });
 });
