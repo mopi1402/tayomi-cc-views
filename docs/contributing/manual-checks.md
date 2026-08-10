@@ -78,7 +78,9 @@ Skip any step and nothing on screen says so: the old engine keeps drawing.
 
 ### The last time you need this chain to settle WHICH engine draws
 
-An engine that finds a strictly newer one on the machine's register stands down, so a checkout under development wins over the copy a plugin installed ("Two engines can draw the same message" in [caveats.md](../caveats.md)). That standing down lives in the engine that DOES it, which no already-installed copy can be taught after the fact: the chain above is how it gets there, once. Past that install, a newer engine takes the screen on its own and no publish stands between an edit and what you see.
+An engine stands aside on a view a strictly NEWER one on the machine's register also declares, so a checkout under development wins on the views it HAS ("Two engines can draw the same message" in [caveats.md](../caveats.md)). Per ZONE, and the rest of the message is unaffected: a view only the installed copy carries is still drawn by it, in that same message, which is what a bump can never give you.
+
+That standing aside lives in the engine that DOES it, which no already-installed copy can be taught after the fact: the chain above is how it gets there, once. Past that install, a newer engine takes the zones it can draw and no publish stands between an edit and what you see.
 
 The chain still earns its place for everything else, since it is the only thing that proves the package, its `views/` and the plugin's own copy of both.
 
@@ -122,6 +124,21 @@ Ask the BINARY rather than grepping a manifest beside it: the number it prints c
 On screen, `@{view:welcome}` carries that same number in its badge, read off `${#engine}`. This is the one measurement that survives two engines racing for the same message: any number typed INTO a view names the view's file, never the copy that drew it, and a view resolves through directories the engine does not own.
 
 Nothing here proves the RESTART, and no check should: a session already running keeps the engine it loaded, you are the one who restarts it, and restarting again costs three seconds against two commands. When in doubt, restart rather than measure.
+
+### Which engine actually DREW, and why that version line cannot say
+
+That line proves a COPY exists and carries what you published, never that Claude Code RAN it. The register does, since a claim records the path the engine ran from:
+
+```bash
+D=$(node -p 'require("os").tmpdir()')/cc-views/engines
+for f in "$D"/*; do node -p "JSON.parse(require('fs').readFileSync('$f','utf8')).path"; done
+```
+
+Under `~/.claude/plugins/cache/`, the cached copy drew. Inside your plugin's own checkout, the working tree drew and your bump changed nothing on screen (measured 2026-08-11, through the symlink a pnpm workspace install leaves). Two silent causes to check first: the plugin installed at BOTH scopes, since `plugin update` moves one and says nothing of the other, and a marketplace source that is a Directory, so a live checkout.
+
+### Republishing a number the registry already served
+
+Unpublishing frees a version, so the same number can carry different code. Two caches then serve the OLD tarball under it: the consumer's lockfile `integrity`, and pnpm's metadata cache (`~/Library/Caches/pnpm/metadata-v1.3/<registry>/<pkg>.json`). The second hides, since `pnpm remove` then `pnpm add` re-resolves from it and writes the same integrity back. Delete it first, reinstall, then grep the installed `dist/` for something only the new code carries: the number is exactly what did not change.
 
 ## Target 3: the skill
 
