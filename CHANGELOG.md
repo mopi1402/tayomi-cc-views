@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.1
+
+- A code span closes on the run it opened on, and never past its own cell
+
 ## 2.1.0
 
 - Two engines on one machine no longer race: the newest one HOLDING a view draws it

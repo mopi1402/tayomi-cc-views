@@ -6,6 +6,7 @@
 // gutter bar and blanking everything before it.
 
 import { describe, it, expect } from "vitest";
+import { FENCE } from "../data/markup.js";
 import { RESET_MARK, RESUME_MARK, SPAN_MARK, chip, tagMark } from "../style.js";
 import { CELL_MARK, HANG_MARK, STACK_MARK, TAIL_MARK, VOID_MARK } from "./marks.js";
 import { printedWidth } from "./measure.js";
@@ -97,6 +98,30 @@ describe("a code span the wrap cuts", () => {
       // An odd count would leave the terminal with an orphan delimiter.
       expect([...row].filter((c) => c === TICK).length % 2).toBe(0);
     }
+  });
+
+  it("hands back the line it was GIVEN where nothing folds, padding included", () => {
+    // The atomiser rebuilds the line from its atoms, so anything it declines to emit is gone for good. The padding of
+    // a span is markup it must CHARGE nothing for and DROP nothing of: spent here, the delimiter arrives flush against
+    // its text further down and the span stops being a span at all.
+    const padded = `${TICK} ${FENCE} ${TICK}`;
+    expect(foldText(padded, LIMIT)).toEqual([padded]);
+  });
+
+  it("charges the backticks the span HOLDS, which the measurer beside it charges too", () => {
+    // The two have to agree or the fold is computed on one width and the border padded to another. Only the
+    // DELIMITERS cost nothing: an atomiser blind to that packed the run's own columns onto a row for free.
+    const rows = foldText(`a ${TICK} ${FENCE}one ${TICK} bb cc dd ee ff`, LIMIT);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(fits(rows, LIMIT)).toBe(true);
+  });
+
+  it("reopens the span with the run it was OPENED on, never with one backtick", () => {
+    const pair = TICK.repeat(2);
+    const rows = foldText(`${pair}one two three four five${pair}`, LIMIT);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows[0].endsWith(pair)).toBe(true);
+    expect(rows[1].startsWith(pair)).toBe(true);
   });
 });
 

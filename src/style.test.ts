@@ -5,11 +5,11 @@
 // the render meant to keep), and a host's registration is total (a throw at startup once killed a whole display).
 
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { THEME_ENV } from "./data/markup.js";
+import { BLOCK_INFO, CODE_TICK, FENCE, THEME_ENV } from "./data/markup.js";
+import { CELL_MARK, STACK_MARK } from "./data/marks.js";
 import {
   ANSI_RE,
   CHIP_CHROME,
-  CODE_RE,
   RESET_MARK,
   RESUME_MARK,
   TAG_RE,
@@ -24,6 +24,7 @@ import {
   inert,
   isTag,
   markCode,
+  overCode,
   renderCode,
   renderTags,
   rgb,
@@ -822,6 +823,9 @@ describe("extendTags", () => {
   });
 });
 
+/** A span reduced to its own text, which is what a measurer counts and what every other reader wraps. */
+const bare = (s: string): string => overCode(s, (t) => t);
+
 describe("the patterns a measurer shares", () => {
   it("matches an escape already on the line", () => {
     expect("text".replace(ANSI_RE, "")).toBe("text");
@@ -829,8 +833,55 @@ describe("the patterns a measurer shares", () => {
   });
 
   it("matches a non-empty code span and leaves a lone backtick alone", () => {
-    expect("run `it` now".replace(CODE_RE, "$1")).toBe("run it now");
-    expect("a ` b".replace(CODE_RE, "$1")).toBe("a ` b");
+    expect(bare(`run ${CODE_TICK}it${CODE_TICK} now`)).toBe("run it now");
+    expect(bare(`a ${CODE_TICK} b`)).toBe(`a ${CODE_TICK} b`);
+  });
+
+  it("carries a span whose own TEXT is a run of backticks, which is how a fence is quoted at all", () => {
+    // The case this class was rewritten for. A run of one closes on a run of one and never on a backtick sitting
+    // inside a longer run, so the three here are TEXT: read otherwise, the line came back as two spans and the run
+    // between them was gone from the screen.
+    expect(bare(`bloc ${CODE_TICK} ${FENCE}${BLOCK_INFO}x ${CODE_TICK}`)).toBe(
+      `bloc ${FENCE}${BLOCK_INFO}x`
+    );
+  });
+
+  it("closes a LONGER opening run on a run of the same length, never on a shorter one", () => {
+    const pair = CODE_TICK.repeat(2);
+    expect(bare(`${pair}a${CODE_TICK}b${pair}`)).toBe(`a${CODE_TICK}b`);
+  });
+
+  it("leaves an opening run that never meets its match exactly as written", () => {
+    // The near-miss, and it is the half a class of this shape gets wrong: a run with no closer of its length is not a
+    // span at all, and backtracking onto a shorter run inside it would invent one.
+    expect(bare(`${FENCE}${BLOCK_INFO}x`)).toBe(`${FENCE}${BLOCK_INFO}x`);
+    expect(bare(`${FENCE}a${CODE_TICK}`)).toBe(`${FENCE}a${CODE_TICK}`);
+  });
+
+  it("never crosses a CELL, which is the inline context a row is split into first", () => {
+    // A span is looked for on the line the layout already drew, so the columns of a row sit on it side by side. A run
+    // that found its closer two columns further along ate both delimiters and the separator between them, and the two
+    // cells came back merged: the fold and the padding were computed on a line nobody could read back.
+    const row = `${CELL_MARK}a${CODE_TICK}b${CELL_MARK} | ${CELL_MARK}c${CODE_TICK}d${CELL_MARK}`;
+    expect(bare(row)).toBe(row);
+  });
+
+  it("never crosses a STACKED row either, each one being a screen row of its own", () => {
+    const stacked = `${CODE_TICK}a${STACK_MARK}b${CODE_TICK}`;
+    expect(bare(stacked)).toBe(stacked);
+  });
+
+  it("still reads a span WITHIN one cell, which is the whole point of stopping at its edge", () => {
+    expect(bare(`${CELL_MARK}a${CODE_TICK}b${CODE_TICK}c${CELL_MARK}`)).toBe(
+      `${CELL_MARK}abc${CELL_MARK}`
+    );
+  });
+
+  it("spends the ONE padding space at each end, and only where both are there", () => {
+    // What lets a span open or close on a backtick of its own. One space, never a trim: the rest is the author's.
+    expect(bare(`${CODE_TICK}  x  ${CODE_TICK}`)).toBe(" x ");
+    expect(bare(`${CODE_TICK} x${CODE_TICK}`)).toBe(" x");
+    expect(bare(`${CODE_TICK} ${CODE_TICK}`)).toBe(" ");
   });
 
   it("renders a code span in the pinned accent", () => {

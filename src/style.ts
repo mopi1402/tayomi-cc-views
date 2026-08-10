@@ -1,8 +1,15 @@
 // The ANSI vocabulary: the tag names a view may write, and what they render as.
 // Why the palette is process-global, and why only a template may spend it: docs/architecture/architecture.md.
 
-import { CODE_TICK, TAG_CLOSE, TAG_OPEN } from "./data/markup.js";
-import { INERT_MARK, RESUME_MARK, SPAN_MARK, dropControl } from "./data/marks.js";
+import { CODE_TICK, NL, TAG_CLOSE, TAG_OPEN } from "./data/markup.js";
+import {
+  CELL_MARK,
+  INERT_MARK,
+  RESUME_MARK,
+  SPAN_MARK,
+  STACK_MARK,
+  dropControl,
+} from "./data/marks.js";
 import { activeTheme, counterpart, isLight, slotIsDark, type Theme } from "./platform/theme.js";
 
 export { CODE_TICK, RESUME_MARK, SPAN_MARK };
@@ -13,6 +20,7 @@ export const R = `${ESC}[0m`;
 /** The one tag name that is not a word, and the only one that CLOSES. */
 const RESET_NAME = "/";
 const CODE = "code";
+const SPACE = " ";
 
 // A base-sixteen background sits ten above its foreground; the extended forms differ only by their selector.
 const BG_FIRST = 40;
@@ -327,8 +335,55 @@ export const TAG_AT = tagRe("y");
 /** An escape sequence already on the line. Zero columns wide, so every measurement strips it. */
 export const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
+// What a span may not CROSS. A span is looked for on the line the layout already DREW, so a cell is still bracketed
+// here: markdown splits a row into cells before it looks for one, and without these a run opened in one column closed
+// in the next, eating both delimiters and the text between. A stacked row is a screen row of its own, same rule.
+const SPAN_STOP = `${NL}${CELL_MARK}${STACK_MARK}`;
+
+// A code span the way CommonMark reads one: a RUN of backticks opens it, and only a run of the SAME length closes it,
+// which is what lets a span carry backticks of its own. A class forbidding the backtick inside read a quoted fence as
+// two spans and dropped the run between them, so the syntax a cell was quoting never reached the screen.
 // eslint-disable-next-line security/detect-non-literal-regexp
-export const CODE_RE = new RegExp(String.raw`${CODE_TICK}([^${CODE_TICK}\n]+)${CODE_TICK}`, "g");
+const CODE_RE = new RegExp(
+  String.raw`(?<!${CODE_TICK})(${CODE_TICK}+)(?!${CODE_TICK})([^${SPAN_STOP}]+?)(?<!${CODE_TICK})\1(?!${CODE_TICK})`,
+  "g"
+);
+
+/** Where a span sits: the delimiter runs at either end, and the TEXT between them with its padding already spent. */
+export type CodeSpan = { at: number; textAt: number; textEnd: number; end: number; run: string };
+
+// CommonMark's padding rule: one space off each end, and only where BOTH are there and the span is not all spaces. It
+// is what lets a span open or close on a backtick of its own.
+function padded(text: string): boolean {
+  return text.startsWith(SPACE) && text.endsWith(SPACE) && text.trim() !== "";
+}
+
+/** The spans of `s`, in order and never overlapping: the one reading of the line every reader below shares. */
+export function codeSpans(s: string): CodeSpan[] {
+  const out: CodeSpan[] = [];
+  for (const m of s.matchAll(CODE_RE)) {
+    const at = m.index ?? 0;
+    const run = m[1];
+    const end = at + m[0].length;
+    const pad = padded(m[2]) ? SPACE.length : 0;
+    out.push({ at, textAt: at + run.length + pad, textEnd: end - run.length - pad, end, run });
+  }
+  return out;
+}
+
+/**
+ * Every span of `s`, its own TEXT handed to `f` and the delimiters gone. The one place that knows where a span begins
+ * and ends, so the measurer, the wrapper and the two renderers cannot grow four opinions about it.
+ */
+export function overCode(s: string, f: (text: string) => string): string {
+  let out = "";
+  let i = 0;
+  for (const sp of codeSpans(s)) {
+    out += s.slice(i, sp.at) + f(s.slice(sp.textAt, sp.textEnd));
+    i = sp.end;
+  }
+  return out + s.slice(i);
+}
 
 // Consulted BEFORE the built-ins: a host SHADOWS an engine name.
 const EXTENDED: Record<string, string> = {};
@@ -694,7 +749,7 @@ export function fillTone(s: string, cls: string | undefined): string {
  * mark here and, where it is the tone slot, not yet even a colour: the terminator cannot be a sequence.
  */
 export function markCode(s: string): string {
-  return s.replace(CODE_RE, (_m: string, x: string) => `${spanOpen(CODE)}${x}${spanClose(CODE)}`);
+  return overCode(s, (x) => `${spanOpen(CODE)}${x}${spanClose(CODE)}`);
 }
 
 /**
@@ -703,5 +758,5 @@ export function markCode(s: string): string {
  */
 export function renderCode(s: string): string {
   const open = resolveTag(CODE) ?? "";
-  return s.replace(CODE_RE, (_m: string, x: string) => `${open}${x}${R}`);
+  return overCode(s, (x) => `${open}${x}${R}`);
 }

@@ -1,17 +1,17 @@
 // Wrapping a rendered line to a column limit.
 //
 // It happens on ATOMS rather than characters, because a line carries markup that costs no column: a {{tag}} is opaque
-// and zero-width, a backtick delimits a code span and is consumed downstream. Splitting a line as a plain string would
+// and zero-width, and a code span's DELIMITER run is consumed downstream. Splitting a line as a plain string would
 // count that markup as text and, worse, could cut a tag or a span in half.
 
 import {
-  CODE_TICK,
   RESET_MARK,
   RESUME_MARK,
   SPAN_MARK,
   TAG_AT,
   TAG_SOURCE,
   closeCut,
+  codeSpans,
   isTag,
   popSpan,
   tagMark,
@@ -38,15 +38,44 @@ const MIN_CONT = 4;
 
 // `name` is the tag an atom opens, carried so a fold can seal what a row leaves open and reopen it on the next: a bold
 // span split over two rows is otherwise bold on one and plain on the other, and its closer unwinds the ROW's style.
+// `tick` marks a DELIMITER run, whose own text is what a cut row reopens on.
 type Atom = { s: string; w: number; space: boolean; tick: boolean; name?: string };
+
+const delimAtom = (run: string): Atom => ({ s: run, w: 0, space: false, tick: true });
+
+// The padding space of a span, kept on the line and charged NOTHING. Spending it here would be spending it twice: the
+// span is only resolved further down (markCode), and a delimiter left flush against its text is no longer parsable
+// there. Never a break opportunity either, or a fold could part the padding from the run it belongs to.
+const padAtom = (pad: string): Atom => ({ s: pad, w: 0, space: false, tick: false });
 
 function atomize(text: string): Atom[] {
   const atoms: Atom[] = [];
   // One atom per GRAPHEME CLUSTER, not per code unit: the greedy fill below would cut a surrogate pair or a joined
   // sequence in half, and a per-unit atom is w: 1 whatever it draws.
   const clusters = clusterMap(text);
+  // Read ONCE by style.ts, which is the only module that knows where a span starts: only a delimiter costs no column,
+  // and the backticks a span HOLDS are text a reader sees. Charging every backtick alike sized this line short by the
+  // run, which is the fold computed on one width and the border padded to another.
+  const spans = codeSpans(text);
+  let n = 0;
   let i = 0;
   while (i < text.length) {
+    const span = spans[n];
+    if (span !== undefined && i === span.at) {
+      atoms.push(delimAtom(span.run));
+      const from = span.at + span.run.length;
+      if (from < span.textAt) atoms.push(padAtom(text.slice(from, span.textAt)));
+      i = span.textAt;
+      continue;
+    }
+    if (span !== undefined && i === span.textEnd) {
+      const upto = span.end - span.run.length;
+      if (span.textEnd < upto) atoms.push(padAtom(text.slice(span.textEnd, upto)));
+      atoms.push(delimAtom(span.run));
+      i = span.end;
+      n++;
+      continue;
+    }
     TAG_AT.lastIndex = i;
     const m = TAG_AT.exec(text);
     if (m && isTag(m[1])) {
@@ -57,12 +86,7 @@ function atomize(text: string): Atom[] {
     // A tag is pure ASCII, so the index it leaves behind is a cluster boundary; the fallback keeps the walk total if it
     // ever were not.
     const g = clusters.get(i) ?? text[i];
-    atoms.push({
-      s: g,
-      w: g === CODE_TICK ? 0 : displayWidth(g),
-      space: g === SPACE,
-      tick: g === CODE_TICK,
-    });
+    atoms.push({ s: g, w: displayWidth(g), space: g === SPACE, tick: false });
     i += g.length;
   }
   return atoms;
@@ -175,22 +199,23 @@ export function foldText(text: string, width: number): string[] {
   // The shared notion of what is open (style.ts), never a copy: a boolean could say whether a style was open and never
   // WHICH, and it counted the tag of a COMPLETE engine span as still standing.
   const open: string[] = [];
-  let tick = false;
+  // The delimiter RUN a span is standing on, empty where none is: a row is closed and the next reopened on that same
+  // run, and reopening on one backtick would leave a span of three closed by a span of one.
+  let run = "";
   for (const atoms of groups) {
     // What the row before left standing, replayed IN ORDER, boundaries included: a row is self-contained, or the
     // closer further down unwinds to the wrong place.
-    let s =
-      open.map((e) => (e === SPAN_MARK ? SPAN_MARK : tagMark(e))).join("") + (tick ? CODE_TICK : "");
+    let s = open.map((e) => (e === SPAN_MARK ? SPAN_MARK : tagMark(e))).join("") + run;
     for (const a of atoms) {
       s += a.s;
-      if (a.tick) tick = !tick;
+      if (a.tick) run = run === "" ? a.s : "";
       else if (a.name !== undefined) trackTag(open, a.name);
       else if (a.s === SPAN_MARK) trackTag(open, SPAN_MARK);
       else if (a.s === RESUME_MARK) popSpan(open);
     }
-    // A code span cut in two is closed and reopened, otherwise the orphan backtick reaches the screen and neither half
+    // A code span cut in two is closed and reopened, otherwise the orphan run reaches the screen and neither half
     // renders as code. The style around it is sealed the same way, and for the same reason.
-    out.push(closeCut(s + (tick ? CODE_TICK : ""), open));
+    out.push(closeCut(s + run, open));
   }
   return out;
 }

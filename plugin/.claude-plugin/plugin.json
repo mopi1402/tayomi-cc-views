@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "cc-views",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Write a .view template for @tayomi/cc-views: pick a bundled view, write the template and the block that feeds it, and verify with cc-views check.",
   "author": {
     "name": "Pierre Moati",

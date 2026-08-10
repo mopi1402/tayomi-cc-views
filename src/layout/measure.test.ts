@@ -6,9 +6,10 @@
 // in its prose short.
 
 import { describe, it, expect } from "vitest";
+import { CODE_TICK, FENCE } from "../data/markup.js";
 import { RESET_MARK, RESUME_MARK, SPAN_MARK, isTag, spanOpen, tagMark } from "../style.js";
 import { HANG_MARK, RULE_MARK } from "./marks.js";
-import { longestKey, padCell, printedWidth } from "./measure.js";
+import { longestKey, padCell, printedText, printedWidth } from "./measure.js";
 
 const KNOWN = "b";
 const UNKNOWN = "not_a_palette_name";
@@ -40,6 +41,14 @@ describe("printedWidth", () => {
 
   it("charges an UNPAIRED backtick, which prints as itself", () => {
     expect(printedWidth("a ` b")).toBe("a ` b".length);
+  });
+
+  it("charges the backticks a span holds as its TEXT, which reach the screen", () => {
+    // Only the DELIMITERS are consumed downstream. Asserted on the TEXT and not on the width alone: a reading that
+    // dropped the run and kept a stray tick in its place measures the same number and draws a different line.
+    const quoted = `bloc ${CODE_TICK} ${FENCE}x ${CODE_TICK}`;
+    expect(printedText(quoted)).toBe(`bloc ${FENCE}x`);
+    expect(printedWidth(quoted)).toBe(`bloc ${FENCE}x`.length);
   });
 
   it("charges nothing for the engine's own control marks", () => {
