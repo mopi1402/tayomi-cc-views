@@ -12,7 +12,8 @@ import {
   sweepStale,
 } from "../platform/stream-state.js";
 import { DEFAULT_STATE_DIR } from "../platform/scratch.js";
-import { yieldsToNewer } from "../platform/peers.js";
+import { standAside } from "../platform/peers.js";
+import { defaultViewsPath, listViews } from "../template/load.js";
 import { parseStdin, readStdin } from "@tayomi/utils";
 import type { RenderOptions } from "../options.js";
 
@@ -42,11 +43,10 @@ export async function handleMessageDisplay(
   options?: RenderOptions
 ): Promise<string | null> {
   try {
-    // Before ANYTHING, so a newer engine registered on this machine draws whatever order the dispatcher chose. Null is
-    // the answer this edge already gives for "nothing to say", and it is exactly what a yield means: the delta stands
-    // and the next hook in the chain receives it untouched. Decided once here and never per zone, or one message would
-    // tear across two renders.
-    if (yieldsToNewer()) return null;
+    // Before ANYTHING, and per ZONE: the newest engine HOLDING a view draws it, whatever order the dispatcher chose.
+    // Standing down for a whole MESSAGE takes with it the zones nobody else can draw, which is why this is a name set.
+    // Announced from the CALLER's own search path, deduped: an ordered path resolves one name once.
+    standAside([...new Set((options?.viewsPath ?? defaultViewsPath()).flatMap(listViews))]);
     if (payload === null || typeof payload !== "object") return null;
     const d = payload as Record<string, unknown>;
     const id = typeof d.message_id === "string" && d.message_id !== "" ? d.message_id : "nomsg";

@@ -32,6 +32,7 @@ import {
   TABLE_MARK,
 } from "../data/markup.js";
 import { renderView, type Dressing } from "../template/render.js";
+import { defersView } from "../platform/peers.js";
 import { namedFields } from "../template/view-data.js";
 import { inert, spanClose, spanOpen } from "../style.js";
 import { fenceAt, fenceSpans, type Fence } from "./fences.js";
@@ -400,6 +401,12 @@ export function renderDecorated(
       continue; // a refused payload's lines follow untouched: raw markdown, valid anyway
     }
     const { deco, payload, end } = zone;
+    // A newer engine on this machine has this view too, so the zone is left exactly as written, decorator included, and
+    // reaches that engine untouched. Refused the way every other refusal here works: the payload's lines follow.
+    if (defersView(deco.view)) {
+      out.push(lines[i]);
+      continue;
+    }
     try {
       const data: Scope = payload === null ? {} : payload.data;
       // See Payload.type: the unset field IS the precedence rule.

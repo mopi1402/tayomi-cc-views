@@ -3,13 +3,14 @@
 // .tayomi/tickets/cc-views-04.md, and the expectations the retired table POC could never satisfy (engage on intent,
 // name the template, name the type, keep the fallback native).
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { transform, slice, type DisplayHost } from "../pipeline.js";
 import { handleMessageDisplay } from "../hook/runner.js";
 import { cutStreamingDecorated, DECORATOR_HINT } from "./decorator.js";
+import { setDeferred } from "../platform/peers.js";
 import { VIEW_EXT } from "../template/load.js";
 import { ANSI_RE, renderTags, tagMark } from "../style.js";
 import { hasControlMark } from "../data/marks.js";
@@ -197,6 +198,42 @@ const labelText = (rows: string[]): string =>
 const options = { viewsPath: [first, second], width: WIDTH };
 
 const DECORATED = lines(decorator(ITEM), "| Item | Info |", DELIM, "| Decorator | one line above |");
+
+// WHOSE decision it is stays at the hook edge, which asks the machine's register once per flush. What this carrier owes
+// is to honour it per ZONE, so the state is set here directly and no register is involved.
+describe("a zone a newer engine also draws", () => {
+  afterEach(() => setDeferred(new Set()));
+
+  it("leaves the decorator and its payload exactly as written", () => {
+    setDeferred(new Set([ITEM]));
+    // Not one character rewritten: the decorator line survives, which is what lets the newer engine consume the zone.
+    expect(transform(DECORATED, undefined, true, undefined, options)).toBe(DECORATED);
+  });
+
+  it("draws, in that same message, the zone the decision does NOT name", () => {
+    // The whole reason the decision is per zone: standing down for the MESSAGE took this second zone with it, and
+    // nobody downstream had the view to draw it.
+    const msg = DECORATED + lines("", decorator(STATIC), "");
+    setDeferred(new Set([ITEM]));
+    const out = transform(msg, undefined, true, undefined, options).replace(ANSI_RE, "");
+    expect(out).toContain(decorator(ITEM));
+    expect(out).toContain("the box is the template");
+  });
+
+  it("hands the zone over WHOLE across a stream, flushed line by line", () => {
+    setDeferred(new Set([ITEM]));
+    let shown = "";
+    let from = 0;
+    const at = [...DECORATED].flatMap((c, i) => (c === "\n" ? [i + 1] : []));
+    for (const to of at) {
+      const got = slice(DECORATED.slice(0, from), DECORATED.slice(from, to), undefined, to === DECORATED.length, undefined, options);
+      shown += got ?? DECORATED.slice(from, to);
+      from = to;
+    }
+    // Withheld while the zone's end is unknown, then released untouched: over the message, not per flush.
+    expect(shown).toBe(DECORATED);
+  });
+});
 
 describe("a payload-less decorator", () => {
   // The health-check ask: `@{view:welcome}` alone, no table below. Payload-LESS is a blank line or the end of the
@@ -1006,6 +1043,13 @@ describe("a decorator inside a code fence", () => {
 });
 
 describe("streaming", () => {
+  // The hook edge below consults the MACHINE's engine register, and cuts both ways: a real engine installed here would
+  // stand this test down and make a green run mean nothing, and its own claim would land in that register from source,
+  // declaring these fixture names to every engine on the machine. Pointed at an empty one of its own.
+  const peerHome = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-deco-peers-`));
+  beforeEach(() => vi.stubEnv("TMPDIR", peerHome));
+  afterEach(() => vi.unstubAllEnvs());
+
   it("withholds the zone until its end is known, on an in-order stream", () => {
     const chunks = ["intro", decorator(ITEM), EMPTY_HEADER, DELIM, "| k | **v** |", "after"].map(
       (l) => `${l}\n`

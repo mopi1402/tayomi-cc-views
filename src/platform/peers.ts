@@ -16,11 +16,20 @@ import { fileURLToPath } from "node:url";
 import { ENGINE_VERSION } from "../data/engine.js";
 import { ENGINES_DIR, NO_YIELD_ENV, SCRATCH_DIR } from "../data/markup.js";
 
-/** One engine's claim: where it runs from, and the version of the code that would draw. */
+/**
+ * One engine's claim: where it runs from, the version of the code that would draw, and the view NAMES it can resolve.
+ * The names are what makes the yield a per-ZONE decision: an engine stands aside on a view a newer engine also has, and
+ * draws every other one itself, with its own templates and its own host's colours.
+ */
 export interface Peer {
   path: string;
   version: string;
+  views: string[];
 }
+
+// A claim is a file another process wrote, read as input and never as truth. The cap bounds what one entry can cost on
+// EVERY flush.
+const MAX_VIEWS = 256;
 
 /**
  * Read at CALL time, and machine-wide on purpose: `RenderOptions.stateDir` exists so a host does NOT share scratch with
@@ -107,8 +116,22 @@ function selfPath(): string {
   }
 }
 
-/** THIS engine: the module that would draw, and the version the drawing code answers with. */
-export const SELF: Peer = { path: selfPath(), version: ENGINE_VERSION };
+/** THIS engine's IDENTITY: the module that would draw, and the version the drawing code answers with. */
+export const SELF: Peer = { path: selfPath(), version: ENGINE_VERSION, views: [] };
+
+/**
+ * The claim this flush announces. The names come from the CALLER's own search path, never from a default: a host
+ * composing its own `viewsPath` resolves from nowhere else, and the register must state what would really be found.
+ */
+export function selfClaim(views: string[]): Peer {
+  return { ...SELF, views: views.slice(0, MAX_VIEWS) };
+}
+
+/** The one open field, kept to what a reader can vouch for: a list of strings, bounded. */
+function statedViews(read: unknown): string[] {
+  if (!Array.isArray(read)) return [];
+  return read.slice(0, MAX_VIEWS).filter((name): name is string => typeof name === "string");
+}
 
 function entryPath(dir: string, of: string): string {
   return path.join(dir, createHash(DIGEST).update(of).digest("hex").slice(0, KEY_LEN));
@@ -160,7 +183,7 @@ export function peers(dir: string = peersDir(), self: Peer = SELF): Peer[] {
         fs.rmSync(file, { force: true });
         continue;
       }
-      out.push({ path: claim.path, version: claim.version });
+      out.push({ path: claim.path, version: claim.version, views: statedViews(claim.views) });
     } catch {
       // malformed, vanished under us, or unreadable: a claim that cannot be read silences nobody
     }
@@ -169,21 +192,53 @@ export function peers(dir: string = peersDir(), self: Peer = SELF): Peer[] {
 }
 
 /**
- * Announce, then say whether a strictly NEWER engine is registered. The announce comes first and always: an engine that
- * only appeared on the register when it drew would vanish from it the moment it started yielding, and the two would
- * take turns.
+ * The views a strictly NEWER engine also has. Those and only those are the zones this engine stands aside on: a view no
+ * newer engine declares is one only this engine can draw, and a view nobody else has is nobody else's to draw.
  *
- * Total. Every failure answers false, because the cost of a wrong yield is a blank where a view was, and the cost of a
- * wrong draw is the screen this machine already had.
+ * Names rather than a verdict on the whole message, which is the entire point. An engine that stood down for a message
+ * left every zone in it to whoever ran next, so a view the newer engine did NOT have reached the screen as raw text
+ * with nobody left to draw it. Standing aside per zone costs nothing: the chain already consumes zone by zone.
  */
-export function yieldsToNewer(dir: string = peersDir(), self: Peer = SELF): boolean {
+export function newerViews(list: Peer[], self: Peer = SELF): Set<string> {
+  const out = new Set<string>();
+  if (parse(self.version) === null) return out; // unrankable: this engine outranks nobody and defers to nobody
+  for (const peer of list) {
+    if (compareVersions(peer.version, self.version) <= 0) continue;
+    for (const name of peer.views) out.add(name);
+  }
+  return out;
+}
+
+// The names this flush stands aside on, installed once by the hook edge and read per zone by the carriers. Module state
+// rather than an argument threaded through the pipeline: a flush is one synchronous pass in a process of its own.
+let DEFERRED: ReadonlySet<string> = new Set();
+
+/** Install what this flush defers. Empty is the answer for every failure, and empty means DRAW. */
+export function setDeferred(names: ReadonlySet<string>): void {
+  DEFERRED = names;
+}
+
+/** Whether a newer engine on this machine also has this view, so this one leaves the zone for it. */
+export function defersView(name: string): boolean {
+  return DEFERRED.has(name);
+}
+
+/**
+ * Announce this engine and work out what it stands aside on. The announce comes first and always: an engine that only
+ * appeared on the register when it drew would vanish from it the moment it started deferring, and the two would take
+ * turns.
+ *
+ * Total. Every failure defers NOTHING, because the cost of a wrong deferral is a blank where a view was, and the cost
+ * of a wrong draw is the screen this machine already had.
+ */
+export function standAside(views: string[], dir: string = peersDir(), me: Peer = SELF): void {
   try {
+    const self = { ...me, views: views.slice(0, MAX_VIEWS) };
     announce(dir, self);
-    const set = process.env[NO_YIELD_ENV];
-    if (set !== undefined && set !== "") return false;
-    if (parse(self.version) === null) return false;
-    return peers(dir, self).some((p) => compareVersions(p.version, self.version) > 0);
+    const off = process.env[NO_YIELD_ENV];
+    if (off !== undefined && off !== "") return setDeferred(new Set());
+    setDeferred(newerViews(peers(dir, self), self));
   } catch {
-    return false;
+    setDeferred(new Set());
   }
 }

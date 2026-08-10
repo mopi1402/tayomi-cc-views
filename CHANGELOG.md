@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.0
+
+- Two engines on one machine no longer race: the newest one HOLDING a view draws it
+- Each engine announces its path, its version and the view names it resolves
+- Per ZONE: a view only one engine has is always drawn by that engine
+- `CC_VIEWS_NO_YIELD` turns it off, and every failure to read the register means draw
+
 ## 2.0.0
 
 - BREAKING: `DisplayHost.inject` receives parsed data instead of the block's raw text

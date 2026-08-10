@@ -28,7 +28,19 @@ const options = { viewsPath: [BUNDLED], width: 60, stateDir };
 const NEWER = `${Number(ENGINE_VERSION.split(".")[0]) + 1}.0.0`;
 
 const SENTENCE = "la ligne que tu aurais ecrite de toute facon";
-const MESSAGE = ["@{view:quote, tone:gold}", `> ${SENTENCE}`].join("\n");
+/** A view BOTH engines have, which is the only kind a stand-aside applies to. */
+const SHARED = "quote";
+const MESSAGE = [`@{view:${SHARED}, tone:gold}`, `> ${SENTENCE}`].join("\n");
+
+/** Another engine on the machine, real file behind it, declaring the views it can draw. */
+function otherEngine(version: string, views: string[]): string {
+  const at = path.join(home, `engine-${version}-${n}.js`);
+  fs.writeFileSync(at, "", "utf8");
+  announce(peersDir(), { path: at, version, views });
+  return at;
+}
+
+const newerThan = (...views: string[]): string => otherEngine(NEWER, views);
 
 let n = 0;
 const flush = async (): Promise<string | null> =>
@@ -65,20 +77,43 @@ describe("two engines, one screen", () => {
     expect(out).not.toContain("@{view:");
   });
 
-  it("hands the whole message on where a NEWER engine is registered", async () => {
-    const at = path.join(home, "newer.js");
-    fs.writeFileSync(at, "", "utf8");
-    announce(peersDir(), { path: at, version: NEWER });
-    // Nothing at all, so the dispatcher passes the delta to the next hook in the chain: the newer engine gets the
-    // message exactly as the model wrote it, decorator included, and draws it itself.
-    expect(await flush()).toBeNull();
+  it("leaves the zone whose view a NEWER engine ALSO has, exactly as written", async () => {
+    newerThan(SHARED);
+    // Not rewritten at all: the decorator and its payload reach the next hook in the chain character for character, and
+    // the newer engine is the one that consumes them.
+    expect(drawn(await flush())).toBe(MESSAGE);
+  });
+
+  // The case the per-message stand-down used to lose, and the reason the decision is per zone: an engine that went
+  // silent for the whole message took this second zone down with it, and nobody else had the view to draw it.
+  it("still draws, in that same message, the view the newer engine does NOT have", async () => {
+    newerThan(SHARED);
+    const out = drawn(
+      await handleMessageDisplay(
+        {
+          message_id: `mixed-${process.pid}-${n++}`,
+          index: 0,
+          delta: [MESSAGE, "", "@{view:welcome}"].join("\n"),
+          final: true,
+        },
+        undefined,
+        options
+      )
+    );
+    // Theirs is left alone...
+    expect(out).toContain(`@{view:${SHARED}, tone:gold}`);
+    // ...and ours is drawn in the very same flush.
+    expect(out).toContain("Welcome!");
+  });
+
+  it("draws a view they BOTH have when the other engine is OLDER", async () => {
+    otherEngine("0.0.1", [SHARED]);
+    expect(drawn(await flush())).toContain(SENTENCE);
   });
 
   it("goes back to drawing the moment that engine is gone", async () => {
-    const at = path.join(home, "gone.js");
-    fs.writeFileSync(at, "", "utf8");
-    announce(peersDir(), { path: at, version: NEWER });
-    expect(await flush()).toBeNull();
+    const at = newerThan(SHARED);
+    expect(drawn(await flush())).toBe(MESSAGE);
     fs.rmSync(at);
     expect(drawn(await flush())).toContain(SENTENCE);
   });

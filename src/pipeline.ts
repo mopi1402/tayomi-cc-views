@@ -15,6 +15,7 @@ import {
 import { CRLF, NL } from "./data/markup.js";
 import { defaultViewsPath } from "./template/load.js";
 import { renderView } from "./template/render.js";
+import { defersView } from "./platform/peers.js";
 import { parseData } from "./template/view-data.js";
 import {
   failedOutcome,
@@ -50,6 +51,8 @@ export function transform(
     // A block quoted inside an ordinary fence is an EXAMPLE. Its own fence is the one span it may be inside.
     const fence = fenceAt(fences, at);
     if (fence !== undefined && !fence.carrier) return m;
+    // A newer engine on this machine has this view too, so the zone is left exactly as written and reaches it untouched.
+    if (defersView(name)) return m;
     try {
       // The host is handed the block PARSED, never its text: the same shape a decorated zone hands over, with lists
       // unsplit since @fields is the template's business.

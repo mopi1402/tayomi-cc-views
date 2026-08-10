@@ -6,15 +6,18 @@
 // THE SLICE CONTRACT: concatenated slices equal the target transform of the whole message. Checked by replaying a
 // message at several chunk sizes against one whole render.
 
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { BLOCK_HINT, DECORATOR_CLOSE, DECORATOR_HINT, FENCE, VIEW_EXT } from "./data/markup.js";
 import { slice, transform, type DisplayHost } from "./pipeline.js";
+import { setDeferred } from "./platform/peers.js";
 import { ANSI_RE, tagMark } from "./style.js";
 
 const NAME = "probe";
+/** A second view of the same shape, so one message can hold a zone that is deferred and a zone that is not. */
+const OURS = "ours_alone";
 const STRICT = "strict_probe";
 const WIDTH = 60;
 const CHUNKS = [1, 2, 7, 23];
@@ -24,6 +27,7 @@ afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 const view = (name: string, body: string): void =>
   fs.writeFileSync(path.join(dir, name + VIEW_EXT), body);
 view(NAME, "said: ${said}\n");
+view(OURS, "said: ${said}\n");
 view(STRICT, "said: ${said}\n");
 
 const options = { viewsPath: [dir], width: WIDTH };
@@ -104,6 +108,45 @@ describe("transform", () => {
   it("neutralises a tag the block's DATA carries, so data cannot open a colour", () => {
     const out = render(block(NAME, `said: ${tagMark("warn")}danger`));
     expect(plain(out)).toContain(`${tagMark("warn")}danger`);
+  });
+});
+
+// WHOSE decision it is stays at the hook edge, which asks the machine's register once per flush. What this module owes
+// is to honour it per ZONE, so the state is set here directly and no register is involved.
+describe("a zone a newer engine also draws", () => {
+  afterEach(() => setDeferred(new Set()));
+
+  it("leaves the block exactly as written, fences included", () => {
+    const msg = block(NAME, "said: theirs");
+    setDeferred(new Set([NAME]));
+    expect(render(msg)).toBe(msg);
+  });
+
+  it("renders, in that same message, the block the decision does NOT name", () => {
+    // The whole reason the decision is per zone: standing down for the MESSAGE took this second block with it, and
+    // nobody downstream had the view to draw it.
+    setDeferred(new Set([NAME]));
+    const out = plain(render(block(NAME, "said: theirs") + block(OURS, "said: ours")));
+    expect(out).toContain(BLOCK_HINT + NAME);
+    expect(out).toContain("said: ours");
+  });
+
+  it("hands the whole zone over across a stream, flushed line by line", () => {
+    // Withholding runs whatever the decision says, so a non-final flush still cuts an unclosed block: what the newer
+    // engine receives is the zone WHOLE at the end, and the identity is over the message, never per flush.
+    const msg = block(NAME, "said: theirs");
+    setDeferred(new Set([NAME]));
+    expect(replayAt(msg, everyLine(msg))).toBe(msg);
+  });
+
+  it("leaks only the head of the fence, cut one character per flush", () => {
+    // The same accepted residual a rendered zone carries, and it must be no worse here: everything downstream needs
+    // arrives, and the stale characters are the opening token's alone.
+    const msg = block(NAME, "said: theirs");
+    setDeferred(new Set([NAME]));
+    const shown = replayAt(msg, everyNth(msg, 1));
+    expect(shown).toContain(msg);
+    expect(shown.replace(msg, "")).toBe(BLOCK_HINT.slice(0, shown.length - msg.length));
   });
 });
 

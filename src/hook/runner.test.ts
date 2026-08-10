@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { handleMessageDisplay, type MessageContext } from "./runner.js";
 import { readEarlier } from "../platform/stream-state.js";
-import { announce, peersDir } from "../platform/peers.js";
+import { announce, peers, peersDir } from "../platform/peers.js";
 import { ANSI_RE } from "../style.js";
 import { ENGINE_VERSION } from "../data/engine.js";
 import { BOX, EACH, END, ENDBOX, HEAD } from "../data/language.js";
@@ -37,6 +37,8 @@ const registerHome = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-runne
 /** Told apart from this engine by version alone, and DERIVED from it so neither can drift into the other. */
 const NEWER = `${Number(ENGINE_VERSION.split(".")[0]) + 1}.0.0`;
 const OLDER = "0.0.1";
+/** The view both engines have: the only kind a stand-aside can apply to. */
+const SHARED_VIEWS = ["note"];
 
 beforeEach(() => {
   fs.rmSync(path.join(registerHome, SCRATCH_DIR), { recursive: true, force: true });
@@ -51,7 +53,7 @@ afterEach(() => {
 function otherEngine(version: string): void {
   const at = path.join(registerHome, `engine-${version}.js`);
   fs.writeFileSync(at, "", "utf8");
-  announce(peersDir(), { path: at, version });
+  announce(peersDir(), { path: at, version, views: SHARED_VIEWS });
 }
 
 let n = 0;
@@ -141,11 +143,12 @@ describe("handleMessageDisplay", () => {
 describe("when another engine is registered on the machine", () => {
   const block = "```view:note\nnote:\n- a\n```";
 
-  it("stands down for a NEWER one, so the delta reaches it untouched", async () => {
-    // Null is what this edge already answers for "nothing to say", and it is exactly what standing down means: the
-    // dispatcher hands the raw delta to the next hook in the chain, which is the newer engine.
+  it("stands aside on a view a NEWER one also has, so the delta reaches it untouched", async () => {
+    // Not one character rewritten, so the next hook in the chain receives the block exactly as the model wrote it and
+    // the newer engine is the one that consumes it.
     otherEngine(NEWER);
-    expect(await handleMessageDisplay(payload(msg(), 0, block, true), undefined, options)).toBeNull();
+    const out = await handleMessageDisplay(payload(msg(), 0, block, true), undefined, options);
+    expect(shown(out)).toBe(block);
   });
 
   it("draws for an OLDER one, which is the half a bare presence check would get wrong", async () => {
@@ -155,5 +158,16 @@ describe("when another engine is registered on the machine", () => {
 
   it("draws where it is alone, which is every screen this engine has ever drawn", async () => {
     expect(shown(await handleMessageDisplay(payload(msg(), 0, block, true), undefined, options))).toContain("- a");
+  });
+
+  it("announces each view name ONCE, whatever the search path repeats", async () => {
+    // Read off the live register on 2026-08-11: two directories resolving the same names announced all of them twice.
+    // Shadowing is what an ORDERED path is for, and the claim's cap has to count views rather than directories.
+    await handleMessageDisplay(payload(msg(), 0, block, true), undefined, {
+      ...options,
+      viewsPath: [views, views],
+    });
+    const [mine] = peers(peersDir(), { path: "/somewhere/else", version: OLDER, views: [] });
+    expect(mine.views).toEqual(["note"]);
   });
 });
