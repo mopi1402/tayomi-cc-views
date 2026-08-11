@@ -95,13 +95,13 @@ Two habits go with it. Tests typecheck like the rest of the code, so a fixture t
 
 Unit tests cannot catch a broken `files` whitelist, a mis-wired bin, or a resolution that only fails in an INSTALLED copy. The gate replays the README's minimal setup end to end, locally:
 
-1. `npm pack`: the exact tarball `npm publish` would upload.
+1. `pnpm pack`: the exact tarball `pnpm publish` would upload. PNPM and not npm, because pnpm alone applies the `publishConfig` exports: a tarball npm builds ships the dev ones, pointing at a `src/` it does not carry.
 2. Asserts the files contract: `views/welcome.view` and the art its `@aside` names both ship; `docs/`, `examples/`, `src/` do not.
 3. Installs the tarball in a throwaway project.
 4. Feeds the INSTALLED bin one real MessageDisplay payload carrying a fenced `view:welcome` block, at TWO widths.
 5. Requires the dressed box on the other side: frame, title, every section, no raw fence. Wide, one line must carry both an art cell and a section label (the two columns compose); narrow, the art must be dropped whole rather than shredded.
 
-`prepublishOnly` chains `lint + typecheck + test + verify:pack`, so a real `npm publish` physically refuses to ship a red state.
+`prepublishOnly` opens on the publisher guard (`scripts/check-publisher.mjs`: pnpm or nothing) and chains the whole `pnpm verify`, so the wrong tool is refused outright and a red state cannot ship. The guard is not ceremony: an `npm publish` passes every gate and then uploads its OWN tarball, the ungated one (measured 2026-08-11, a 2.1.2 whose import threw, unpublished within the hour).
 
 ## The eye test: `sandbox/`
 

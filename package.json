@@ -1,6 +1,6 @@
 {
   "name": "@tayomi/cc-views",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "type": "module",
   "description": "Template-driven terminal rendering for Claude Code's MessageDisplay hook: data blocks in, coloured views on screen, zero tokens spent on presentation.",
   "license": "MIT",
@@ -46,7 +46,7 @@
     "assemble:plugin": "node scripts/assemble-plugin.mjs",
     "check:plugin": "node scripts/assemble-plugin.mjs --check",
     "verify": "pnpm lint && pnpm typecheck && pnpm check:sidecars && pnpm check:vocabulary && pnpm test && pnpm verify:pack && pnpm check:catalogue && pnpm check:skill && pnpm check:steering && pnpm check:plugin",
-    "prepublishOnly": "pnpm verify",
+    "prepublishOnly": "node scripts/check-publisher.mjs && pnpm verify",
     "check:skill": "node scripts/check-skill.mjs",
     "check:steering": "node scripts/check-steering.mjs",
     "sync:version": "node scripts/sync-version.mjs",

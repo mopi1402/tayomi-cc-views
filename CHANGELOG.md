@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.1.2
+## 2.1.3
 
 - A fold cutting a code span seals and reopens one space off the text
 - A backtick surviving resolution as text is drawn as the lookalike U+02CB

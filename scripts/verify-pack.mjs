@@ -25,8 +25,9 @@ try {
   // 1. The real tarball, exactly what `pnpm publish` would upload.
   //
   // PNPM, never `npm pack`: publishConfig swaps `exports` from the dev entry (./src/index.ts, kept OUT of the tarball)
-  // to the built one, and npm applies it at publish time alone. Measured: an npm-packed tarball installs and its binary
-  // draws, resolved through `bin`, while `import { renderView } from "@tayomi/cc-views"` throws ERR_MODULE_NOT_FOUND.
+  // to the built one, and pnpm ALONE applies it, npm at no step (measured 2026-08-11: an npm-PUBLISHED 2.1.2 shipped
+  // the dev exports). An npm tarball installs and its binary draws, resolved through `bin`, while
+  // `import { renderView } from "@tayomi/cc-views"` throws ERR_MODULE_NOT_FOUND. check-publisher.mjs guards the tool.
   execSync(`pnpm pack --pack-destination "${work}"`, { stdio: "pipe" });
   const tgzName = fs.readdirSync(work).find((f) => f.endsWith(".tgz"));
   if (!tgzName) fail("pnpm pack produced no tarball");
@@ -116,7 +117,11 @@ try {
     path.join(proj, "package.json"),
     JSON.stringify({ name: "verify-pack-project", private: true }, null, 2)
   );
-  execSync(`npm install --no-audit --no-fund "${tgz}"`, { cwd: proj, stdio: "pipe" });
+  // A publish lifecycle exports its flags to every child: under `pnpm publish --dry-run` this install
+  // inherits npm_config_dry_run, installs NOTHING in silence, and the import below fails first.
+  const installEnv = { ...process.env };
+  delete installEnv.npm_config_dry_run;
+  execSync(`npm install --no-audit --no-fund "${tgz}"`, { cwd: proj, stdio: "pipe", env: installEnv });
 
   // 3b. The PUBLIC API, by package name. The only step going through `exports`: every other resolves a path, so a
   // broken entry leaves them green while an adopter's own import throws.

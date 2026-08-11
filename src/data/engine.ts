@@ -5,7 +5,7 @@
 // scripts/sync-version.mjs writes the number and scripts/check-skill.mjs gates it.
 
 export const ENGINE_NAME = "@tayomi/cc-views";
-export const ENGINE_VERSION = "2.1.2";
+export const ENGINE_VERSION = "2.1.3";
 
 /** The one form a version is shown in, so a badge on screen and a `--version` on the command line compare by eye. */
 export const engineBadge = (): string => `${ENGINE_NAME} v${ENGINE_VERSION}`;
