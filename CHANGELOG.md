@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.2
+
+- A fold cutting a code span seals and reopens one space off the text
+- A backtick surviving resolution as text is drawn as the lookalike U+02CB
+- A star the bold pass did not spend is drawn as the lookalike U+2217
+
 ## 2.1.1
 
 - A code span closes on the run it opened on, and never past its own cell

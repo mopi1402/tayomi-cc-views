@@ -1,7 +1,7 @@
 // The ANSI vocabulary: the tag names a view may write, and what they render as.
 // Why the palette is process-global, and why only a template may spend it: docs/architecture/architecture.md.
 
-import { CODE_TICK, NL, TAG_CLOSE, TAG_OPEN } from "./data/markup.js";
+import { CODE_TICK, EMPHASIS_STAR, NL, TAG_CLOSE, TAG_OPEN } from "./data/markup.js";
 import {
   CELL_MARK,
   INERT_MARK,
@@ -744,12 +744,24 @@ export function fillTone(s: string, cls: string | undefined): string {
     .join(tagMark(cls));
 }
 
+// The host shows the drawn message through its OWN markdown pass, so a literal backtick or star surviving the
+// resolution is a delimiter there: the host eats the pair and restyles the text between, columns off the very rows the
+// layout had squared, and it pairs stars ACROSS LINES, slanting whole stretches of a table (both measured 2026-08-11,
+// Claude Code). Each lookalike keeps the glyph and says nothing to markdown, one column either way, so a width measured
+// before the swap still holds. Only what survives as TEXT is swapped: a span's or a bold run's own delimiters are
+// consumed before this runs, and the body a block falls through to never passes here.
+export const INERT_TICK = "ˋ"; // MODIFIER LETTER GRAVE ACCENT
+export const INERT_STAR = "∗"; // ASTERISK OPERATOR
+
+const inertMarkdown = (s: string): string =>
+  s.split(CODE_TICK).join(INERT_TICK).split(EMPHASIS_STAR).join(INERT_STAR);
+
 /**
  * Code spans as MARKS. It runs BEFORE fillTone and renderTags, so the style a span interrupts is still an unresolved
  * mark here and, where it is the tone slot, not yet even a colour: the terminator cannot be a sequence.
  */
 export function markCode(s: string): string {
-  return overCode(s, (x) => `${spanOpen(CODE)}${x}${spanClose(CODE)}`);
+  return inertMarkdown(overCode(s, (x) => `${spanOpen(CODE)}${x}${spanClose(CODE)}`));
 }
 
 /**
@@ -758,5 +770,5 @@ export function markCode(s: string): string {
  */
 export function renderCode(s: string): string {
   const open = resolveTag(CODE) ?? "";
-  return overCode(s, (x) => `${open}${x}${R}`);
+  return inertMarkdown(overCode(s, (x) => `${open}${x}${R}`));
 }

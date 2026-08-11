@@ -9,7 +9,7 @@ import { describe, it, expect } from "vitest";
 import { FENCE } from "../data/markup.js";
 import { RESET_MARK, RESUME_MARK, SPAN_MARK, chip, tagMark } from "../style.js";
 import { CELL_MARK, HANG_MARK, STACK_MARK, TAIL_MARK, VOID_MARK } from "./marks.js";
-import { printedWidth } from "./measure.js";
+import { printedText, printedWidth } from "./measure.js";
 import { foldText, stackCell, wrapLine } from "./wrap.js";
 
 /** The section bar a template draws down its left margin; wrap.ts keeps it private. */
@@ -122,6 +122,46 @@ describe("a code span the wrap cuts", () => {
     expect(rows.length).toBeGreaterThan(1);
     expect(rows[0].endsWith(pair)).toBe(true);
     expect(rows[1].startsWith(pair)).toBe(true);
+  });
+
+  it("seals one space OFF the text, so a cut landing after a backtick the span HOLDS still parses", () => {
+    // The near-miss that used to print: flush, the seal fused with the inner tick into a run of three, no closer
+    // matched it, and the delimiters the fill had charged at nothing reached the screen, three columns past the border.
+    const pair = TICK.repeat(2);
+    const rows = foldText(`${pair} un ${TICK}mot${TICK} deux trois ${pair}`, 10);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(fits(rows, 10)).toBe(true);
+    expect(rows.map(printedText).join(" ")).toBe(`un ${TICK}mot${TICK} deux trois`);
+  });
+
+  it("reopens one space off too, for the cut landing right BEFORE a held backtick", () => {
+    const pair = TICK.repeat(2);
+    const rows = foldText(`${pair} un ${TICK}mot${TICK} fin ${pair}`, 6);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(fits(rows, 6)).toBe(true);
+    expect(rows.map(printedText).join(" ")).toBe(`un ${TICK}mot${TICK} fin`);
+  });
+
+  it("pads the flush span it rebuilds, one uncharged space the resolver strips back off", () => {
+    // Every fragment of a cut span needs the pad at BOTH ends or the strip refuses it, and the seal's own pad would
+    // print. Giving the flush span the padding CommonMark lets it omit costs nothing a reader sees: same text back,
+    // same single column.
+    const rows = foldText(`${TICK}x${TICK}`, LIMIT);
+    expect(rows).toEqual([`${TICK} x ${TICK}`]);
+    expect(printedWidth(rows[0])).toBe(1);
+  });
+
+  it("leaves a span of ONLY spaces flush, whose pads the strip would refuse and print", () => {
+    const blank = `${TICK}  ${TICK}`;
+    expect(foldText(blank, LIMIT)).toEqual([blank]);
+  });
+
+  it("folds a flush-written span and hands the resolver the same text back", () => {
+    const pair = TICK.repeat(2);
+    const rows = foldText(`${pair}alpha beta gamma${pair}`, 8);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(fits(rows, 8)).toBe(true);
+    expect(rows.map(printedText).join(" ")).toBe("alpha beta gamma");
   });
 });
 

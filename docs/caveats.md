@@ -56,6 +56,7 @@ Every failure to read that register means DRAW, never a silence: an unreadable d
 | An interrupted message never reveals what was withheld | That message alone, no final flush ever arrives | Claude Code's dispatcher |
 | Headless (`claude -p`) shows plain data | End-to-end checks are manual; everything below `handleMessageDisplay` stays unit-testable | Claude Code: no display to hook |
 | A colour the HOST opened is not resumed after an engine span | A code span, chip or bold span sitting inside a sequence the engine did not write; the reset still happens there | Deliberate: the engine tracks its own marks, never arbitrary sequences on the line |
+| A backtick or a star a drawn line shows is a lookalike (U+02CB, U+2217), never the character itself | Only what survives resolution as TEXT: a tick a span holds, an orphan, a star the bold pass did not spend. Resolved delimiters were never text at all, and the BODY a block falls through to keeps its own | Claude Code re-reads the drawn message as markdown: a literal pair is a delimiter there, eaten off the very rows the layout had squared, and stars pair ACROSS LINES, slanting whole stretches of a table (both measured 2026-08-11). The engine draws what markdown cannot eat |
 
 ## Reference: the `@` collision catalogue
 

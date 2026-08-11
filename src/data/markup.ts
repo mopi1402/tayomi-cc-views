@@ -38,6 +38,9 @@ export const TAG_CLOSE = "}}";
 
 export const CODE_TICK = "`";
 
+/** Markdown's emphasis character: what the decorator's bold matcher spends, and what no drawn line may carry as text. */
+export const EMPHASIS_STAR = "*";
+
 export const FENCE = "```";
 /**
  * The INFO STRING marking a fence as this engine's own carrier rather than an ordinary code block. It is what tells the

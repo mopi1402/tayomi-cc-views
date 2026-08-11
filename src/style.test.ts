@@ -5,11 +5,13 @@
 // the render meant to keep), and a host's registration is total (a throw at startup once killed a whole display).
 
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { BLOCK_INFO, CODE_TICK, FENCE, THEME_ENV } from "./data/markup.js";
+import { BLOCK_INFO, CODE_TICK, EMPHASIS_STAR, FENCE, THEME_ENV } from "./data/markup.js";
 import { CELL_MARK, STACK_MARK } from "./data/marks.js";
 import {
   ANSI_RE,
   CHIP_CHROME,
+  INERT_STAR,
+  INERT_TICK,
   RESET_MARK,
   RESUME_MARK,
   TAG_RE,
@@ -887,6 +889,47 @@ describe("the patterns a measurer shares", () => {
   it("renders a code span in the pinned accent", () => {
     expect(renderCode("run `it`")).toContain(ESC);
     expect(renderCode("run it")).toBe("run it");
+  });
+});
+
+// The host re-reads the drawn message through its own markdown pass, and a literal backtick pair there is an
+// inline-code delimiter: eaten, it pulled the border of the very rows the layout had squared. Only what SURVIVES the
+// resolution is swapped: the delimiters are already consumed, and the body a block falls through to never passes here.
+describe("the backtick a drawn line may not carry", () => {
+  it("draws a backtick the span HOLDS as the lookalike, the pair being what the host eats", () => {
+    const pair = CODE_TICK.repeat(2);
+    const out = renderTags(markCode(`a ${pair} ${CODE_TICK}b${CODE_TICK} ${pair} c`));
+    expect(out).not.toContain(CODE_TICK);
+    expect(out).toContain(`${INERT_TICK}b${INERT_TICK}`);
+  });
+
+  it("draws an orphan the same way: the near-miss stays VISIBLE, and stays harmless", () => {
+    expect(renderTags(markCode(`a ${CODE_TICK}b`))).toBe(`a ${INERT_TICK}b`);
+  });
+
+  it("spends none on a resolved span, whose delimiters were never text at all", () => {
+    expect(renderTags(markCode(`run ${CODE_TICK}it${CODE_TICK}`))).not.toContain(INERT_TICK);
+  });
+
+  it("guards the host's own door with the same swap", () => {
+    expect(renderCode(`x ${CODE_TICK} y`)).toBe(`x ${INERT_TICK} y`);
+  });
+
+  it("costs the column the backtick cost, so a width measured before the swap still holds", () => {
+    expect(printedWidth(INERT_TICK)).toBe(printedWidth(CODE_TICK));
+  });
+
+  it("draws a surviving star as the operator lookalike, which cannot pair across lines", () => {
+    // The star's own aggravation: the host pairs them across the LINES of a drawn table, so one stray star two rows up
+    // slants a whole column of labels and pulls every row that lost its pair.
+    expect(renderTags(markCode(`des ${EMPHASIS_STAR}simples${EMPHASIS_STAR} et un seul ${EMPHASIS_STAR}`)).includes(EMPHASIS_STAR)).toBe(false);
+    expect(renderTags(markCode(`a ${EMPHASIS_STAR}b${EMPHASIS_STAR} c`))).toBe(
+      `a ${INERT_STAR}b${INERT_STAR} c`
+    );
+  });
+
+  it("costs the column the star cost too", () => {
+    expect(printedWidth(INERT_STAR)).toBe(printedWidth(EMPHASIS_STAR));
   });
 });
 

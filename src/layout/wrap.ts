@@ -17,6 +17,7 @@ import {
   tagMark,
   tagSource,
   trackTag,
+  type CodeSpan,
 } from "../style.js";
 import { CELL_MARK, HANG_MARK, STACK_MARK, TAIL_MARK, VOID_MARK } from "./marks.js";
 import { padCell, printedWidth } from "./measure.js";
@@ -48,6 +49,13 @@ const delimAtom = (run: string): Atom => ({ s: run, w: 0, space: false, tick: tr
 // there. Never a break opportunity either, or a fold could part the padding from the run it belongs to.
 const padAtom = (pad: string): Atom => ({ s: pad, w: 0, space: false, tick: false });
 
+// A span the author wrote FLUSH is given the padding CommonMark lets it omit: the fold seals and reopens on a padded
+// run, and the strip that consumes a pad takes one space off EACH end or none at all, so every fragment needs both.
+// Position for position the stripped spaces are exactly the uncharged ones, and the drawn row keeps the measured width.
+// All-space content stays flush: the strip refuses a span of only spaces, and the pads would print.
+const holdsInk = (text: string, span: CodeSpan): boolean =>
+  text.slice(span.textAt, span.textEnd).trim() !== "";
+
 function atomize(text: string): Atom[] {
   const atoms: Atom[] = [];
   // One atom per GRAPHEME CLUSTER, not per code unit: the greedy fill below would cut a surrogate pair or a joined
@@ -65,12 +73,14 @@ function atomize(text: string): Atom[] {
       atoms.push(delimAtom(span.run));
       const from = span.at + span.run.length;
       if (from < span.textAt) atoms.push(padAtom(text.slice(from, span.textAt)));
+      else if (holdsInk(text, span)) atoms.push(padAtom(SPACE));
       i = span.textAt;
       continue;
     }
     if (span !== undefined && i === span.textEnd) {
       const upto = span.end - span.run.length;
       if (span.textEnd < upto) atoms.push(padAtom(text.slice(span.textEnd, upto)));
+      else if (holdsInk(text, span)) atoms.push(padAtom(SPACE));
       atoms.push(delimAtom(span.run));
       i = span.end;
       n++;
@@ -200,12 +210,17 @@ export function foldText(text: string, width: number): string[] {
   // WHICH, and it counted the tag of a COMPLETE engine span as still standing.
   const open: string[] = [];
   // The delimiter RUN a span is standing on, empty where none is: a row is closed and the next reopened on that same
-  // run, and reopening on one backtick would leave a span of three closed by a span of one.
+  // run, and reopening on one backtick would leave a span of three closed by a span of one. One space OFF the text at
+  // both: flush, a seal landing beside a backtick the span HOLDS fuses with it into a longer run, no closer matches it,
+  // and the delimiters the fill charged at nothing print after all. The pad is the one atomize guarantees at the span's
+  // own ends, so the strip downstream consumes it and the row keeps its width.
   let run = "";
+  const seal = (): string => (run === "" ? "" : SPACE + run);
+  const reopen = (): string => (run === "" ? "" : run + SPACE);
   for (const atoms of groups) {
     // What the row before left standing, replayed IN ORDER, boundaries included: a row is self-contained, or the
     // closer further down unwinds to the wrong place.
-    let s = open.map((e) => (e === SPAN_MARK ? SPAN_MARK : tagMark(e))).join("") + run;
+    let s = open.map((e) => (e === SPAN_MARK ? SPAN_MARK : tagMark(e))).join("") + reopen();
     for (const a of atoms) {
       s += a.s;
       if (a.tick) run = run === "" ? a.s : "";
@@ -215,7 +230,7 @@ export function foldText(text: string, width: number): string[] {
     }
     // A code span cut in two is closed and reopened, otherwise the orphan run reaches the screen and neither half
     // renders as code. The style around it is sealed the same way, and for the same reason.
-    out.push(closeCut(s + run, open));
+    out.push(closeCut(s + seal(), open));
   }
   return out;
 }

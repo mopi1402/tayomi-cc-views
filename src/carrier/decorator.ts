@@ -27,6 +27,7 @@ import {
 import {
   DECORATOR_CLOSE,
   DECORATOR_HINT,
+  EMPHASIS_STAR,
   NAME_MARK,
   QUOTE_MARK,
   TABLE_MARK,
@@ -155,7 +156,10 @@ function rowFields(cells: string[], read: (raw: string) => string): DecoratedRow
 
 // PER SPAN, so the emphasis survives every re-render from the transcript and nothing is added the message did not
 // carry. Whole-cell bolding is what buried the POC.
-const BOLD_SPAN_RE = /\*\*([^*\n]+)\*\*/g;
+/** The star, escaped for a pattern: it is regex punctuation. */
+const STAR = `\\${EMPHASIS_STAR}`;
+// eslint-disable-next-line security/detect-non-literal-regexp
+const BOLD_SPAN_RE = new RegExp(`${STAR}${STAR}([^${EMPHASIS_STAR}\\n]+)${STAR}${STAR}`, "g");
 const BOLD_TAG = "b";
 const BOLD_SPAN = `${spanOpen(BOLD_TAG)}$1${spanClose(BOLD_TAG)}`;
 

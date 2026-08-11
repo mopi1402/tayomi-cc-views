@@ -12,7 +12,7 @@ import { handleMessageDisplay } from "../hook/runner.js";
 import { cutStreamingDecorated, DECORATOR_HINT } from "./decorator.js";
 import { setDeferred } from "../platform/peers.js";
 import { VIEW_EXT } from "../template/load.js";
-import { ANSI_RE, renderTags, tagMark } from "../style.js";
+import { ANSI_RE, INERT_STAR, renderTags, tagMark } from "../style.js";
 import { hasControlMark } from "../data/marks.js";
 import {
   EACH,
@@ -306,6 +306,22 @@ describe("a decorated payload", () => {
     const out = transform(decorated(decorator(ITEM), "| a | so **very** bold |"), undefined, true, undefined, options);
     expect(out).toContain(`${BOLD}very`);
     expect(out).not.toContain("*");
+  });
+
+  it("sends the star a bold pass left behind to the screen as the lookalike, never raw", () => {
+    // The near-miss twice over: a single pair is EMPHASIS the engine does not honour, and a run never closed is not
+    // bold at all. Both used to reach the host as literal stars, and the host pairs those across the drawn table's own
+    // lines: one stray star slanted a column of labels and pulled every row that lost its pair.
+    const out = transform(
+      decorated(decorator(ITEM), "| a | des *simples* et un **jamais fermé |"),
+      undefined,
+      true,
+      undefined,
+      options
+    );
+    expect(out).not.toContain("*");
+    expect(out.replace(ANSI_RE, "")).toContain(`${INERT_STAR}simples${INERT_STAR}`);
+    expect(out.replace(ANSI_RE, "")).toContain(`${INERT_STAR}${INERT_STAR}jamais fermé`);
   });
 
   it("honours the `**` it derives, and nothing the cell wrote as markup itself", () => {
