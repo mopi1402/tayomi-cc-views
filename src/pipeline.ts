@@ -13,7 +13,7 @@ import {
   renderDecorated,
 } from "./carrier/decorator.js";
 import { CRLF, NL } from "./data/markup.js";
-import { defaultViewsPath } from "./template/load.js";
+import { defaultViewsPath, resolvesView } from "./template/load.js";
 import { renderView } from "./template/render.js";
 import { defersView } from "./platform/peers.js";
 import { parseData } from "./template/view-data.js";
@@ -71,10 +71,12 @@ export function transform(
   });
   // Withholding is the NON-FINAL flush's business: a cut promises that a later flush reveals what it holds back, and on
   // the last delta no later flush exists (a block that never closes used to be cut away here and never came back).
-  // Withheld first, rendered second, so a half-formed payload can never render.
+  // Withheld first, rendered second, so a half-formed payload can never render. Neither cut engages on a view this
+  // engine cannot resolve: not its zone, so it streams as prose and nothing is ever re-emitted over a peer's render.
   if (final !== true) {
-    out = cutUnclosedBlock(out);
-    out = cutStreamingDecorated(out);
+    const resolves = (name: string, type?: string): boolean => resolvesView(name, dirs, type);
+    out = cutUnclosedBlock(out, resolves);
+    out = cutStreamingDecorated(out, resolves);
   }
   // NO tag pass here, and the absence is the rule: only a template resolves a tag.
   const decorated = renderDecorated(out, dirs, options, host, cwd);
@@ -141,12 +143,17 @@ export function slice(
   cwd?: string,
   options?: RenderOptions
 ): string | null {
-  const full = prev + (typeof delta === "string" ? delta : "");
+  const d = typeof delta === "string" ? delta : "";
+  const full = prev + d;
   if (!engaged(full)) return null;
   const before = transform(prev, host, false, cwd, options);
   const after = transform(full, host, final, cwd, options);
   // `before` is normally a prefix of `after`. The one shape that breaks it is a CARRIER TOKEN cut mid-way at the end of
   // `prev` ("@{view:ta"), prose to the cut there and an anchor once complete. Slicing at the shared prefix re-emits
   // from the divergence, so the corrected text always reaches the screen and no content is dropped.
-  return after.slice(sharedPrefix(before, after));
+  const shown = after.slice(sharedPrefix(before, after));
+  // An answer IDENTICAL to the delta is an echo. Alone it says what omitting already says, "show the original"; in a
+  // chain it is a DEFINED answer, and the dispatcher keeps the LAST of those, so an echo landing after the render a
+  // peer answered for this same flush replaced that render with raw text (measured 2026-08-12).
+  return shown === d ? null : shown;
 }

@@ -8,13 +8,22 @@ import { describe, it, expect } from "vitest";
 import {
   BOX,
   DEFAULT_KEY,
+  DIAGRAM,
   EACH,
   END,
   ENGINE_REF,
+  FIELD_CONTENT,
+  FIELD_HEAD,
+  FIELD_ROWS,
+  FIELD_TYPE,
   FIELDS,
+  FOOT,
   INDEX_REF,
   ITEM_REF,
   MAP,
+  PAYLOAD_FENCE,
+  PAYLOAD_QUOTE,
+  PAYLOAD_TABLE,
   RIGHT,
   TEXT,
   TONE,
@@ -195,5 +204,59 @@ describe("spendsSlots", () => {
 
   it("is true for an ordinary field", () => {
     expect(parseTemplate(ref("said")).spendsSlots).toBe(true);
+  });
+});
+
+describe(DIAGRAM, () => {
+  const ref = (name: string): string => `\${${name}}`;
+  const DIAGRAM_BODY = lines(DIAGRAM, ref(FIELD_CONTENT));
+
+  it("declares the body a diagram source, which claims the fence payload and nothing else can", () => {
+    const t = parseTemplate(DIAGRAM_BODY);
+    expect(t.diagram).toBe(true);
+    expect(t.payload).toBe(PAYLOAD_FENCE);
+  });
+
+  it("outranks the scoring: spending `content` alone reads as a quote in any other template", () => {
+    expect(parseTemplate(ref(FIELD_CONTENT)).payload).toBe(PAYLOAD_QUOTE);
+    expect(parseTemplate(DIAGRAM_BODY).payload).toBe(PAYLOAD_FENCE);
+  });
+
+  it("takes no argument: a line carrying one is body, and the template is no diagram", () => {
+    const t = parseTemplate(lines(`${DIAGRAM} flow`, ref(FIELD_CONTENT)));
+    expect(t.diagram).toBe(false);
+    expect(t.body).toContain(`${DIAGRAM} flow`);
+  });
+
+  it("does not reach the body: a declaration never renders", () => {
+    expect(parseTemplate(DIAGRAM_BODY).body).not.toContain(DIAGRAM);
+  });
+});
+
+describe("the payload a view accepts", () => {
+  const ref = (name: string): string => `\${${name}}`;
+
+  it("derives the quote from a body spending what only a quote yields", () => {
+    expect(parseTemplate(lines(ref(FIELD_CONTENT), ref(FIELD_TYPE))).payload).toBe(PAYLOAD_QUOTE);
+  });
+
+  it("derives the table from a body spending its rows", () => {
+    expect(parseTemplate(lines(ref(FIELD_ROWS), ref(FIELD_HEAD))).payload).toBe(PAYLOAD_TABLE);
+  });
+
+  it("falls to the table for a sectioned view spending its OWN names, the one shape that yields any", () => {
+    expect(parseTemplate(lines(ref("said"), ref("did"))).payload).toBe(PAYLOAD_TABLE);
+  });
+
+  it("expects none where the body spends nothing, so a health check owes no form", () => {
+    expect(parseTemplate("a static line").payload).toBeNull();
+  });
+
+  it("expects none from a STATIC template, its optional garnish notwithstanding", () => {
+    // The welcome case: an @foot names a field, but a template spending no slot draws on nothing, so it is not a
+    // view a message summons and the teaching gate must not demand it be taught.
+    const t = parseTemplate(lines(`${FOOT} message`, "a static line"));
+    expect(t.spendsSlots).toBe(false);
+    expect(t.payload).toBeNull();
   });
 });

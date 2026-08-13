@@ -33,6 +33,14 @@
       "readIn": []
     },
     {
+      "word": "@diagram",
+      "kind": "declaration",
+      "takes": "",
+      "opens": [],
+      "closedBy": null,
+      "readIn": []
+    },
+    {
       "word": "@box",
       "kind": "opener",
       "takes": "[bare]",
@@ -250,6 +258,13 @@
       ],
       "selectedBy": "a first line starting with >",
       "marker": "[!TOKEN]"
+    },
+    "fence": {
+      "fields": [
+        "content"
+      ],
+      "selectedBy": "a first line of exactly ```mermaid, the source running to the closing ```",
+      "marker": null
     }
   },
   "tags": {
@@ -413,6 +428,18 @@
           "content"
         ]
       }
+    },
+    {
+      "name": "mermaid",
+      "file": "views/mermaid.view",
+      "static": false,
+      "payload": "fence",
+      "spends": [
+        "content"
+      ],
+      "tone": null,
+      "tables": {},
+      "lists": {}
     },
     {
       "name": "quote",

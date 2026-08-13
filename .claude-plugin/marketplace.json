@@ -9,7 +9,7 @@
       "name": "cc-views",
       "source": "./plugin",
       "description": "The skill that writes a .view template for this engine.",
-      "version": "2.1.3"
+      "version": "2.2.1-rc.0"
     }
   ]
 }

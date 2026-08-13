@@ -12,7 +12,7 @@ import { announce, peers, peersDir } from "../platform/peers.js";
 import { ANSI_RE } from "../style.js";
 import { ENGINE_VERSION } from "../data/engine.js";
 import { BOX, EACH, END, ENDBOX, HEAD } from "../data/language.js";
-import { SCRATCH_DIR, VIEW_EXT } from "../data/markup.js";
+import { DECORATOR_HINT, SCRATCH_DIR, VIEW_EXT } from "../data/markup.js";
 
 const VIEW = [
   BOX,
@@ -83,12 +83,59 @@ describe("handleMessageDisplay", () => {
     expect(shown(out)).toContain("- carried");
   });
 
-  it("returns null on an incomplete prefix rather than mis-slicing", async () => {
+  it("returns null on an incomplete prefix when the delta alone carries no zone", async () => {
     const id = msg();
     await handleMessageDisplay(payload(id, 0, "```view:note\nnote:\n- x\n"), undefined, options);
-    // Index 1 never lands: the flush at index 2 cannot know its offset on screen.
+    // Index 1 never lands: the flush at index 2 cannot know its offset on screen, and a bare closing fence engages
+    // nothing on its own, so the host's own delta stands.
     const out = await handleMessageDisplay(payload(id, 2, "```", true), undefined, options);
     expect(out).toBeNull();
+  });
+
+  it("renders an ENGAGED delta alone on an incomplete prefix, its open zone withheld rather than shown raw", async () => {
+    const id = msg();
+    // Index 0 never lands. Handed back to the host this delta printed raw and STAYED, zone opening included
+    // (measured 2026-08-11): rendered alone, the engine's own withholding cuts the open zone and keeps the prose.
+    const deco = `${DECORATOR_HINT}note}`;
+    const row = "| a | b |";
+    const out = await handleMessageDisplay(
+      payload(id, 1, `prose kept\n${deco}\n${row}\n`),
+      undefined,
+      options
+    );
+    expect(shown(out)).toContain("prose kept");
+    expect(shown(out)).not.toContain(deco);
+    expect(shown(out)).not.toContain(row);
+  });
+
+  it("answers a withheld flush with an EMPTY displayContent, which is the protocol's own suppression", async () => {
+    const id = msg();
+    // The delta opens a zone and brings nothing showable yet. The field must be PRESENT and empty: the host reads any
+    // defined displayContent as the delta's replacement, and an omitted one as "display the original" (read off the
+    // 2.1.228 binary, 2026-08-11). Answered null instead, the raw fence reaches the screen and its unclosed ``` puts
+    // the host's markdown inside a code block for the whole rest of the message.
+    const out = await handleMessageDisplay(payload(id, 0, "```view:note\n"), undefined, options);
+    expect(out).not.toBeNull();
+    const envelope = JSON.parse(out as string) as {
+      hookSpecificOutput: { displayContent?: string };
+    };
+    expect(envelope.hookSpecificOutput.displayContent).toBe("");
+  });
+
+  it("answers NOTHING, flush after flush, for a view its own search path cannot resolve", async () => {
+    // The leak of 2026-08-12, at the edge it reached the screen through: three hooks on one machine, two of them
+    // running an engine that has no `tldr` template. The zone must never be theirs: withheld flushes re-emitted raw at
+    // the close were the LAST defined answer, order permitting, and replaced the box the third engine had drawn.
+    const id = msg();
+    const flushes = ["@{view:elsewhere}\n", "| | |\n| --- | --- |\n", "| said | - hello |\n"];
+    for (const [at, delta] of flushes.entries()) {
+      const out = await handleMessageDisplay(
+        payload(id, at, delta, at === flushes.length - 1),
+        undefined,
+        options
+      );
+      expect(out, `flush ${at}`).toBeNull();
+    }
   });
 
   it("cleans its message dir on the final flush", async () => {
@@ -143,12 +190,11 @@ describe("handleMessageDisplay", () => {
 describe("when another engine is registered on the machine", () => {
   const block = "```view:note\nnote:\n- a\n```";
 
-  it("stands aside on a view a NEWER one also has, so the delta reaches it untouched", async () => {
-    // Not one character rewritten, so the next hook in the chain receives the block exactly as the model wrote it and
-    // the newer engine is the one that consumes it.
+  it("stands aside on a view a NEWER one also has, saying NOTHING so its render stands", async () => {
+    // Silence and not an untouched copy: the dispatcher hands every hook the original delta and keeps the LAST defined
+    // answer, so a DEFINED copy landing after the newer engine's render replaced that render with raw text.
     otherEngine(NEWER);
-    const out = await handleMessageDisplay(payload(msg(), 0, block, true), undefined, options);
-    expect(shown(out)).toBe(block);
+    expect(await handleMessageDisplay(payload(msg(), 0, block, true), undefined, options)).toBeNull();
   });
 
   it("draws for an OLDER one, which is the half a bare presence check would get wrong", async () => {

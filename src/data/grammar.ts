@@ -10,6 +10,7 @@ import {
   ASIDE,
   BARE,
   BOX,
+  DIAGRAM,
   DECLS,
   EACH,
   END,
@@ -107,6 +108,8 @@ export const TAKES: Record<string, string> = {
   [TEXT]: `${ARG_NAME} ${ARG_VALUE}${PAIR_SEP}${QUOTE} ${MORE}`,
   [FIELDS]: `${ARG_LIST} ${ARG_FIELD} ${MORE}`,
   [TONE]: ARG_TAG,
+  // Nothing after it, and nothing it could take: it names the KIND of the block's body, and a kind has no parameter.
+  [DIAGRAM]: "",
   [BOX]: opt(BARE),
   [HEAD]: ARG_TEXT,
   [RIGHT]: ARG_TEXT,

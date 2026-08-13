@@ -51,6 +51,13 @@ export const BLOCK_INFO = `${VIEW}${NAME_MARK}`;
 export const BLOCK_HINT = `${FENCE}${BLOCK_INFO}`;
 
 /**
+ * The info string of the ONE ordinary fence a decorator may claim as its payload: a diagram source. It is the word the
+ * forges already draw, and that is the point: where the hook does not run, the fallback is a diagram that renders
+ * itself, which no other carrier of this language can promise.
+ */
+export const DIAGRAM_INFO = "mermaid";
+
+/**
  * Nothing shorter than `@{view:`: PowerShell writes `@{Name='x'}` and Perl writes `@{$ref}`, so a bare `@{` would
  * capture them.
  */

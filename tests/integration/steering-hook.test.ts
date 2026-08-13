@@ -17,6 +17,7 @@ const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
 const EVENT = "SessionStart";
 const OPT_OUT_ENV = "CC_VIEWS_STEERING";
 const PROJECT_DIR_ENV = "CLAUDE_PROJECT_DIR";
+const NO_MERMAID_ENV = "CC_VIEWS_NO_MERMAID";
 const PKG_PATH = ["node_modules", "@tayomi", "cc-views"];
 const AGENT_DIR = "agent";
 const STEERING_FILE = "steering.md";
@@ -162,6 +163,9 @@ describe("the SessionStart hook the plugin ships", () => {
 });
 
 describe("the version drift the hook reports", () => {
+  /** The drift alone is on trial here, so the diagram notice is switched OFF rather than asserted around. */
+  const DIAGRAM_OFF = { [NO_MERMAID_ENV]: "1" };
+
   /** A plugin copy saying `version`, standing in for the one Claude Code cached. */
   function pluginSaying(version: string | null): string {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-plugin-"));
@@ -200,7 +204,7 @@ describe("the version drift the hook reports", () => {
     const root = pluginSaying(plugin);
     const opened = projectSaying(engine);
     try {
-      const raw = await steeringPayload(root, { [PROJECT_DIR_ENV]: opened });
+      const raw = await steeringPayload(root, { [PROJECT_DIR_ENV]: opened, ...DIAGRAM_OFF });
       const payload = JSON.parse(raw as string) as { systemMessage?: string };
       return payload.systemMessage ?? null;
     } finally {
@@ -226,7 +230,7 @@ describe("the version drift the hook reports", () => {
     const opened = checkoutOf("@tayomi/cc-views", "1.0.30");
     try {
       const { systemMessage } = JSON.parse(
-        (await steeringPayload(root, { [PROJECT_DIR_ENV]: opened })) as string,
+        (await steeringPayload(root, { [PROJECT_DIR_ENV]: opened, ...DIAGRAM_OFF })) as string,
       ) as { systemMessage: string };
       expect(systemMessage).toContain("1.0.29");
       expect(systemMessage).toContain("1.0.30");
@@ -256,7 +260,7 @@ describe("the version drift the hook reports", () => {
     fs.writeFileSync(path.join(opened, MANIFEST), JSON.stringify({ name: "@tayomi/cc-views", version: "1.0.30" }));
     try {
       const { systemMessage } = JSON.parse(
-        (await steeringPayload(root, { [PROJECT_DIR_ENV]: opened })) as string,
+        (await steeringPayload(root, { [PROJECT_DIR_ENV]: opened, ...DIAGRAM_OFF })) as string,
       ) as { systemMessage: string };
       expect(systemMessage).toContain("1.0.27");
       expect(systemMessage).not.toContain("1.0.30");
@@ -277,7 +281,7 @@ describe("the version drift the hook reports", () => {
     const opened = projectSaying("1.0.27");
     try {
       fs.symlinkSync(path.join(REPO, "dist"), path.join(opened, ...PKG_PATH, "dist"), "dir");
-      const payload = JSON.parse((await steeringPayload(root, { [PROJECT_DIR_ENV]: opened })) as string) as {
+      const payload = JSON.parse((await steeringPayload(root, { [PROJECT_DIR_ENV]: opened, ...DIAGRAM_OFF })) as string) as {
         systemMessage: string;
       };
       expect(payload.systemMessage).toContain("WARNING");
@@ -292,7 +296,7 @@ describe("the version drift the hook reports", () => {
     const root = pluginSaying("1.0.29");
     const opened = projectSaying("1.0.27");
     try {
-      const payload = JSON.parse((await steeringPayload(root, { [PROJECT_DIR_ENV]: opened })) as string) as {
+      const payload = JSON.parse((await steeringPayload(root, { [PROJECT_DIR_ENV]: opened, ...DIAGRAM_OFF })) as string) as {
         systemMessage?: string;
         hookSpecificOutput?: { additionalContext: string };
       };
@@ -301,6 +305,58 @@ describe("the version drift the hook reports", () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
       fs.rmSync(opened, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the half of the briefing an install can turn off", () => {
+  // The mermaid half, wrapped in markers so a session that has said no is never taught a view it does not want. There
+  // is nothing left to probe: the renderer is a dependency of the engine, so an install that resolves the view draws
+  // it, and the switch is the whole question.
+  const NO_MERMAID_ENV = "CC_VIEWS_NO_MERMAID";
+  const NEEDS_OPEN = "<!-- needs:diagram -->";
+  const NEEDS_CLOSE = "<!-- /needs:diagram -->";
+  const DIAGRAM_HALF = "the half the switch takes out";
+  const ALWAYS = "the half that always holds";
+  const MARKED = `${ALWAYS}\n\n${NEEDS_OPEN}\n${DIAGRAM_HALF}\n${NEEDS_CLOSE}\n\nand the rest`;
+
+  /** Both halves of one answer: what the session reads, and what the user is shown. */
+  async function answered(
+    env: NodeJS.ProcessEnv = {},
+  ): Promise<{ context: string; notice: string | null }> {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-draws-"));
+    installEngine(root, MARKED);
+    try {
+      const raw = await steeringPayload(pluginRoot(), { ...env, [PROJECT_DIR_ENV]: root });
+      const payload = JSON.parse(raw as string) as {
+        systemMessage?: string;
+        hookSpecificOutput?: { additionalContext: string };
+      };
+      return { context: payload.hookSpecificOutput?.additionalContext ?? "", notice: payload.systemMessage ?? null };
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  it("keeps it by default, and says nothing at all", async () => {
+    const { context, notice } = await answered();
+    expect(context).toContain(DIAGRAM_HALF);
+    expect(notice).toBeNull();
+  });
+
+  it("drops it and stays QUIET once the switch is set", async () => {
+    // Someone who has said no is owed neither the view nor a word about it.
+    const { context, notice } = await answered({ [NO_MERMAID_ENV]: "1" });
+    expect(context).toContain(ALWAYS);
+    expect(context).not.toContain(DIAGRAM_HALF);
+    expect(notice).toBeNull();
+  });
+
+  it("takes the MARKERS out either way, machinery being no part of a briefing", async () => {
+    for (const env of [{}, { [NO_MERMAID_ENV]: "1" }]) {
+      const { context } = await answered(env);
+      expect(context).not.toContain(NEEDS_OPEN);
+      expect(context).not.toContain(NEEDS_CLOSE);
     }
   });
 });

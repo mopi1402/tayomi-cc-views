@@ -1,0 +1,35 @@
+# mermaid.view: a diagram, drawn. The one view whose data is not fields but a SOURCE, handed to a
+# renderer and printed as the text it comes back as.
+#
+# ONE way in, the decorator over the fence the forges already draw:
+#
+#   @{view:mermaid}
+#   ```mermaid
+#   flowchart TD
+#       A[source] --> B{parse}
+#       B -->|ok| C[render]
+#       B -->|malforme| D[body]
+#   ```
+#
+# WHY THE DECORATOR AND NOT A view:mermaid FENCE: the fallback. Where this hook does not run, in a
+# reread transcript, on a forge, `view:mermaid` is an info string nothing recognises and the block
+# prints as raw text, while a bare ```mermaid fence draws itself, the decorator line above it one
+# harmless line of prose. This is the one carrier in the whole language whose fail-open is still a
+# diagram, so it is the ONLY form: `@diagram` below makes the engine refuse the fenced block's flat
+# data format outright (render.ts), and the payload rule refuses a table or a quote under the
+# decorator the same way. The source arrives RAW under `content`, drawn by the engine, and the
+# DRAWING is what gets neutralised: `A{{hexagon}}` is valid diagram source, not markup.
+#
+# The renderer is asked for its COLOURS, and this view is the one place in the language where that
+# is not a message painting a terminal: a source naming a red box beside a green one is saying
+# something about the GRAPH, and dropping it would lose meaning the author wrote, not decoration.
+# So the drawing arrives painted, and NO tone is declared here: a tone would open a scope the
+# drawing's own resets close on its first glyph, which reads as a tone that silently does nothing.
+#
+# NO CONTAINER, and it is the only view here without one. A box measures the value it holds as a
+# SINGLE line, so a drawing handed to one comes back chopped every `width` columns, its own rows
+# interleaved with the fold's. A diagram that wrapped would not be a narrower diagram, it would
+# be a broken one. What a bare box bought elsewhere, this file buys by ENDING on its last row:
+# no closing newline, or the file's own would print as a blank line under the drawing.
+@diagram
+${content}

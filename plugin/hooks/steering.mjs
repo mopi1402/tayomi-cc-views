@@ -43,6 +43,20 @@ const MAX_HOPS = 5;
 const OPT_OUT_ENV = "CC_VIEWS_STEERING";
 /** Forgiving in the one direction whose intent is unambiguous. Anything else, `on` included, keeps the text. */
 const OFF = ["off", "0", "false", "no"];
+
+// The one view an install may not want taught, the renderer being the only dependency a briefing rests on. Named after
+// the VIEW and not after the renderer, so it stays readable whatever draws underneath.
+// Any non-empty value means no, the way NO_YIELD reads in the engine. check-steering.mjs keeps it in the family.
+const NO_MERMAID_ENV = "CC_VIEWS_NO_MERMAID";
+/** What wraps the part of the briefing an install may turn off. Taken out either way: a marker is machinery, never
+ * words for a session. */
+const NEEDS_OPEN = "<!-- needs:diagram -->";
+const NEEDS_CLOSE = "<!-- /needs:diagram -->";
+/** A drift is something WRONG on the machine, and the only thing left worth a band. */
+const WARNING = "WARNING";
+/** What a stripped region leaves behind, since both markers sit on lines of their own. */
+const BLANK_RUN = /\n{3,}/g;
+const PARAGRAPH = "\n\n";
 /** An HTML comment opening the file: a note to whoever EDITS it, never something a session should read. */
 const NOTE_OPEN = "<!--";
 const NOTE_CLOSE = "-->";
@@ -77,6 +91,24 @@ function installedSteering(env) {
   if (installed === null) return null;
   const candidate = path.join(installed, AGENT_DIR, STEERING_FILE);
   return fs.existsSync(candidate) ? candidate : null;
+}
+
+/**
+ * The briefing without what this install cannot honour. The markers go in both cases, and an UNBALANCED one keeps the
+ * rest as written: swallowing the tail of a briefing is the one outcome worse than teaching a view too many.
+ */
+function forCapability(text, keeps) {
+  let out = "";
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf(NEEDS_OPEN, at);
+    if (open === -1) return (out + text.slice(at)).replace(BLANK_RUN, PARAGRAPH);
+    const close = text.indexOf(NEEDS_CLOSE, open);
+    if (close === -1) return (out + text.slice(at)).replace(BLANK_RUN, PARAGRAPH);
+    out += text.slice(at, open);
+    if (keeps) out += text.slice(open + NEEDS_OPEN.length, close);
+    at = close + NEEDS_CLOSE.length;
+  }
 }
 
 /** A manifest's fields, or nothing at all for anything unreadable: a warning is never worth a broken session start. */
@@ -130,8 +162,8 @@ function versionDrift(root, installed) {
  * resolves is its own. Falls back to the bare sentence for anything at all: an entry that will not import, a copy too
  * old to know the view, a block that came back undrawn. A notice is never worth a broken session start.
  */
-async function drawn(installed, message) {
-  const block = `@{view:banner}\n> [!WARNING]\n> ${message}\n`;
+async function drawn(installed, message, level = WARNING) {
+  const block = `@{view:banner}\n> [!${level}]\n> ${message}\n`;
   try {
     const entry = pathToFileURL(path.join(installed, ...DIST_ENTRY)).href;
     const { transform } = await import(entry);
@@ -157,11 +189,21 @@ export async function steeringPayload(root, env = process.env) {
   // Reported even where the briefing is unreadable, since a drift is exactly the reason it could be.
   const installed = installedRoot(env);
   const drift = versionDrift(root, installed);
-  if (body === "" && drift === null) return null;
+  // The switch is the whole question now: the renderer is a dependency of the engine, so an install that resolves the
+  // view can draw it. Nothing to probe, and nothing to invite anyone to install.
+  body = forCapability(body, (env[NO_MERMAID_ENV] ?? "").trim() === "");
+  const notices = [];
+  if (drift !== null) notices.push([drift, WARNING]);
+  if (body === "" && notices.length === 0) return null;
   const payload = {};
   if (body !== "") payload.hookSpecificOutput = { hookEventName: EVENT, additionalContext: body };
-  // On the USER's screen and not in the context: it is an action to take, and no answer of the agent's depends on it.
-  if (drift !== null) payload.systemMessage = await drawn(installed, drift);
+  // On the USER's screen and not in the context: these are actions to take, and no answer of the agent's depends on
+  // them. Drawn one by one, since a band is what the engine draws and two facts are never one band.
+  if (notices.length > 0) {
+    const bands = [];
+    for (const [message, level] of notices) bands.push(await drawn(installed, message, level));
+    payload.systemMessage = bands.join(PARAGRAPH);
+  }
   return JSON.stringify(payload);
 }
 

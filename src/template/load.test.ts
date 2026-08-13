@@ -15,6 +15,7 @@ import {
   defaultViewsPath,
   listViews,
   loadTemplate,
+  resolvesView,
   viewFile,
   viewsDir,
 } from "./load.js";
@@ -76,6 +77,28 @@ describe("loadTemplate", () => {
   it("throws with a real path when the view resolves nowhere, never silently", () => {
     const dir = mkdir();
     expect(() => loadTemplate("absent", [dir])).toThrow(dir);
+  });
+});
+
+describe("resolvesView", () => {
+  // The question a zone asks BEFORE it opens, so it must answer exactly where loadTemplate would find a file.
+  it("says yes wherever loadTemplate would read, LAST dir included", () => {
+    const early = mkdir();
+    const late = mkdir();
+    write(late, NAME + VIEW_EXT, "late");
+    expect(resolvesView(NAME, [early, late])).toBe(true);
+    expect(resolvesView(NAME, late)).toBe(true);
+  });
+
+  it("says no for a view no dir holds: not this engine's zone", () => {
+    expect(resolvesView("absent", [mkdir()])).toBe(false);
+  });
+
+  it("counts a view existing ONLY in its typed form, when that type is asked", () => {
+    const dir = mkdir();
+    write(dir, `${NAME}.${TYPE}${VIEW_EXT}`, "typed");
+    expect(resolvesView(NAME, [dir], TYPE)).toBe(true);
+    expect(resolvesView(NAME, [dir])).toBe(false);
   });
 });
 

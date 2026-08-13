@@ -50,11 +50,16 @@ function openingStart(text: string): number {
 // message with its own closing fence, so the still-streaming block below it reaches the screen raw.
 //
 // The still-arriving opening is scanned SECOND, and only when no complete opening is waiting for its closing fence: a
-// partial fence sits below such an opening, so the cut at the opening already takes it.
-export function cutUnclosedBlock(text: string): string {
+// partial fence sits below such an opening, so the cut at the opening already takes it. That cut cannot consult
+// `resolves`, its name still arriving: the accepted residual is the head's own characters, re-emitted once complete.
+//
+// `resolves` says whether a name is a view THIS engine can draw. A name it cannot is not its zone: the block streams as
+// prose, nothing withheld, so nothing is ever re-emitted over what a peer holding the template answered.
+export function cutUnclosedBlock(text: string, resolves?: (name: string) => boolean): string {
   let open = -1;
   let bodyStart = -1;
   for (const m of text.matchAll(VIEW_OPEN)) {
+    if (resolves !== undefined && !resolves(m[1])) continue;
     open = m.index;
     bodyStart = m.index + m[0].length;
   }

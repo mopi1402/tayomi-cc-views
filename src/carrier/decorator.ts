@@ -5,9 +5,13 @@
 //   | --- | --- |
 //   | Decorator | one line above the payload |
 //
-// TWO payload shapes, decided by the zone's FIRST line and nowhere else. A leading pipe is a table, reaching the
+// THREE payload shapes, decided by the zone's FIRST line and nowhere else. A leading pipe is a table, reaching the
 // template as `rows`. A leading `>` is a blockquote, reaching it as `content`, its optional `[!WARNING]` marker as
-// `type`. Why a quote rather than a paragraph: docs/architecture/architecture.md, "The decorator's trade".
+// `type`. A ```mermaid fence is a diagram source, reaching it RAW as `content` for the engine to draw. Why a quote
+// rather than a paragraph: docs/architecture/architecture.md, "The decorator's trade".
+//
+// The carrier only NAMES the shape it parsed (Dressing.payload); which shape a view accepts is the template's own
+// declaration, and render.ts is where a mismatch refuses. One view, one form: a banner takes a quote and nothing else.
 //
 // A table of TWO columns is ALSO read as named fields, so a sectioned view can be spent from a decorator. That reading
 // runs where the template is known (view-data.ts): this carrier hands over rows, the derived fields land UNDER them.
@@ -22,17 +26,23 @@ import {
   MARKER_SOURCE,
   MAX_COLUMNS,
   MIN_COLUMNS,
+  PAYLOAD_FENCE,
+  PAYLOAD_QUOTE,
+  PAYLOAD_TABLE,
   middleField,
 } from "../data/language.js";
 import {
   DECORATOR_CLOSE,
   DECORATOR_HINT,
+  DIAGRAM_INFO,
   EMPHASIS_STAR,
+  FENCE,
   NAME_MARK,
   QUOTE_MARK,
   TABLE_MARK,
 } from "../data/markup.js";
 import { renderView, type Dressing } from "../template/render.js";
+import { resolvesView } from "../template/load.js";
 import { defersView } from "../platform/peers.js";
 import { namedFields } from "../template/view-data.js";
 import { inert, spanClose, spanOpen } from "../style.js";
@@ -93,6 +103,10 @@ function hasPayload(lines: string[], below: number, stop: number): boolean {
 const TABLE_SOURCE = `\\${TABLE_MARK}`;
 const PIPE_LINE_RE = re(String.raw`^[ \t]*${TABLE_SOURCE}`);
 const QUOTE_LINE_RE = re(String.raw`^[ \t]*${QUOTE_MARK}`);
+/** The ONE ordinary fence a decorator may claim: the diagram's info string, exact, and nothing else opens the shape. */
+const FENCE_OPEN_RE = re(String.raw`^[ \t]*${FENCE}${DIAGRAM_INFO}[ \t]*$`);
+/** What closes it: a bare run of at least the fence's own ticks, as fences.ts reads one. An info'd run stays body. */
+const FENCE_CLOSE_RE = re(String.raw`^[ \t]*${FENCE}` + FENCE[0] + String.raw`*[ \t]*$`);
 /** The marker off a body line, and the one optional space markdown allows after `>`. */
 const QUOTE_PREFIX_RE = re(String.raw`^[ \t]*${QUOTE_MARK}[ \t]?`);
 // eslint-disable-next-line security/detect-non-literal-regexp
@@ -278,13 +292,18 @@ function parseQuote(zone: string[]): Payload | null {
  * fails open, which is what makes "a quote must be followed by a blank line" a rule the author sees enforced.
  */
 interface Shape {
+  /** The name this shape rides under in Dressing.payload, where the template's own refusal judges it (render.ts). */
+  payload: string;
   opens(line: string): boolean;
   holds(line: string): boolean;
+  /** The zone's extent when per-line holds cannot say it: a fence ENDS ON its closing line, one line more then stop. */
+  run?(lines: string[], from: number, stop: number): number;
   parse(zone: string[]): Payload | null;
 }
 
 const SHAPES: Shape[] = [
   {
+    payload: PAYLOAD_TABLE,
     opens: (l) => PIPE_LINE_RE.test(l),
     holds: (l) => PIPE_LINE_RE.test(l),
     parse: (zone) => {
@@ -299,9 +318,29 @@ const SHAPES: Shape[] = [
     },
   },
   {
+    payload: PAYLOAD_QUOTE,
     opens: (l) => QUOTE_LINE_RE.test(l),
     holds: (l) => l.trim() !== "",
     parse: parseQuote,
+  },
+  {
+    payload: PAYLOAD_FENCE,
+    opens: (l) => FENCE_OPEN_RE.test(l),
+    // Never consulted: run() below owns the extent.
+    holds: () => false,
+    run: (lines, from, stop) => {
+      for (let i = from + 1; i < stop; i++) if (FENCE_CLOSE_RE.test(lines[i])) return i + 1;
+      return stop; // unclosed: the zone runs out with the text, and parse below refuses it
+    },
+    parse: (zone) => {
+      // Opening line, at least one source line, closing line: anything less is a near-miss the author must see.
+      if (zone.length < 3 || !FENCE_CLOSE_RE.test(zone[zone.length - 1])) return null;
+      // RAW on both readings, deliberately, and UNJOINED: the body feeds a RENDERER, never a template slot, so
+      // inertText here would hand the subprocess a marked source, and the engine neutralises the DRAWING instead
+      // (render.ts). Line structure is the source's own syntax, so nothing trims and nothing rejoins with spaces.
+      const source = zone.slice(1, -1).join("\n");
+      return { data: { [FIELD_CONTENT]: source }, bare: { [FIELD_CONTENT]: source } };
+    },
   },
 ];
 
@@ -311,6 +350,7 @@ function shapeOf(line: string): Shape | undefined {
 }
 
 function runEnd(shape: Shape | undefined, lines: string[], from: number, stop: number): number {
+  if (shape?.run !== undefined) return shape.run(lines, from, stop);
   let end = from;
   if (shape !== undefined) while (end < stop && shape.holds(lines[end])) end++;
   return end;
@@ -336,6 +376,8 @@ interface Zone {
   refused: boolean;
   /** The first line PAST the zone. */
   end: number;
+  /** The name of the shape that anchored, for Dressing.payload. Absent when no payload announced one. */
+  form?: string;
 }
 
 /**
@@ -352,7 +394,7 @@ function zoneAt(lines: string[], fences: Fence[], starts: number[], at: number):
   const shape = has ? shapeOf(lines[below]) : undefined;
   const end = runEnd(shape, lines, below, lines.length);
   const payload = shape === undefined ? null : shape.parse(lines.slice(below, end));
-  return { deco, payload, refused: shape !== undefined && payload === null, end };
+  return { deco, payload, refused: shape !== undefined && payload === null, end, form: shape?.payload };
 }
 
 /** What one decorated PASS produced: the text, and the strict view's outcome when a zone here is what decided it. */
@@ -387,6 +429,12 @@ export function renderDecorated(
       out.push(lines[i]);
       continue;
     }
+    // A view this engine cannot RESOLVE is not this engine's zone: the run stays prose, exactly as a refusal leaves
+    // it, and whoever holds the template answers it. The strict view alone is exempt, its failures owed a line.
+    if (zone.deco.view !== strictView && !resolvesView(zone.deco.view, dirs, zone.deco.type)) {
+      out.push(lines[i]);
+      continue;
+    }
     // Judged on the SHAPE, never on whether anything follows. A payload announcing itself and then refusing to parse
     // is a near-miss the author must see; prose announces nothing, claims no line, and leaves a static view summoned
     // as a line alone would. A view that spends slots throws below on no data, so arity decides, not a table here.
@@ -413,8 +461,10 @@ export function renderDecorated(
     }
     try {
       const data: Scope = payload === null ? {} : payload.data;
-      // See Payload.type: the unset field IS the precedence rule.
-      const dressing = payload?.type === undefined ? deco : { ...deco, type: undefined };
+      // See Payload.type: the unset field IS the precedence rule. The shape rides along on a PARSED payload alone, so
+      // the template's own refusal (render.ts) judges the form the author actually wrote, and a static summon none.
+      const base = payload?.type === undefined ? deco : { ...deco, type: undefined };
+      const dressing: Dressing = payload === null ? base : { ...base, payload: zone.form };
       // The host is handed the PARSED zone as WRITTEN (`bare`), in the grammar a block hands over and with lists
       // unsplit: the styled cells and their marks are the render's alone.
       const injected = host?.inject?.(deco.view, namedFields(payload === null ? {} : payload.bare), cwd);
@@ -487,8 +537,14 @@ export function decoratedZones(text: string): DecoratedZone[] {
  *
  * Accepted residual: anchoring needs the COMPLETE decorator line, so a token cut mid-stream ("@{view:ta") is prose here
  * and can reach the screen raw. Only the token's first characters can leak; the zone below never does.
+ *
+ * `resolves` says whether a name is a view THIS engine can draw. A name it cannot is not its zone: the run streams as
+ * prose, nothing withheld, so nothing is ever re-emitted over what a peer holding the template answered.
  */
-export function cutStreamingDecorated(text: string): string {
+export function cutStreamingDecorated(
+  text: string,
+  resolves?: (name: string, type?: string) => boolean
+): string {
   if (!text.includes(DECORATOR_HINT)) return text;
   const lines = text.split("\n");
   const fences = fenceSpans(text);
@@ -496,11 +552,17 @@ export function cutStreamingDecorated(text: string): string {
   let end = lines.length;
   if (end > 0 && lines[end - 1] === "") end--; // a line terminator, not a line
   let last = -1;
+  let deco: Decorator | null = null;
   for (let i = 0; i < end; i++) {
     // A fenced decorator anchors nothing, or a quoted example at the tail of a message withholds everything below it.
-    if (parseDecorator(lines[i]) !== null && fenceAt(fences, starts[i]) === undefined) last = i;
+    const at = parseDecorator(lines[i]);
+    if (at !== null && fenceAt(fences, starts[i]) === undefined) {
+      last = i;
+      deco = at;
+    }
   }
   if (last === -1) return text;
+  if (resolves !== undefined && deco !== null && !resolves(deco.view, deco.type)) return text;
   const first = last + 1;
   const shape = first < end ? shapeOf(lines[first]) : undefined;
   const after = runEnd(shape, lines, first, end);

@@ -21,6 +21,12 @@ export const EACH = keyword("each");
 export const ASIDE = keyword("aside");
 export const USE = keyword("use");
 export const END = keyword("end");
+/**
+ * The one word that changes what a BLOCK'S BODY IS. Every other view reads its body as the flat data format
+ * (view-data.ts); a template declaring this one says "my body is a diagram source", and the body reaches it drawn, in
+ * `content`, having been parsed by nobody here.
+ */
+export const DIAGRAM = keyword("diagram");
 
 /** The token that turns @box into a container with NO outline: the body machinery, none of the chrome. */
 export const BARE = "bare";
@@ -85,6 +91,11 @@ export const FIELD_TONE = "tone";
 
 export const PAYLOAD_TABLE = "table";
 export const PAYLOAD_QUOTE = "quote";
+/**
+ * The third shape, and the one NEVER derived: a fence is claimed by a template declaring @diagram, nothing else, so it
+ * stays out of PAYLOAD_FIELDS below and no view can score its way into one.
+ */
+export const PAYLOAD_FENCE = "fence";
 
 /** Which shape yields which fields. Spending one of them is what says a view expects that payload. */
 export const PAYLOAD_FIELDS: Record<string, readonly string[]> = {

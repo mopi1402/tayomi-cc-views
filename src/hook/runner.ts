@@ -17,6 +17,9 @@ import { declaredViews } from "../template/load.js";
 import { parseStdin, readStdin, stringField } from "@tayomi/utils";
 import type { RenderOptions } from "../options.js";
 
+/** The event this edge answers to, spelled once: the envelope names it whether it carries text or a suppression. */
+const EVENT = "MessageDisplay";
+
 /** The payload meta a host may key on, parsed once by the runner. */
 export interface MessageContext {
   messageId: string;
@@ -77,17 +80,22 @@ export async function handleMessageDisplay(
       prev = earlier.text;
       whole = earlier.complete;
     }
-    // An incomplete prefix means a predecessor never landed, so no offset into the screen can be computed. Fail open to
-    // the host's own delta: raw markdown for one flush is ugly, a swallowed sentence is not recoverable.
-    const display = whole ? slice(prev, delta, resolved, final, cwd, options) : null;
+    // An incomplete prefix means a predecessor never landed, so no offset into the screen can be computed. The delta
+    // renders ALONE instead of going back to the host: handed back, a zone's opening lines printed raw and stayed
+    // (measured 2026-08-11). The engine's own withholding cuts what still streams; prose stays prose, null means prose.
+    const display = whole
+      ? slice(prev, delta, resolved, final, cwd, options)
+      : slice("", delta, resolved, final, cwd, options);
     if (final && index !== null) {
       dropMessage(id, stateDir);
       sweepStale(undefined, stateDir);
     }
     if (display === null) return null;
+    // "" INCLUDED, and it is the protocol's own suppression: the host schema reads any DEFINED displayContent as the
+    // delta's replacement, and omitting it means "display the original" (read off the 2.1.228 binary, 2026-08-11).
     return JSON.stringify({
       hookSpecificOutput: {
-        hookEventName: "MessageDisplay",
+        hookEventName: EVENT,
         displayContent: display,
       },
     });

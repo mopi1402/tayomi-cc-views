@@ -158,7 +158,7 @@ What each degrades to, where the hook is absent:
 
 ## Configuration
 
-Five environment variables, all optional.
+Environment variables, all optional.
 
 | Variable | Takes | Does |
 | --- | --- | --- |
@@ -167,6 +167,8 @@ Five environment variables, all optional.
 | `CC_VIEWS_THEME` | `light`, `dark`, or either with `-ansi` or `-daltonized` | the theme, instead of the one detected |
 | `CC_VIEWS_STEERING` | `off`, `0`, `false`, `no` | silences the plugin's `SessionStart` briefing; the skill and the engine stay |
 | `CC_VIEWS_ENGINES_DIR` | a directory | where engines register for the per-view election, instead of the machine-wide directory; for test harnesses, whose engines then elect among themselves |
+| `CC_VIEWS_NO_MERMAID` | any non-empty value | keeps the diagram view out of the briefing |
+| `CC_VIEWS_NO_YIELD` | any non-empty value | draws every zone even where the election gave the view to another engine |
 
 ## Use it in your plugin or framework
 

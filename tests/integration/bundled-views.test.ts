@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { transform } from "../../src/pipeline.js";
+import { renderDiagram } from "../../src/diagram.js";
 import { ANSI_RE, RESET_MARK, renderTags, tagMark } from "../../src/style.js";
 import { printedWidth } from "../../src/layout/measure.js";
 import { BLOCK_HINT, FENCE, VIEW_EXT } from "../../src/data/markup.js";
@@ -288,9 +289,17 @@ describe("the banner reached through a marked quote", () => {
     // The banner reads `content`, a table hands it `rows`, and it draws a filled band
     // with two caps whatever it was given. That furniture is what made the ink test read
     // a pill around nothing as a successful render: the table vanished from the screen
-    // and a bare `ⓘ NOTE` stood in its place. A view refuses a payload shape by not
-    // reading it, and nothing was added to banner.view to enforce that.
+    // and a bare `ⓘ NOTE` stood in its place. Refused on the SHAPE (render.ts): the
+    // banner declares it takes a quote, and a table is not one, whatever its cells say.
     const msg = lines("@{view:banner}", "| a | b |", "| --- | --- |", "| k | v |", "");
+    expect(render(msg)).toBe(msg);
+  });
+
+  it("refuses the table even when its first cell SPELLS the field the banner spends", () => {
+    // The leak the shape rule closed: a two-column table reads as named fields too, so
+    // `| content | ... |` used to feed the one view that only ever promised to take a
+    // quote. The form decides now, and field names can no longer talk their way in.
+    const msg = lines("@{view:banner}", "| a | b |", "| --- | --- |", "| content | hello |", "");
     expect(render(msg)).toBe(msg);
   });
 
@@ -863,6 +872,88 @@ describe("the hr view the package ships", () => {
     const rows = plainly(out).split("\n");
     expect(rows[0]).toBe(DASH.repeat(options.width));
     expect(rows[1]).toBe("État de l'arbre : 44 fichiers.");
+  });
+});
+
+describe("the mermaid view the package ships", () => {
+  const UNDER = "sous le schema";
+  const DECORATOR = "@{view:mermaid}";
+  const MERMAID_OPEN = FENCE + "mermaid";
+  const SOURCE_ROWS = ["flowchart TD", "    A[source] --> B[render]", "    B --> C[ecran]"];
+  const SOURCE = SOURCE_ROWS.join("\n");
+  const MSG = lines(DECORATOR, MERMAID_OPEN, ...SOURCE_ROWS, FENCE);
+  // Its own state dir, so a draw crossing the whole engine never writes into the one a real session uses.
+  const drawDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-bundled-diagram-"));
+  const drawOptions = { ...options, stateDir: drawDir };
+  const draw = (msg: string): string => transform(msg, undefined, true, undefined, drawOptions);
+  afterAll(() => fs.rmSync(drawDir, { recursive: true, force: true }));
+
+  // The renderer is a SUBPROCESS and installing it IS the feature's activation, so a machine without it
+  // stands these down rather than failing a suite for a binary it never claimed to have. The refusals
+  // below hold either way, an absent renderer never being what they observe, and they stay outside.
+  const DRAWS = ((): boolean => {
+    try {
+      renderDiagram(SOURCE, options.width, drawDir);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+
+  describe.runIf(DRAWS)("with the renderer installed", () => {
+    it("crosses the whole engine with every row of the drawing intact, fence and decorator consumed", () => {
+      // Asked of the module that draws it rather than spelled here, a drawing being the one value
+      // in this package no test could restate without becoming a copy of the renderer.
+      expect(plainly(draw(MSG)).split("\n")).toEqual(
+        plainly(renderDiagram(SOURCE, options.width, drawDir)).split("\n")
+      );
+    });
+
+    it("carries the renderer's OWN paint through and adds not one sequence of its own", () => {
+      // What replaced the tone this template used to declare, and it is the stronger claim: a
+      // colour named in the source says something about the graph, so the engine has to hand it
+      // over untouched. A scope of its own would die on the drawing's first reset anyway, which
+      // reads as a tone that silently does nothing.
+      expect(seqs(draw(MSG))).toEqual(seqs(renderDiagram(SOURCE, options.width, drawDir)));
+    });
+
+    it("leaves ONE blank line under it, which is what every other view leaves", () => {
+      // The template ends on its last row with no closing newline, and this is what says so: the
+      // day an editor puts that newline back, the diagram floats a second blank line over the prose.
+      const rows = plainly(
+        draw(lines(DECORATOR, MERMAID_OPEN, ...SOURCE_ROWS, FENCE, "", UNDER, ""))
+      ).split("\n");
+      expect(rows[rows.length - 1]).toBe(UNDER);
+      expect(rows[rows.length - 2]).toBe("");
+      expect(rows[rows.length - 3]).not.toBe("");
+    });
+  });
+
+  it("hands the zone back AS WRITTEN where the renderer refuses to draw it", () => {
+    // The fail-open every view has, and the only one whose fallback is still a diagram elsewhere:
+    // what stays on screen is a bare ```mermaid fence that a transcript or a forge draws natively,
+    // the decorator line one harmless line of prose above it. Holds with no renderer at all, an
+    // absent one being exactly the refusal this catches.
+    const PROSE = "ceci est une phrase, pas un diagramme";
+    const msg = lines(DECORATOR, MERMAID_OPEN, PROSE, FENCE);
+    expect(draw(msg)).toBe(msg);
+  });
+
+  it("refuses the retired view:mermaid fence outright, showing the block as written", () => {
+    // The one carrier this view REFUSES on principle: `view:mermaid` is an info string no forge
+    // recognises, so drawing it would reward the exact form whose fallback is debris. The engine
+    // throws (a diagram arrives under its own fence), and fail-open keeps every byte on screen.
+    const msg = lines(BLOCK_HINT + "mermaid", ...SOURCE_ROWS, FENCE);
+    expect(draw(msg)).toBe(msg);
+  });
+
+  it("refuses a table and a quote under its decorator: the fence is the ONLY data format", () => {
+    for (const msg of [
+      lines(DECORATOR, "| src | dessin |", "| --- | --- |", `| content | ${SOURCE_ROWS[0]} |`),
+      lines(DECORATOR, "> flowchart TD"),
+    ]) {
+      expect(draw(msg)).toBe(msg);
+    }
   });
 });
 

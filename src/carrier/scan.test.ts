@@ -53,12 +53,14 @@ const block = (tag: string): string => `${OPEN}note:\n${bullets(tag)}${FENCE}\n`
 // Long on purpose: at 33 chunks the FIRST one must still carry the whole opening hint, or that flush is a message with
 // no view fence anywhere, which stays the host's own to draw. 33 * (the hint's end, 14) is the floor, and this clears
 // it.
+/** The prose past the last block: a final delta cut inside it is already exactly right, an ECHO the engine declines. */
+const TAIL = "\nAnd a last sentence after the second block.\n";
 const TWO = [
   "Two:\n\n",
   block("first"),
   "\nA paragraph between them, which the engine leaves exactly as written.\n\n",
   block("second"),
-  "\nAnd a last sentence after the second block.\n",
+  TAIL,
 ].join("");
 
 // What ONE flush shows: transform of the text so far is exactly what the engine puts on screen for that flush.
@@ -66,14 +68,15 @@ const shown = (text: string, final = false): string =>
   transform(text, undefined, final, undefined, options);
 
 // One message streamed as a list of deltas, and the screen it leaves behind. A flush the engine declines (null) is the
-// HOST's own to draw, exactly as the live hook leaves it, so its delta lands on screen raw.
-function streamed(deltas: string[]): { screen: string; declined: number } {
+// HOST's own to draw, exactly as the live hook leaves it, so its delta lands on screen raw: the declined deltas are
+// returned so a test can hold every one of them to that reading.
+function streamed(deltas: string[]): { screen: string; declined: string[] } {
   let prev = "";
   let screen = "";
-  let declined = 0;
+  const declined: string[] = [];
   deltas.forEach((delta, i) => {
     const display = slice(prev, delta, undefined, i === deltas.length - 1, undefined, options);
-    if (display === null) declined++;
+    if (display === null) declined.push(delta);
     screen += display ?? delta;
     prev += delta;
   });
@@ -126,7 +129,9 @@ describe("a message carrying two view blocks", () => {
       // are.
       if (at !== 0 && !TWO.slice(0, at).includes(HINT)) continue;
       const { screen, declined } = streamed([TWO.slice(0, at), TWO.slice(at)]);
-      expect(declined).toBe(at === 0 ? 1 : 0);
+      // Declined at 0, where nothing engages yet, and past the blocks, where the final delta is pure tail prose the
+      // transform leaves IDENTICAL: an echo defines nothing, and the host draws the same characters itself.
+      expect(declined).toHaveLength(at === 0 || at >= TWO.length - TAIL.length ? 1 : 0);
       expect(screen).not.toContain(FENCE);
       expect(screen).toBe(target);
     }
@@ -138,11 +143,13 @@ describe("a message carrying two view blocks", () => {
       const deltas = chunks(TWO, n);
       expect(deltas).toHaveLength(n);
       expect(deltas.join("")).toBe(TWO);
-      // The precondition the witness is sized for: the engine owns the screen from the very first flush, so nothing on
-      // it was drawn by the host.
+      // The precondition the witness is sized for: the engine engages from the very first flush, so every fence on
+      // this screen was its to hide.
       expect(deltas[0]).toContain(HINT);
       const { screen, declined } = streamed(deltas);
-      expect(declined).toBe(0);
+      // What the engine declines it declines because the delta was already exactly right: prose the host draws
+      // identically, and never a delta carrying any part of a fence.
+      for (const left of declined) expect(left).not.toContain(FENCE[0]);
       expect(screen).not.toContain(FENCE);
       expect(screen).toBe(target);
     }
@@ -153,8 +160,9 @@ describe("a block that never closes", () => {
   it("reaches the screen WHOLE on the final flush, all 50 characters of it", () => {
     expect(UNCLOSED).toHaveLength(50);
     // One flush, and it is the last: nothing may be held back, because no later flush exists to reveal it. The cut used
-    // to leave 7 characters and lose 43.
-    expect(slice("", UNCLOSED, undefined, true, undefined, options)).toBe(UNCLOSED);
+    // to leave 7 characters and lose 43. Null and not an echo of the text: the host's own delta IS the 50 characters,
+    // and a DEFINED copy of them is what overwrote a peer's render in a chain.
+    expect(slice("", UNCLOSED, undefined, true, undefined, options)).toBeNull();
   });
 
   it("is still withheld on a flush that is not the last", () => {
@@ -174,7 +182,8 @@ describe("a block that never closes", () => {
 
   it("fails open on the final flush for a view that does not exist either", () => {
     const absent = `${PROSE}${FENCE}view:nosuch\nnote:\n- kept`;
-    expect(slice("", absent, undefined, true, undefined, options)).toBe(absent);
+    // Null says it whole: not this engine's zone, so the host draws its own delta raw and nothing was ever withheld.
+    expect(slice("", absent, undefined, true, undefined, options)).toBeNull();
   });
 });
 
@@ -188,6 +197,18 @@ describe("cutUnclosedBlock", () => {
     // And the complete line, which is what it already did.
     expect(cutUnclosedBlock(PROSE + OPEN)).toBe(PROSE);
     expect(cutUnclosedBlock(`${PROSE}${OPEN}note:\n- half a bod`)).toBe(PROSE);
+  });
+
+  it("leaves an unclosed block whose name it cannot RESOLVE: not its zone, so nothing is withheld", () => {
+    const foreign = `${PROSE}${HINT}elsewhere\nnote:\n- streaming`;
+    expect(cutUnclosedBlock(foreign, () => false)).toBe(foreign);
+    // The same text under a predicate that says yes: the cut this file always made.
+    expect(cutUnclosedBlock(foreign, () => true)).toBe(PROSE);
+  });
+
+  it("still withholds a HEAD still arriving even then, its name not yet judgeable", () => {
+    // The accepted residual: these characters are re-emitted once the name completes and resolves nowhere.
+    expect(cutUnclosedBlock(`${PROSE}${HINT}elsew`, () => false)).toBe(PROSE);
   });
 
   it("hands back an ordinary code fence as soon as it cannot be a view opening", () => {

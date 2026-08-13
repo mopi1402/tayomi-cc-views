@@ -144,7 +144,9 @@ pnpm version prerelease
 #    publish would ship the dev exports pointing at src/, which the tarball
 #    does not carry). prepublishOnly runs `pnpm verify` on the way, so a red
 #    state cannot reach the registry and dist/ is rebuilt before it is packed.
-pnpm publish --registry http://localhost:4873 --access public --no-git-checks
+#    The --tag is mandatory for a prerelease: npm refuses to hand `latest`
+#    to an rc, and that refusal arrives AFTER the whole verify has run.
+pnpm publish --registry http://localhost:4873 --access public --no-git-checks --tag rc
 ```
 
 And from the consumer, IN the workspace that declares the dependency. A monorepo root would take the dep on itself, leaving the workspace that actually imports the engine on the version it already had:

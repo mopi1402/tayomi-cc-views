@@ -10,6 +10,22 @@
 - `cc-views-session` wires the two bookends (`start`, `end`), optional on any host
 - `CC_VIEWS_ENGINES_DIR` redirects the register: a test harness never writes where real engines elect
 
+## 2.3.0
+
+- New `mermaid` view: a mermaid fence under its decorator is drawn in the terminal
+- Diagrams are drawn IN PROCESS by `@tayomi/termaid-ts`: nothing spawns, no Python, no binary to install
+- A diagram fills the box it was drawn for, folded at that width and no other
+- A drawing is cached under the engine's version, so an upgrade never serves the previous engine's render
+- A flowchart's direction can be forced to `TD` or `LR` at render
+- Both footprints of a flowchart are measurable before choosing a direction
+- `CC_VIEWS_NO_MERMAID` keeps the diagram half out of the briefing
+- Node 22.12 is the floor, the version that requires an ES module from synchronous code
+- A flush whose predecessor never lands renders its delta alone, open zones withheld
+- The wait for a predecessor delta grows to a full second
+- A view the search path cannot resolve never opens a zone: prose streams as prose
+- An answer identical to the delta is withheld, so an echo never overwrites a peer's render
+- The briefing no longer claims a closed list of view names, which an install adding its own made false
+
 ## 2.1.3
 
 - A fold cutting a code span seals and reopens one space off the text

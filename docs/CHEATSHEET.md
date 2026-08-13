@@ -112,7 +112,11 @@ markdown, which still reads where the hook does not run:
 - `@{view:<name>}` sits alone on its line, directly above its payload. Attributes: `type:` (the KIND of
   content, may select a typed file `demo.warning.view`) and `tone:` (the LOOK only, and it outranks the kind).
 - The FIRST line decides the shape: a leading pipe is a table, a leading `>` a blockquote (reaching the
-  template as `content`), and it must be followed by a blank line or end the message.
+  template as `content`), an exact ` ```mermaid ` a diagram source (drawn, then reaching it as `content`).
+  A table ends on the first non-pipe line, a quote needs a blank line under it or the end of the message,
+  a fence runs to its closing ` ``` `.
+- ONE view, ONE shape: each template accepts a single payload form (the `payload` column below), and any
+  other shape under its decorator fails open, the zone showing exactly as written.
 - A table reaches the template as `rows`, a list of `{ label, content }`. Its header row is dropped, EXCEPT
   in `box`, where the header IS the frame: first cell the title, last cell a badge.
 - A quote's first line may be a kind marker, `[!TOKEN]` alone, one uppercase run. It arrives LOWERCASED in
@@ -131,6 +135,9 @@ file of the same name in an earlier directory shadows any of these.
 | `box` | table | a framed block, the header row carrying its title and badge |
 | `banner` | quote | one alert band, its kind taken from a `[!KIND]` first line |
 | `quote` | quote | one sentence set apart, colour only |
+| `mermaid` | fence | the diagram a ` ```mermaid ` fence holds, drawn in the terminal |
 | `hr` | none | a rule on its own |
 
-`@{view:welcome}` takes no payload and checks your wiring.
+`@{view:welcome}` takes no payload and checks your wiring. `mermaid` takes the fence and NOTHING else:
+where the hook does not run, the fence stays a diagram that draws itself, which is the whole reason
+that carrier was chosen.

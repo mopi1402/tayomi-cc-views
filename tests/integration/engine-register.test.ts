@@ -77,11 +77,11 @@ describe("two engines, one screen", () => {
     expect(out).not.toContain("@{view:");
   });
 
-  it("leaves the zone whose view a NEWER engine ALSO has, exactly as written", async () => {
+  it("leaves the zone whose view a NEWER engine ALSO has, by saying NOTHING at all", async () => {
     newerThan(SHARED);
-    // Not rewritten at all: the decorator and its payload reach the next hook in the chain character for character, and
-    // the newer engine is the one that consumes them.
-    expect(drawn(await flush())).toBe(MESSAGE);
+    // Silence and not an untouched copy: the dispatcher hands every hook the original delta and keeps the LAST defined
+    // answer, so a copy landing after the newer engine's render replaced that render with raw text on screen.
+    expect(await flush()).toBeNull();
   });
 
   // The case the per-message stand-down used to lose, and the reason the decision is per zone: an engine that went
@@ -113,7 +113,7 @@ describe("two engines, one screen", () => {
 
   it("goes back to drawing the moment that engine is gone", async () => {
     const at = newerThan(SHARED);
-    expect(drawn(await flush())).toBe(MESSAGE);
+    expect(await flush()).toBeNull();
     fs.rmSync(at);
     expect(drawn(await flush())).toContain(SENTENCE);
   });

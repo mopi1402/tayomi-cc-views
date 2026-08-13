@@ -52,10 +52,25 @@ A rule on its own:
 @{view:hr}
 ```
 
-These six are the only view names. `type:` names the KIND of content and `tone:` names the LOOK alone,
-outranking the kind; both take any word, and an unknown one simply falls back: `tone:gold`, `tone:dim`,
-`type:warning`. In a banner prefer `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]`:
-those five are the ones markdown itself draws as an alert box where this hook does not run.
+<!-- needs:diagram -->
+A diagram, drawn in the terminal, for the one structure prose would flatten: a flow, a dependency, a
+lifecycle. The decorator sits over an ordinary mermaid fence, which is the ONLY data it takes, and the
+fence stays a diagram that draws itself anywhere this hook does not run. Keep every node label on ONE
+line: a `<br>` costs the label's first line AND the frame drawn around it.
+
+````
+@{view:mermaid}
+```mermaid
+flowchart TD
+    A[source] --> B[render]
+```
+````
+<!-- /needs:diagram -->
+
+These are the main views to build on. `type:` names the KIND of content and `tone:` names the LOOK
+alone, outranking the kind; both take any word, and an unknown one simply falls back: `tone:gold`,
+`tone:dim`, `type:warning`. In a banner prefer `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or
+`[!CAUTION]`: those five are the ones markdown itself draws as an alert box where this hook does not run.
 
 A tone the palette does not know draws the view's own default and reports nothing, so an invented name
 is a silence, never an error. These are the ones that exist:
@@ -64,6 +79,8 @@ Tones: `red` `green` `yellow` `blue` `magenta` `cyan` `orange` `gold` `purple` `
 `aqua` `lime` `brown` `navy` `salmon` `mint` `dim`, and by meaning rather than by hue `pass` `warn`
 `fail` `high` `med` `low` `key` `info` `success` `warning` `error`.
 
-`hr` spends no tone: a rule is a rule. The other five already carry one that suits them, so name a tone
-only where the colour itself says something the words do not. In `box` it paints the labels and the
-gutter bar together, never one section apart from the rest.
+`hr` spends no tone: a rule is a rule. <!-- needs:diagram -->`mermaid` spends none either, a diagram
+arriving already painted, its own colours saying something about the graph that a tone would bury.
+<!-- /needs:diagram -->The other five already carry
+one that suits them, so name a tone only where the colour itself says something the words do not. In
+`box` it paints the labels and the gutter bar together, never one section apart from the rest.

@@ -32,6 +32,12 @@ const OPT_OUT_DECL = /const OPT_OUT_ENV = "([^"]+)"/;
 const ENV_FAMILY = /^CC_VIEWS_[A-Z_]+$/;
 const PKG_DECL = /const PKG_NAME = "([^"]+)"/;
 const MANIFEST = "package.json";
+/** The switch that turns the diagram half off, and the markers wrapping that half. Read from the HOOK for the same
+ * reason as the two above: it owns them, and there is no build to import through. */
+const NO_MERMAID_DECL = /const NO_MERMAID_ENV = "([^"]+)"/;
+const NEEDS_DECL = [/const NEEDS_OPEN = "([^"]+)"/, /const NEEDS_CLOSE = "([^"]+)"/];
+/** The view that half is about: marked text no longer holding it would strip the wrong words. */
+const NEEDS_VIEW = "mermaid";
 
 // The colour paragraphs, found by a word each opens rather than by a line number.
 const TONES_ANCHOR = "Tones:";
@@ -139,6 +145,33 @@ if (optOut === undefined) {
   if (!read(README).includes(optOut)) fail(`${README} documents no \`${optOut}\`, a switch nobody can find`);
 }
 
+// 3b-bis. The diagram half is turned off by a switch a reader can find, and wrapped in markers that BALANCE. An
+// unpaired one strips nothing (the hook keeps the rest as written), so the failure is a briefing that quietly goes on
+// advertising a view this install may not draw, which is the whole thing the markers exist to stop.
+const noMermaid = NO_MERMAID_DECL.exec(read(HOOK_FILE))?.[1];
+if (noMermaid === undefined) {
+  fail(`${HOOK_FILE} declares no NO_MERMAID_ENV, so the diagram half can no longer be turned off`);
+} else {
+  if (!ENV_FAMILY.test(noMermaid)) fail(`${HOOK_FILE} names \`${noMermaid}\`, outside this package's env family`);
+  if (!read(README).includes(noMermaid)) fail(`${README} documents no \`${noMermaid}\`, a switch nobody can find`);
+}
+const marks = NEEDS_DECL.map((re) => re.exec(read(HOOK_FILE))?.[1]);
+if (marks.some((mark) => mark === undefined)) {
+  fail(`${HOOK_FILE} declares no NEEDS_OPEN/NEEDS_CLOSE, so nothing in ${STEERING} can be made conditional`);
+} else {
+  const [open, close] = marks;
+  const opens = steering.split(open).length - 1;
+  const closes = steering.split(close).length - 1;
+  if (opens !== closes) {
+    fail(`${STEERING} has ${opens} \`${open}\` for ${closes} \`${close}\`: a marker without its pair`);
+  }
+  if (closes === 0) fail(`${STEERING} marks nothing as needing a renderer, so the diagram half always ships`);
+  for (const region of steering.split(open).slice(1)) {
+    if (!region.slice(0, region.indexOf(close)).includes(NEEDS_VIEW)) {
+      fail(`${STEERING} marks a region that never names \`${NEEDS_VIEW}\`, so the wrong words would be stripped`);
+    }
+  }
+}
 // 3c. The name the hook looks the install up under is THIS package's. A typo there never fails: the walk simply finds
 // nothing and the plugin's own copy answers forever, which is the drift the lookup exists to end.
 const pkgName = PKG_DECL.exec(read(HOOK_FILE))?.[1];

@@ -16,6 +16,8 @@ import { printedWidth } from "../layout/measure.js";
 import { ANSI_RE, renderTags, tagMark } from "../style.js";
 import { renderView, traceView } from "./render.js";
 import { parseTemplate } from "./parse.js";
+import { diagramCachePath } from "../diagram.js";
+import { maxBoxWidth } from "../platform/tty-width.js";
 import * as LANG from "../data/language.js";
 
 const NAME = "probe";
@@ -227,6 +229,8 @@ describe("raw over hollow", () => {
       [LANG.TONE]: "names a palette class, resolved against the tags and never the data",
       [LANG.ASIDE]: "names a VIEW file, whose body is taken as text and never substituted",
       [LANG.BOX]: "structure alone: it takes no argument at all",
+      [LANG.DIAGRAM]:
+        "names the KIND of the block's BODY, which is upstream of every field: it says the body is a diagram source, drawn before any scope exists",
       [LANG.ENDBOX]: "a terminator, which takes none either",
       [LANG.ENDASIDE]: "a terminator, which takes none either",
       [LANG.END]: "a terminator, which takes none either",
@@ -451,5 +455,74 @@ describe("what a render recorded", () => {
     const scope: Record<string, unknown> = {};
     expect(() => traceView(NAME, scope, [dir], undefined, options)).toThrow();
     expect(Object.keys(scope)).toEqual([]);
+  });
+});
+
+// The FORM refuses before any field is read. Field names were the leak: a table whose first cell spelt `content`
+// fed a view that only ever promised to take a quote, because the named-fields reading is real and load-bearing
+// (a sectioned view is spent exactly that way). So the shape itself is the contract, one per view.
+describe("the payload shape a view accepts", () => {
+  const QUOTE_BODY = "${content}";
+
+  it("refuses the shape the template does not take, before any field is read", () => {
+    view(QUOTE_BODY);
+    expect(() => render({ content: "x" }, { payload: LANG.PAYLOAD_TABLE })).toThrow(
+      LANG.PAYLOAD_QUOTE
+    );
+  });
+
+  it("accepts the one it derives from what it spends", () => {
+    view(QUOTE_BODY);
+    expect(plain(render({ content: "x" }, { payload: LANG.PAYLOAD_QUOTE }))).toContain("x");
+  });
+
+  it("judges nothing when no shape arrived: a caller's own data owes no form", () => {
+    view(QUOTE_BODY);
+    expect(plain(render({ content: "x" }))).toContain("x");
+  });
+
+  it("polices nothing on a template expecting no shape: furniture reads no payload at all", () => {
+    // A typed FILE may replace a render with pure furniture; the raw-over-hollow rulings govern it, not the form.
+    view("all furniture");
+    expect(plain(render({ content: "x" }, { payload: LANG.PAYLOAD_QUOTE }))).toContain(
+      "all furniture"
+    );
+  });
+});
+
+// The diagram crosses this layer without a subprocess: the cache is seeded under the exact key the engine derives,
+// so what is pinned is the seam (raw source in, neutralised drawing out), never termaid's own output.
+describe("a diagram template", () => {
+  const SOURCE = "flowchart TD\n    A --> B";
+  /** Holds a tag on purpose: valid diagram syntax, and exactly what neutralising must keep as TEXT. */
+  const DRAWN = "A{{hexagon}}--B";
+  const DIAGRAM_BODY = LANG.DIAGRAM + "\n${content}";
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-render-diagram-"));
+  afterAll(() => fs.rmSync(stateDir, { recursive: true, force: true }));
+  const drawOptions = { ...options, stateDir };
+  const seed = (): void => {
+    const file = diagramCachePath(SOURCE, maxBoxWidth(drawOptions), stateDir);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, DRAWN);
+  };
+  const draw = (data: object | string, dressing?: object): string =>
+    renderView(NAME, data as never, [dir], undefined, drawOptions, dressing as never);
+
+  it("draws the fence payload's source, and neutralises the DRAWING rather than eating its glyphs", () => {
+    seed();
+    view(DIAGRAM_BODY);
+    const out = plain(draw({ content: SOURCE }, { payload: LANG.PAYLOAD_FENCE }));
+    expect(out).toContain(DRAWN);
+  });
+
+  it("refuses the flat data format: string data is the fenced block, and a diagram has no fields", () => {
+    view(DIAGRAM_BODY);
+    expect(() => draw(SOURCE)).toThrow(/fence/);
+  });
+
+  it("refuses a quote and a table payload outright, whatever their fields spell", () => {
+    view(DIAGRAM_BODY);
+    expect(() => draw({ content: SOURCE }, { payload: LANG.PAYLOAD_QUOTE })).toThrow();
+    expect(() => draw({ content: SOURCE }, { payload: LANG.PAYLOAD_TABLE })).toThrow();
   });
 });

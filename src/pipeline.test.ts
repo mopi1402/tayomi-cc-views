@@ -394,7 +394,67 @@ describe("the slice contract", () => {
 
   it("treats a delta that is not a string as no delta at all", () => {
     const msg = block(NAME, "said: x");
-    expect(slice(msg, undefined, undefined, true, undefined, options)).toBe("");
+    // Null, not "": there is nothing to replace, and an empty DEFINED answer would be a suppression of nothing.
+    expect(slice(msg, undefined, undefined, true, undefined, options)).toBeNull();
+  });
+
+  it("stays silent on a prose delta of an engaged message: an echo defines nothing", () => {
+    // The delta reaches the screen through the host either way. What the null buys is the CHAIN: a defined copy of the
+    // delta was the answer the dispatcher kept over a peer's render of this same flush (measured 2026-08-12).
+    const prev = block(NAME, "said: drawn") + "and then ";
+    expect(slice(prev, "plain prose after it", undefined, false, undefined, options)).toBeNull();
+  });
+});
+
+// The leak of 2026-08-12, pinned at its root: a view NO directory of this engine's search path resolves. Opening a
+// zone on it withheld flushes ("" answered) and re-emitted them raw at the close, a DEFINED answer that overwrote,
+// order permitting, the render a peer holding the template had answered for the same flush.
+describe("a zone whose view this engine cannot resolve", () => {
+  const FOREIGN = "elsewhere";
+  const decorated = [
+    `${DECORATOR_HINT}${FOREIGN}${DECORATOR_CLOSE}`,
+    "| | |",
+    "| --- | --- |",
+    "| said | - hello |",
+    "| did | - world |",
+    "",
+  ].join("\n");
+
+  it("answers NULL on every flush of it, the streamed close included: nothing withheld, nothing echoed", () => {
+    for (const size of CHUNKS) {
+      let prev = "";
+      for (const at of everyNth(decorated, size)) {
+        const delta = decorated.slice(prev.length, at);
+        const got = slice(prev, delta, undefined, at === decorated.length, undefined, options);
+        expect(got, `flush ending at ${at}, ${size} chars each`).toBeNull();
+        prev += delta;
+      }
+    }
+  });
+
+  it("answers NULL on the whole-message pass too", () => {
+    expect(slice("", decorated, undefined, true, undefined, options)).toBeNull();
+  });
+
+  it("still draws, streamed line by line, the view it CAN resolve", () => {
+    // Line flushes for the exact-screen claim: cut mid-token, the head's characters leak by design, and that residual
+    // is already pinned by "leaks only the head of a carrier token".
+    const ours = decorated.split(FOREIGN).join(NAME);
+    const target = render(ours);
+    expect(plain(target)).toContain("hello");
+    expect(replayAt(ours, everyLine(ours))).toBe(target);
+  });
+
+  it("answers NULL on every LINE flush of a fenced block naming it, the closing fence included", () => {
+    // Line flushes on purpose: a flush cut INSIDE the head line is withheld before the name can be judged, which is
+    // the same accepted residual the carrier token already pins ("leaks only the head of a carrier token").
+    const fenced = `intro\n${block(FOREIGN, "said: kept")}`;
+    let prev = "";
+    for (const at of everyLine(fenced)) {
+      const delta = fenced.slice(prev.length, at);
+      expect(slice(prev, delta, undefined, at === fenced.length, undefined, options)).toBeNull();
+      prev += delta;
+    }
   });
 });
 

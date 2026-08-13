@@ -15,6 +15,7 @@ import { VIEW_EXT } from "../template/load.js";
 import { ANSI_RE, INERT_STAR, renderTags, tagMark } from "../style.js";
 import { hasControlMark } from "../data/marks.js";
 import {
+  DIAGRAM,
   EACH,
   END,
   FIELD_CONTENT,
@@ -28,6 +29,8 @@ import {
   TONE,
 } from "../data/language.js";
 import { SCRATCH_DIR } from "../data/markup.js";
+import { diagramCachePath } from "../diagram.js";
+import { maxBoxWidth } from "../platform/tty-width.js";
 
 const ESC = "\x1b";
 const RESET = `${ESC}[0m`;
@@ -1052,9 +1055,10 @@ describe("a decorator inside a code fence", () => {
 
   it("anchors no withholding while a fenced example streams", () => {
     // The cut reads the same fences the render does, or a quoted example at the tail of a message blanks everything
-    // under it until the fence closes.
+    // under it until the fence closes. Null is that reading said whole: nothing anchored, nothing withheld, the host
+    // draws its own delta. Any DEFINED answer here would be a cut.
     const before = lines("intro", FENCE, decorator(ITEM), "");
-    expect(slice("", before, undefined, false, undefined, options)).toContain("intro");
+    expect(slice("", before, undefined, false, undefined, options)).toBeNull();
   });
 });
 
@@ -1123,6 +1127,13 @@ describe("streaming", () => {
     expect(cutStreamingDecorated(lines(decorator(ITEM), EMPTY_HEADER))).toBe("");
   });
 
+  it("holds NOTHING back on a view it cannot RESOLVE: not its zone, so the run streams as prose", () => {
+    const streaming = lines("prose", decorator(ITEM), "| a | b |");
+    expect(cutStreamingDecorated(streaming, () => false)).toBe(streaming);
+    // The same text under a predicate that says yes: the withholding this file always did.
+    expect(cutStreamingDecorated(streaming, () => true)).toBe(lines("prose"));
+  });
+
   it("holds a QUOTE zone back until its blank line arrives, not until a pipe does", () => {
     // The cut reads the run through the same table the render does. Reading a quote's run as a table's would call the
     // zone closed on its first line, and a delta already shown cannot be retracted: the caps would be drawn twice.
@@ -1156,5 +1167,85 @@ describe("streaming", () => {
     expect(plain).not.toContain(">");
     // Once. A zone revealed before its end is known is a zone the next flush draws again.
     expect(plain.split(WARNING_WORD)).toHaveLength(2);
+  });
+});
+
+// The third payload shape: a ```mermaid fence under the decorator, its body reaching the engine RAW and coming back a
+// drawing. The cache is seeded under the exact key the engine derives, so no test here spawns the renderer; what is
+// pinned is the carrier's claim (which lines belong to the zone) and the ONE-FORM rule both ways round.
+describe("a decorated fence", () => {
+  // Spelled, not composed: inputs built here, production constants asserted against, so a drift in either is caught.
+  const MERMAID_OPEN = "```mermaid";
+  const GRAPH = "graph";
+  const SOURCE_ROWS = ["flowchart TD", "    A --> B"];
+  const SOURCE = SOURCE_ROWS.join("\n");
+  /** Holds a tag on purpose: valid diagram output, and exactly what neutralising must keep as TEXT. */
+  const DRAWN = "A{{hexagon}}──B";
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-deco-diagram-`));
+  const drawOpts = { ...options, stateDir };
+  const seed = (source: string): void => {
+    const file = diagramCachePath(source, maxBoxWidth(drawOpts), stateDir);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, DRAWN);
+  };
+  write(second, viewFile(GRAPH), `${DIAGRAM}\n${TONE} dim\n` + "{{tone}}${content}{{/}}");
+  const raw = (msg: string): string => transform(msg, undefined, true, undefined, drawOpts);
+
+  it("draws the fence's body, decorator line and fence both consumed", () => {
+    seed(SOURCE);
+    const out = raw(lines(decorator(GRAPH), MERMAID_OPEN, ...SOURCE_ROWS, FENCE, "after"));
+    const plain = out.replace(ANSI_RE, "");
+    expect(plain).toContain(DRAWN);
+    expect(plain).toContain("after");
+    expect(out).not.toContain(DECORATOR_HINT);
+    expect(plain).not.toContain(MERMAID_OPEN);
+  });
+
+  it("hands the body over UNTRIMMED and line for line: indentation is the source's own syntax", () => {
+    // The seed only answers under the exact bytes the carrier read, so a hit IS the assertion.
+    const INDENTED = ["  keep", "\tthese", "lines"];
+    seed(INDENTED.join("\n"));
+    const out = raw(lines(decorator(GRAPH), MERMAID_OPEN, ...INDENTED, FENCE, ""));
+    expect(out.replace(ANSI_RE, "")).toContain(DRAWN);
+  });
+
+  it("shows the raw zone under a view that is no diagram: a table view takes a table, nothing else", () => {
+    const msg = lines(decorator(ITEM), MERMAID_OPEN, ...SOURCE_ROWS, FENCE);
+    expect(raw(msg)).toBe(msg);
+  });
+
+  it("shows the raw zone the other way round: a diagram takes its fence, never a table or a quote", () => {
+    for (const msg of [
+      decorated(decorator(GRAPH), KV_ROW),
+      lines(decorator(GRAPH), "> not a diagram"),
+    ]) {
+      expect(raw(msg)).toBe(msg);
+    }
+  });
+
+  it("claims nothing over a fence whose info string is another word", () => {
+    // No shape anchors, so the decorator summons the view bare, the diagram refuses (no fence arrived), and the
+    // whole zone stays on screen as written: a ```js block is being SHOWN, not drawn.
+    const msg = lines(decorator(GRAPH), "```js", "let x = 1", FENCE);
+    expect(raw(msg)).toBe(msg);
+  });
+
+  it("shows the raw zone on a fence that never closes, and on one with nothing in it", () => {
+    for (const msg of [
+      lines(decorator(GRAPH), MERMAID_OPEN, ...SOURCE_ROWS),
+      lines(decorator(GRAPH), MERMAID_OPEN, FENCE),
+    ]) {
+      expect(raw(msg)).toBe(msg);
+    }
+  });
+
+  it("withholds a streaming zone until the closing fence is PAST, pipes and blanks deciding nothing", () => {
+    // A diagram body may hold blank lines and pipe-opening rows; only its own closing fence ends the zone.
+    expect(cutStreamingDecorated(lines(decorator(GRAPH), MERMAID_OPEN, ...SOURCE_ROWS))).toBe("");
+    expect(cutStreamingDecorated(lines("prose", decorator(GRAPH), MERMAID_OPEN, "| a |", ""))).toBe(
+      lines("prose")
+    );
+    const closed = lines(decorator(GRAPH), MERMAID_OPEN, ...SOURCE_ROWS, FENCE, "after");
+    expect(cutStreamingDecorated(closed)).toBe(closed);
   });
 });

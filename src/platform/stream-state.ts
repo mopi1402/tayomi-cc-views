@@ -18,8 +18,11 @@ function streamDir(stateDir: string): string {
   return path.join(stateDir, "stream");
 }
 
-/** How long a reader waits for a predecessor's delta before giving up on it. */
-export const WAIT_MS = 250;
+/**
+ * How long a reader waits for a predecessor's delta before giving up on it. Sized for startup JITTER, not for death:
+ * three hooks per delta plus a cold diagram draw pin the CPU, and 250ms expired mid-storm (measured 2026-08-11).
+ */
+export const WAIT_MS = 1000;
 const POLL_MS = 5;
 
 /**

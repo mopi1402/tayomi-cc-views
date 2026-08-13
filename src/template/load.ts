@@ -117,6 +117,22 @@ function candidateFiles(name: string, type?: string): string[] {
   return type ? [`${name}.${type}${VIEW_EXT}`, name + VIEW_EXT] : [name + VIEW_EXT];
 }
 
+/**
+ * Whether the name resolves to a template on this search path, asked BEFORE a zone opens on it. A view this engine
+ * cannot draw is not this engine's zone: withholding one only to re-emit it raw is what overwrote, order permitting,
+ * the render a peer holding the template had answered for the same flush (measured 2026-08-12).
+ */
+export function resolvesView(
+  name: string,
+  dirs: string | string[] = viewsDir(),
+  type?: string
+): boolean {
+  const list = Array.isArray(dirs) ? dirs : [dirs];
+  return list.some((dir) =>
+    candidateFiles(name, type).some((file) => fs.existsSync(path.join(dir, file)))
+  );
+}
+
 // An ORDERED search path, first hit wins. The LAST dir is read unconditionally rather than existence-checked, so a view
 // found nowhere fails with a real path a human can act on.
 //

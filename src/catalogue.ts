@@ -9,7 +9,6 @@
 import {
   ARG_FIELD,
   ARG_KIND,
-  ARG_LIST,
   ARG_TAG,
   ARG_VALUE,
   ARG_VIEW,
@@ -21,18 +20,20 @@ import {
   readsHere,
 } from "./data/grammar.js";
 import {
+  FIELD_CONTENT,
   FIELD_TONE,
   FIELD_TYPE,
   MARKER_FORM,
+  PAYLOAD_FENCE,
   PAYLOAD_FIELDS,
   PAYLOAD_QUOTE,
   PAYLOAD_TABLE,
-  TOKEN_SEP,
 } from "./data/language.js";
 import {
   BLOCK_HINT,
   DECORATOR_CLOSE,
   DECORATOR_HINT,
+  DIAGRAM_INFO,
   FENCE,
   ITEM_MARK,
   NAME_MARK,
@@ -42,7 +43,6 @@ import {
   VIEWS_DIR,
   VIEW_EXT,
 } from "./data/markup.js";
-import { SUBST_RE, slotField } from "./scope.js";
 import { TAG_SUFFIXES, builtinTagNames, tagNames } from "./style.js";
 import {
   bundledViewsDir,
@@ -51,7 +51,6 @@ import {
   loadTemplate,
   viewFile,
 } from "./template/load.js";
-import type { Template } from "./template/parse.js";
 
 /** What a word IS, told from what the tables above answer for it rather than from a fifth list to keep in step. */
 const OPENER = "opener";
@@ -139,13 +138,6 @@ const POSIX_SEP = "/";
 
 const TERMINATORS = new Set(Object.values(CLOSES));
 
-/** The words whose FIRST argument names a field of the block, read off the shape each one declares. */
-const NAMES_A_FIELD = new Set(
-  Object.keys(TAKES).filter(
-    (word) => TAKES[word].startsWith(ARG_FIELD) || TAKES[word].startsWith(ARG_LIST)
-  )
-);
-
 function kindOf(word: string, opens: string[], readIn: string[]): string {
   if (opens.length > 0) return OPENER;
   if (TERMINATORS.has(word)) return TERMINATOR;
@@ -167,54 +159,16 @@ function directives(): DirectiveDoc[] {
   });
 }
 
-/**
- * Every field name a template spends: each substitution's own, each field a directive NAMES, and everything an @fields
- * declares. What a block has to carry, and what the payload below is derived from.
- */
-function spentFields(tpl: Template): string[] {
-  const spent = new Set<string>();
-  for (const [, ref] of tpl.body.join("\n").matchAll(SUBST_RE)) {
-    const field = slotField(ref);
-    if (field !== null) spent.add(field);
-  }
-  for (const line of tpl.body) {
-    // UnTRIMMED: a directive sits at column 0, so an indented line splits on a leading empty token and matches nothing.
-    const [word, arg] = line.split(TOKEN_SEP);
-    if (arg !== undefined && NAMES_A_FIELD.has(word)) spent.add(arg);
-  }
-  for (const [list, fields] of Object.entries(tpl.objectLists)) {
-    spent.add(list);
-    for (const field of fields) spent.add(field);
-  }
-  return [...spent].sort();
-}
-
-/**
- * Which payload a view is asking for, scored on what it spends. Nothing but scoring can answer it, since `content`
- * belongs to both shapes and a view spending it ALONE (quote.view) is asking for the one that leaves the least unspent.
- * A tie is reported as none rather than guessed.
- */
-function payloadOf(spent: readonly string[]): string | null {
-  const held = new Set(spent);
-  const scored = Object.entries(PAYLOAD_FIELDS).map(([shape, fields]) => {
-    const hits = fields.filter((field) => held.has(field)).length;
-    return { shape, hits, score: hits - (fields.length - hits) };
-  });
-  if (scored.every((s) => s.hits === 0)) return null;
-  const best = Math.max(...scored.map((s) => s.score));
-  const winners = scored.filter((s) => s.score === best);
-  return winners.length === 1 ? winners[0].shape : null;
-}
-
 function viewDoc(name: string, dir: string, file: string): ViewDoc {
+  // Spends and payload come OFF the template (parse.ts): the render's refusal is decided on the same value this
+  // publishes, so the catalogue cannot promise a shape the engine would turn away.
   const tpl = loadTemplate(name, [dir]);
-  const spends = spentFields(tpl);
   return {
     name,
     file,
     static: !tpl.spendsSlots,
-    payload: payloadOf(spends),
-    spends,
+    payload: tpl.payload,
+    spends: tpl.spends,
     tone: tpl.tone ?? null,
     tables: Object.fromEntries(
       Object.entries(tpl.tables).map(([tableName, table]) => [tableName, table.kind])
@@ -274,16 +228,24 @@ function payloads(): Record<string, PayloadDoc> {
     [PAYLOAD_TABLE]: TABLE_MARK,
     [PAYLOAD_QUOTE]: QUOTE_MARK,
   };
-  return Object.fromEntries(
-    Object.entries(PAYLOAD_FIELDS).map(([shape, fields]) => [
-      shape,
-      {
-        fields,
-        selectedBy: `a first line starting with ${selector[shape]}`,
-        marker: shape === PAYLOAD_QUOTE ? MARKER_FORM : null,
-      },
-    ])
-  );
+  return {
+    ...Object.fromEntries(
+      Object.entries(PAYLOAD_FIELDS).map(([shape, fields]) => [
+        shape,
+        {
+          fields,
+          selectedBy: `a first line starting with ${selector[shape]}`,
+          marker: shape === PAYLOAD_QUOTE ? MARKER_FORM : null,
+        },
+      ])
+    ),
+    // Not in PAYLOAD_FIELDS: a fence is never derived from what a view spends, only claimed by @diagram (parse.ts).
+    [PAYLOAD_FENCE]: {
+      fields: [FIELD_CONTENT],
+      selectedBy: `a first line of exactly ${FENCE}${DIAGRAM_INFO}, the source running to the closing ${FENCE}`,
+      marker: null,
+    },
+  };
 }
 
 function assemble(views: ViewDoc[], tags: string[]): Catalogue {

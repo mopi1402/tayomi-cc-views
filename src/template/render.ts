@@ -3,12 +3,14 @@
 
 import { WRAP_MARKS } from "../data/marks.js";
 import { holdsCells, wrapLine } from "../layout/wrap.js";
-import { dropInert, fillTone, markCode, renderTags, toneClass } from "../style.js";
+import { dropInert, fillTone, inert, markCode, renderTags, toneClass } from "../style.js";
 import { nameField, type Scope } from "../scope.js";
-import { FIELD_TONE, FIELD_TYPE } from "../data/language.js";
+import { FIELD_CONTENT, FIELD_TONE, FIELD_TYPE, PAYLOAD_FENCE } from "../data/language.js";
+import { DIAGRAM_INFO, FENCE } from "../data/markup.js";
 import { renderBody } from "./directives.js";
 import { loadTemplate, viewsDir } from "./load.js";
 import { maxBoxWidth } from "../platform/tty-width.js";
+import { renderDiagram } from "../diagram.js";
 import { inertData, namedFields, parseData } from "./view-data.js";
 import type { RenderOptions } from "../options.js";
 
@@ -21,6 +23,12 @@ export interface Dressing {
   type?: string;
   /** The tone CLASS: a palette tag name, no file, no semantics. Outranks the kind. */
   tone?: string;
+  /**
+   * The SHAPE the payload arrived in (PAYLOAD_TABLE, PAYLOAD_QUOTE, PAYLOAD_FENCE). Set by the decorator carrier
+   * alone, and absent for a static summon, a fenced view: block or a caller's own data: the shape check above only
+   * ever judges what a decorator actually parsed.
+   */
+  payload?: string;
 }
 
 /**
@@ -53,20 +61,46 @@ export function traceView(
   options?: RenderOptions,
   dressing?: Dressing
 ): Traced {
-  const { tables, objectLists, body, labelWidth, tone, spendsSlots } = loadTemplate(
-    name,
-    dir,
-    dressing?.type
-  );
+  const { tables, objectLists, body, labelWidth, tone, spendsSlots, diagram, payload } =
+    loadTemplate(name, dir, dressing?.type);
+  // Resolved here rather than at the render below, because a DIAGRAM body is drawn to a width and that happens on the
+  // way in. The layers under this one still receive it as a value and never probe for it.
+  const limit = maxBoxWidth(options);
+  // The FORM refuses before any field is read: a payload shape arrived (only a decorator says which), and it must be
+  // the ONE this template accepts. Deciding on field names instead was the leak: a table whose first cell spelt
+  // `content` fed a view that only ever promised to take a quote. A template expecting NO shape polices none: it
+  // reads nothing, a typed FILE may be pure furniture over any payload, and the raw-over-hollow rulings below are
+  // what already govern it.
+  if (dressing?.payload !== undefined && payload !== null && dressing.payload !== payload) {
+    throw new Error(`view ${name}: a ${dressing.payload} payload, and this view takes ${payload}`);
+  }
+  // A diagram is fed by its fence ALONE, so string data (the fenced view: block's flat format) refuses too: a source
+  // read as key-value pairs is debris here and raw text everywhere else, while the decorator's fence stays a diagram
+  // that draws itself on any forge.
+  if (diagram && dressing?.payload !== PAYLOAD_FENCE) {
+    throw new Error(`view ${name}: a diagram arrives under its own ${FENCE}${DIAGRAM_INFO} fence`);
+  }
   // Either pre-parsed data (callers, tests) or the raw block text (the hook). Parsed here so the view's @fields
   // directive drives the split, and neutralised here because raw block text came from the MESSAGE. A caller handing
   // pre-parsed data owns its own provenance.
-  const parsed: Scope =
-    typeof data === "string" ? (inertData(parseData(data, objectLists)) as Scope) : data;
   // Rows read a SECOND way, HERE where the template is known: splitting a list is @fields' business, no carrier's.
   // PRE-PARSED data alone: a fenced block's `rows` were split by @fields already, and deriving would move its render.
-  const scope: Scope =
-    typeof data === "string" ? parsed : (namedFields(parsed, objectLists) as Scope);
+  let scope: Scope =
+    typeof data === "string"
+      ? (inertData(parseData(data, objectLists)) as Scope)
+      : (namedFields(data, objectLists) as Scope);
+  if (diagram) {
+    // The source arrived RAW (the carrier styles nothing bound for a renderer), and the DRAWING is what gets
+    // neutralised: `A{{hexagon}}` is valid diagram source, so the glyphs coming back must reach the template as text
+    // a MESSAGE wrote. A renderer absent or refusing THROWS, and the caller's fail-open turns that into the fence
+    // shown as written. Spread, never assigned in place: `scope` may still BE the caller's own object.
+    scope = {
+      ...scope,
+      [FIELD_CONTENT]: inert(
+        renderDiagram(String(scope[FIELD_CONTENT] ?? ""), limit, options?.stateDir)
+      ),
+    };
+  }
   // "Raw over hollow", first two readings (.tayomi/specs/fix/carrier-guards.md). Whether DATA arrived, never whether
   // the template printed: a view drawing literal furniture always puts ink on screen. A template spending no slot is
   // STATIC and renders on empty data, which keeps `@{view:welcome}` a health check. The carrier's KIND counts as data,
@@ -89,10 +123,7 @@ export function traceView(
   const read = new Set<string>();
   full.__read = read;
   let out: string[];
-  const limit = maxBoxWidth(options);
   try {
-    // Width and search path resolved ONCE here and handed down as values: the layers below never import platform/ and
-    // never probe for a file.
     out = renderBody(body, full, tables, objectLists, limit, dir);
     // A template declaring no container passes no wrapper, so the fold happens here or nowhere. A stacked cell has to
     // be dealt or its rows print side by side, and a line holding COLUMNS has to be folded even when nothing stacked:
