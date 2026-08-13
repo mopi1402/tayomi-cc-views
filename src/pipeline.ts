@@ -11,11 +11,20 @@ import {
   cutStreamingDecorated,
   decoratedZones,
   renderDecorated,
+  zoneSpans,
 } from "./carrier/decorator.js";
 import { CRLF, NL } from "./data/markup.js";
 import { defaultViewsPath, resolvesView } from "./template/load.js";
 import { renderView } from "./template/render.js";
-import { defersView } from "./platform/peers.js";
+import { composeRole, defersView } from "./platform/peers.js";
+import {
+  FENCED_ZONE,
+  DECORATED_ZONE,
+  pieceFor,
+  publishPiece,
+  publishRaw,
+  zoneKey,
+} from "./platform/compose.js";
 import { parseData } from "./template/view-data.js";
 import {
   failedOutcome,
@@ -45,14 +54,27 @@ export function transform(
   const strictView = host?.strict?.view;
   let outcome: Outcome | null = null;
   // Measured on THIS text, before the pass that rewrites it. The decorator measures again on its own input: these
-  // offsets no longer name the same characters once the blocks below have been replaced by their renders.
+  // offsets no longer name the same characters once the blocks below have been replaced by their renders, and that
+  // shift is why a zone's composition identity is an ORDINAL and never an offset.
   const fences = fenceSpans(text);
+  const ordinals = new Map<string, number>();
+  const nth = (name: string): number => {
+    const ordinal = ordinals.get(name) ?? 0;
+    ordinals.set(name, ordinal + 1);
+    return ordinal;
+  };
   let out = text.replace(BLOCK_RE, (m: string, name: string, bodyText: string, at: number) => {
-    // A block quoted inside an ordinary fence is an EXAMPLE. Its own fence is the one span it may be inside.
+    // A block quoted inside an ordinary fence is an EXAMPLE. Its own fence is the one span it may be inside, and it
+    // spends no ordinal: the pre-pass skips it the same way, so the two counts can never drift.
     const fence = fenceAt(fences, at);
     if (fence !== undefined && !fence.carrier) return m;
-    // A newer engine on this machine has this view too, so the zone is left exactly as written and reaches it untouched.
-    if (defersView(name)) return m;
+    const key = zoneKey(FENCED_ZONE, name, nth(name));
+    // A zone whose election this engine LOST: where this engine assembles, the winner's published piece replaces the
+    // block whole; everywhere else it is left exactly as written and reaches the winner untouched.
+    if (defersView(name)) {
+      return pieceFor(key)?.text ?? m;
+    }
+    const span = m.split(NL).length;
     try {
       // The host is handed the block PARSED, never its text: the same shape a decorated zone hands over, with lists
       // unsplit since @fields is the template's business.
@@ -60,12 +82,16 @@ export function transform(
         renderView(name, bodyText, dirs, host?.inject?.(name, parseData(bodyText), cwd), options) +
         "\n";
       if (name === strictView) outcome = okOutcome();
+      publishPiece(key, span, rendered);
       return rendered;
     } catch (e) {
       if (name === strictView && host?.strict !== undefined) {
         outcome = failedOutcome(e);
-        return strictLine(host.strict) + "\n"; // never the raw block nor its fences
+        const shown = strictLine(host.strict) + "\n"; // never the raw block nor its fences
+        publishPiece(key, span, shown);
+        return shown;
       }
+      publishRaw(key); // won and declined all the same: the assembler must not wait for it
       return m; // fail-open: show the raw block
     }
   });
@@ -73,8 +99,11 @@ export function transform(
   // the last delta no later flush exists (a block that never closes used to be cut away here and never came back).
   // Withheld first, rendered second, so a half-formed payload can never render. Neither cut engages on a view this
   // engine cannot resolve: not its zone, so it streams as prose and nothing is ever re-emitted over a peer's render.
+  // Under a COMPOSITION the deferred views join the cut: the winner's piece will fill the zone, so its head must never
+  // stream as prose, which is exactly the leak that painted a peer's zone raw at a flush boundary (docs/caveats.md).
   if (final !== true) {
-    const resolves = (name: string, type?: string): boolean => resolvesView(name, dirs, type);
+    const resolves = (name: string, type?: string): boolean =>
+      resolvesView(name, dirs, type) || (composeRole() !== "off" && defersView(name));
     out = cutUnclosedBlock(out, resolves);
     out = cutStreamingDecorated(out, resolves);
   }
@@ -119,6 +148,38 @@ function lastStrictIsDecorated(text: string, strictView: string): boolean {
  */
 function engaged(full: string): boolean {
   return full.includes(BLOCK_HINT) || full.includes(DECORATOR_HINT);
+}
+
+/**
+ * The zones this flush is OWED by its peers: every zone of both carriers whose election this engine lost and whose
+ * winner has something to say already, a fenced block being closed by construction and a decorated zone once a line
+ * past its run exists, or on the final flush where nothing can grow. What the assembler's pre-pass awaits pieces for,
+ * named the way the store names them, and counted the way the render passes count: every zone of a view spends its
+ * ordinal, deferred or not, shielded examples excluded on both sides alike.
+ */
+export function deferredZoneKeys(full: string, final?: boolean): string[] {
+  const text = full.split(CRLF).join(NL);
+  if (!engaged(text)) return [];
+  const out: string[] = [];
+  const fences = fenceSpans(text);
+  const fencedOrdinals = new Map<string, number>();
+  for (const m of text.matchAll(BLOCK_RE)) {
+    const fence = fenceAt(fences, m.index);
+    if (fence !== undefined && !fence.carrier) continue;
+    const name = m[1];
+    const ordinal = fencedOrdinals.get(name) ?? 0;
+    fencedOrdinals.set(name, ordinal + 1);
+    if (defersView(name)) out.push(zoneKey(FENCED_ZONE, name, ordinal));
+  }
+  const decoratedOrdinals = new Map<string, number>();
+  for (const zone of zoneSpans(text)) {
+    const ordinal = decoratedOrdinals.get(zone.view) ?? 0;
+    decoratedOrdinals.set(zone.view, ordinal + 1);
+    if ((zone.closed || final === true) && defersView(zone.view)) {
+      out.push(zoneKey(DECORATED_ZONE, zone.view, ordinal));
+    }
+  }
+  return out;
 }
 
 function sharedPrefix(a: string, b: string): number {

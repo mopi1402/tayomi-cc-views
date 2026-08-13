@@ -48,7 +48,7 @@ The second is the one worth having, and the reason it is a line and not a band: 
 
 ### When two engines draw your session
 
-If you also run a MessageDisplay hook from a plugin, both are registered and they CHAIN, first to run consuming the zone, and the order is not yours to choose ("Two engines can draw the same message" in [caveats.md](docs/caveats.md)). So a box in this repo may come from the published engine rather than from your working tree, with nothing on screen saying which.
+If you also run a MessageDisplay hook from a plugin, both are registered, each receives the ORIGINAL delta, and the host keeps the LAST defined answer, an order that is not yours to choose ("Two engines can draw the same message" in [caveats.md](docs/caveats.md)). The register is what keeps that livable: each engine draws the zones it WINS, and where every claim speaks the composition protocol, one assembler answers the flush alone. A box in this repo may still come from the published engine rather than from your working tree, with nothing on screen saying which.
 
 Ask for `@{view:welcome}`: the box names the engine that drew it, version included.
 

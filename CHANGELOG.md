@@ -1,7 +1,19 @@
 # Changelog
 
-## Unreleased
+## 2.3.3
 
+- Engines COMPOSE one answer per flush: claims speak a protocol, all-or-nothing per fleet
+- The election casts one ASSEMBLER; every other engine answers nothing at all
+- A speaker's render travels as a write-once piece, named by message, carrier, view and ordinal
+- The assembler splices the winners' pieces into its own render, their colours intact
+- A peer's zone still streaming is withheld like the engine's own: the flush-boundary leak dies
+- An expired piece wait is recorded and irrevocable: a late piece never repaints a raw zone
+- One mute claim on the register sends the whole fleet back to answering alone
+- A mixed fleet is named to the operator, culprits pointed by version and by the project to update, once per session
+- A claim outrun by a newer engine at its own location dies at once: an update never leaves a ghost accusing the project it fixed
+- The warning is a styled NOTICE: accent header, boxed culprits, and the update call under the rule
+- `notice` and `middleEllipsis` join the public API: the systemMessage dress, for any host with something to say
+- The warning lands mid-session too, relayed by the model from the first prompt after the fleet mixed: `cc-views-session prompt`, a new optional hook
 - One engine WINS each view: an election every engine computes alike replaces the stand-aside
 - A view another engine declares and this one cannot resolve is left to its winner, never echoed as prose
 - The election tie-breaks by version, then proximity to the project, then a fixed path order: one winner, always

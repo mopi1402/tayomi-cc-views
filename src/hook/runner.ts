@@ -4,7 +4,7 @@
 // reassembly logic, no process anywhere, which is what makes the dance testable. runMessageDisplayHook is the thin edge
 // over it. Neither ever exits the process: the exit belongs to the caller (the bin below, or a host's own edge).
 
-import { slice, type DisplayHost } from "../pipeline.js";
+import { deferredZoneKeys, slice, type DisplayHost } from "../pipeline.js";
 import {
   awaitEarlier,
   dropMessage,
@@ -12,7 +12,13 @@ import {
   sweepStale,
 } from "../platform/stream-state.js";
 import { DEFAULT_STATE_DIR } from "../platform/scratch.js";
-import { holdElection } from "../platform/peers.js";
+import { composeRole, holdElection } from "../platform/peers.js";
+import {
+  dropComposition,
+  gatherPieces,
+  setComposition,
+  sweepCompose,
+} from "../platform/compose.js";
 import { declaredViews } from "../template/load.js";
 import { parseStdin, readStdin, stringField } from "@tayomi/utils";
 import type { RenderOptions } from "../options.js";
@@ -61,8 +67,12 @@ export async function handleMessageDisplay(
     };
     // Before any RENDER, and per ZONE: the election says which views this flush draws and which it leaves, whatever
     // order the dispatcher chose. After the parse on purpose: the electorate is the SESSION's roster, and the
-    // proximity tie-break reads the project's own directory.
+    // proximity tie-break reads the project's own directory. The same election casts this flush's PART in the
+    // composition: off answers alone as always, a speaker publishes its zones as pieces and answers nothing, the one
+    // assembler splices the pieces in and is the flush's single defined answer.
     holdElection(declaredViews(options?.viewsPath), ctx.sessionId, cwd);
+    const role = composeRole();
+    setComposition(role === "off" ? null : id);
     const resolved = typeof host === "function" ? host(ctx) : host;
     const stateDir = options?.stateDir ?? DEFAULT_STATE_DIR;
     // The flush's position in its message, and the ONLY ordering this edge trusts. A payload without it (an older
@@ -80,6 +90,12 @@ export async function handleMessageDisplay(
       prev = earlier.text;
       whole = earlier.complete;
     }
+    // The assembler's PRE-PASS, on the same text the slice below will read: the zones the election owes a peer are
+    // resolved here, waiting BOUNDED for the pieces the winners render in sibling processes of this same flush, so the
+    // carriers splice synchronously and no render ever blocks mid-walk.
+    if (role === "assembler") {
+      await gatherPieces(deferredZoneKeys(whole ? prev + delta : delta, final));
+    }
     // An incomplete prefix means a predecessor never landed, so no offset into the screen can be computed. The delta
     // renders ALONE instead of going back to the host: handed back, a zone's opening lines printed raw and stayed
     // (measured 2026-08-11). The engine's own withholding cuts what still streams; prose stays prose, null means prose.
@@ -89,7 +105,12 @@ export async function handleMessageDisplay(
     if (final && index !== null) {
       dropMessage(id, stateDir);
       sweepStale(undefined, stateDir);
+      if (role === "assembler") dropComposition(id);
+      sweepCompose();
     }
+    // A SPEAKER answers NOTHING whatever it rendered: its zones travelled as pieces, its host's own duties (inject,
+    // strict, onRendered) all ran in the slice above, and the assembler is the flush's one voice.
+    if (role === "speaker") return null;
     if (display === null) return null;
     // "" INCLUDED, and it is the protocol's own suppression: the host schema reads any DEFINED displayContent as the
     // delta's replacement, and omitting it means "display the original" (read off the 2.1.228 binary, 2026-08-11).

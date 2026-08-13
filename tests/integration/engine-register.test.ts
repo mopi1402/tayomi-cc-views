@@ -32,11 +32,15 @@ const SENTENCE = "la ligne que tu aurais ecrite de toute facon";
 const SHARED = "quote";
 const MESSAGE = [`@{view:${SHARED}, tone:gold}`, `> ${SENTENCE}`].join("\n");
 
-/** Another engine on the machine, real file behind it, declaring the views it can draw. */
+/**
+ * Another engine on the machine, real file behind it, declaring the views it can draw. It speaks NO composition
+ * protocol on purpose: this suite is the FALLBACK contract, every engine answering alone the way the whole fleet did
+ * before pieces existed, and the way it still must the moment one mute claim stands on the register.
+ */
 function otherEngine(version: string, views: string[]): string {
   const at = path.join(home, `engine-${version}-${n}.js`);
   fs.writeFileSync(at, "", "utf8");
-  announce(peersDir(), { path: at, version, views });
+  announce(peersDir(), { path: at, version, views, speaks: 0 });
   return at;
 }
 

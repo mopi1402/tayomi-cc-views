@@ -9,15 +9,20 @@ import os from "node:os";
 import path from "node:path";
 import { ENGINES_DIR, ENGINES_DIR_ENV, NO_YIELD_ENV, SCRATCH_DIR } from "../data/markup.js";
 import {
+  COMPOSE_PROTOCOL,
   PEER_STALE_MS,
   SESSION_STALE_MS,
   announce,
   announceRoster,
+  claimMuteWarning,
   clearRoster,
   compareVersions,
+  composeRole,
+  composedRole,
   defersView,
   electedLosses,
   holdElection,
+  mutePeers,
   peers,
   peersDir,
   rosterDir,
@@ -58,7 +63,12 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const claim = (at: string, version: string, views: string[] = []): Peer => ({ path: at, version, views });
+const claim = (at: string, version: string, views: string[] = []): Peer => ({
+  path: at,
+  version,
+  views,
+  speaks: COMPOSE_PROTOCOL,
+});
 const self = (version = MINE): Peer => claim(ours, version);
 const other = (version: string, views: string[] = []): Peer => claim(theirs, version, views);
 
@@ -118,7 +128,9 @@ describe("the register", () => {
 
   it("hands back a peer that is fresh, real and readable", () => {
     announce(dir, other(NEWER));
-    expect(peers(dir, self())).toEqual([{ path: theirs, version: NEWER, views: [] }]);
+    expect(peers(dir, self())).toEqual([
+      { path: theirs, version: NEWER, views: [], speaks: COMPOSE_PROTOCOL },
+    ]);
   });
 });
 
@@ -183,14 +195,14 @@ describe("the election", () => {
   it("announces the names it was handed, so a peer can elect against THIS engine", () => {
     holdElection([MINE_ONLY, BOTH], undefined, undefined, dir, self());
     expect(peers(dir, other(OLDER))).toEqual([
-      { path: ours, version: MINE, views: [MINE_ONLY, BOTH] },
+      { path: ours, version: MINE, views: [MINE_ONLY, BOTH], speaks: COMPOSE_PROTOCOL },
     ]);
   });
 
   it("computes the losses from a LIST the same way, the pure half a test can hold still", () => {
     const list: Peer[] = [
-      { path: "/old", version: OLDER, views: ["oldonly"] },
-      { path: "/new", version: NEWER, views: [BOTH] },
+      { path: "/old", version: OLDER, views: ["oldonly"], speaks: COMPOSE_PROTOCOL },
+      { path: "/new", version: NEWER, views: [BOTH], speaks: COMPOSE_PROTOCOL },
     ];
     // BOTH is lost to the newer peer; oldonly is lost unopposed, self never having declared it.
     expect([...electedLosses(list, self())].sort()).toEqual(["oldonly", BOTH]);
@@ -259,7 +271,9 @@ describe("the session roster", () => {
     announceRoster(SESSION, dir, { ...self(), views: [VIEW] });
     announceRoster(SESSION, dir, { ...other(NEWER), views: [VIEW] });
     expect(rosterHolds(SESSION, dir, self())).toBe(true);
-    expect(rosterPeers(SESSION, dir, self())).toEqual([{ path: theirs, version: NEWER, views: [VIEW] }]);
+    expect(rosterPeers(SESSION, dir, self())).toEqual([
+      { path: theirs, version: NEWER, views: [VIEW], speaks: COMPOSE_PROTOCOL },
+    ]);
   });
 
   it("keeps a roster PER session: tearing one down leaves the neighbour's fleet standing", () => {
@@ -321,6 +335,171 @@ describe("the session roster", () => {
     announceRoster(SESSION, dir, { ...other(OLDER), views: [] });
     holdElection([VIEW], SESSION, undefined, dir, self());
     expect(defersView(VIEW)).toBe(false); // the roster's word: no view claimed, nothing lost to it
+  });
+});
+
+// The rule, in one line: composition engages only where the WHOLE electorate speaks it, and then exactly one engine of
+// the fleet computes itself the voice. Every failure is `off`, which is the behaviour that already ran.
+describe("the composition role", () => {
+  const VIEW = "somewhere";
+
+  /** A claim from before the protocol: same shape, speaks nothing. */
+  const mute = (at: string, version: string, views: string[] = []): Peer => ({
+    ...claim(at, version, views),
+    speaks: 0,
+  });
+
+  it("is OFF alone: composition has nobody to compose with", () => {
+    expect(composedRole([], self())).toBe("off");
+  });
+
+  it("is OFF for the whole fleet the moment ONE peer does not speak the protocol", () => {
+    // A mute engine answers alone whatever the others agree on, so an assembler elected without it would be spoken
+    // over: the only safe fleet is the one where everyone falls back together.
+    expect(composedRole([other(OLDER), mute(engineAt("mute"), OLDER)], self())).toBe("off");
+  });
+
+  it("hands the TOP of the same total order the voice, and the rest silence", () => {
+    expect(composedRole([other(OLDER)], self())).toBe("assembler");
+    expect(composedRole([other(NEWER)], self())).toBe("speaker");
+  });
+
+  it("casts exactly one assembler per fleet, computed alike from every seat", () => {
+    const a = claim(engineAt("aaa"), MINE, [VIEW]);
+    const z = claim(engineAt("zzz"), MINE, [VIEW]);
+    expect(composedRole([z], a)).toBe("assembler");
+    expect(composedRole([a], z)).toBe("speaker");
+  });
+
+  it("is installed by the election, read where the runner dispatches", () => {
+    announce(dir, other(OLDER, [VIEW]));
+    holdElection([VIEW], undefined, undefined, dir, self());
+    expect(composeRole()).toBe("assembler");
+    announce(dir, other(NEWER, [VIEW]));
+    holdElection([VIEW], undefined, undefined, dir, self());
+    expect(composeRole()).toBe("speaker");
+  });
+
+  it("is OFF under the opt-out: an engine drawing everything cannot also owe silence", () => {
+    announce(dir, other(OLDER, [VIEW]));
+    vi.stubEnv(NO_YIELD_ENV, "1");
+    holdElection([VIEW], undefined, undefined, dir, self());
+    expect(composeRole()).toBe("off");
+  });
+
+  it("is OFF where the register cannot be read: every failure is the behaviour that already ran", () => {
+    announce(dir, other(OLDER, [VIEW]));
+    holdElection([VIEW], undefined, undefined, dir, self());
+    holdElection([VIEW], undefined, undefined, path.join(dir, "nope", "deeper"), self());
+    expect(composeRole()).toBe("off");
+  });
+
+  it("is OFF against a legacy claim on the real register too, read back as speaking nothing", () => {
+    fs.writeFileSync(
+      path.join(dir, "old-format"),
+      JSON.stringify({ path: theirs, version: NEWER, views: [VIEW] }),
+      "utf8"
+    );
+    holdElection([VIEW], undefined, undefined, dir, self());
+    expect(composeRole()).toBe("off");
+    expect(defersView(VIEW)).toBe(true); // the election itself still stands: the zone is still theirs
+  });
+});
+
+// A mixed fleet is a DEGRADED state the operator can end, so it is named to them: once per session, culprits pointed.
+describe("the mute-fleet warning", () => {
+  const VIEW = "somewhere";
+
+  /** A claim from before the protocol. */
+  const mute = (): Peer => ({ ...other(NEWER, [VIEW]), speaks: 0 });
+
+  it("filters the claims that send everyone back to solo answers", () => {
+    expect(mutePeers([other(OLDER), mute()])).toEqual([mute()]);
+    expect(mutePeers([other(OLDER)])).toEqual([]);
+  });
+
+  it("is claimed ONCE per session: the first asker gets the text, every later one gets null", () => {
+    const first = claimMuteWarning(SESSION, [mute()], dir);
+    expect(first).not.toBeNull();
+    expect(claimMuteWarning(SESSION, [mute()], dir)).toBeNull();
+    expect(claimMuteWarning(OTHER_SESSION, [mute()], dir)).not.toBeNull(); // its neighbour still warns
+  });
+
+  it("hands the claimer the CULPRITS to name, facts only: each edge dresses them for its own channel", () => {
+    expect(claimMuteWarning(SESSION, [mute()], dir)).toEqual([mute()]);
+  });
+
+  it("warns about nothing where there is nothing: no culprit, or no session to claim under", () => {
+    expect(claimMuteWarning(SESSION, [], dir)).toBeNull();
+    expect(claimMuteWarning("", [mute()], dir)).toBeNull();
+  });
+
+  it("leaves the roster's claims readable around its marker, and dies with the roster", () => {
+    announceRoster(SESSION, dir, { ...other(NEWER), views: [VIEW] });
+    claimMuteWarning(SESSION, [mute()], dir);
+    expect(rosterPeers(SESSION, dir, self())).toHaveLength(1); // the marker is not a claim and silences nobody
+    clearRoster(SESSION, dir);
+    expect(claimMuteWarning(SESSION, [mute()], dir)).not.toBeNull(); // a new session of the same name warns anew
+  });
+});
+
+// A claim proves an engine RAN, never that it is still wired: after an update the old engine's claim would otherwise
+// stand a full expiry, accusing the very project the operator just fixed and holding the fleet out of composition
+// (measured 2026-08-14). The newer claim at the SAME location is the proof the location moved on.
+describe("a claim outrun at its own location", () => {
+  // The incident's own numbers: the ghost the operator was accused by, and the release that had replaced it.
+  const GHOST = "2.3.2-rc.0";
+  const RELEASE = "2.3.3";
+
+  /** An installed engine under a PROJECT: real file, real package.json, the shape locationOf recognises. */
+  const projectEngine = (project: string, pkg: string): string => {
+    const root = path.join(dir, project);
+    const at = path.join(root, "node_modules", pkg, "dist", "platform", "peers.js");
+    fs.mkdirSync(path.dirname(at), { recursive: true });
+    fs.writeFileSync(at, "", "utf8");
+    fs.writeFileSync(path.join(root, "package.json"), "{}", "utf8");
+    return at;
+  };
+
+  /** The register's claim FILES, told apart from the fixture trees beside them. */
+  const claimFiles = (): number =>
+    fs.readdirSync(dir).filter((name) => fs.statSync(path.join(dir, name)).isFile()).length;
+
+  it("dies at once, its file swept: an update never leaves a ghost accusing the project it fixed", () => {
+    const old = claim(projectEngine("proj", "old"), GHOST);
+    old.speaks = 0;
+    announce(dir, old);
+    announce(dir, claim(projectEngine("proj", "new"), RELEASE));
+    const before = claimFiles();
+    const seen = peers(dir, self());
+    expect(seen.map((peer) => peer.version)).toEqual([RELEASE]);
+    expect(claimFiles()).toBe(before - 1);
+    announce(dir, old); // the ghost re-announced dies again while the newer claim stands
+    expect(peers(dir, self()).map((peer) => peer.version)).toEqual([RELEASE]);
+  });
+
+  it("is outrun by SELF too: the updated project's own session needs no third engine to see it", () => {
+    const old = claim(projectEngine("proj", "old"), GHOST);
+    old.speaks = 0;
+    announce(dir, old);
+    const me = claim(projectEngine("proj", "self"), RELEASE);
+    expect(peers(dir, me)).toEqual([]);
+  });
+
+  it("stands against an EQUAL version, and against a newer one somewhere ELSE", () => {
+    announce(dir, claim(projectEngine("proj", "a"), RELEASE));
+    announce(dir, claim(projectEngine("proj", "b"), RELEASE));
+    announce(dir, claim(projectEngine("elsewhere", "c"), "9.9.9"));
+    expect(peers(dir, self())).toHaveLength(3);
+  });
+
+  it("dies on the session ROSTER the same way, where no age limit would ever have caught it", () => {
+    const old = claim(projectEngine("proj", "old"), GHOST);
+    announceRoster(SESSION, dir, old);
+    announceRoster(SESSION, dir, claim(projectEngine("proj", "new"), RELEASE));
+    const seen = rosterPeers(SESSION, dir, self());
+    expect(seen.map((peer) => peer.version)).toEqual([RELEASE]);
+    clearRoster(SESSION, dir);
   });
 });
 
@@ -401,7 +580,9 @@ describe("what must never silence a screen", () => {
   it("still announces under the opt-out, so a peer can elect against THIS engine", () => {
     vi.stubEnv(NO_YIELD_ENV, "1");
     holdElection([VIEW], undefined, undefined, dir, self());
-    expect(peers(dir, other(OLDER))).toEqual([{ path: ours, version: MINE, views: [VIEW] }]);
+    expect(peers(dir, other(OLDER))).toEqual([
+      { path: ours, version: MINE, views: [VIEW], speaks: COMPOSE_PROTOCOL },
+    ]);
   });
 
   it("caps what one claim can cost on every flush", () => {

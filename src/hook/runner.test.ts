@@ -8,7 +8,16 @@ import os from "node:os";
 import path from "node:path";
 import { handleMessageDisplay, type MessageContext } from "./runner.js";
 import { readEarlier } from "../platform/stream-state.js";
-import { announce, peers, peersDir } from "../platform/peers.js";
+import { COMPOSE_PROTOCOL, announce, peers, peersDir } from "../platform/peers.js";
+import {
+  DECORATED_ZONE,
+  FENCED_ZONE,
+  composeMessageDir,
+  piecePath,
+  rawVerdictPath,
+  zoneKey,
+  type Piece,
+} from "../platform/compose.js";
 import { ANSI_RE } from "../style.js";
 import { ENGINE_VERSION } from "../data/engine.js";
 import { BOX, EACH, END, ENDBOX, HEAD } from "../data/language.js";
@@ -50,11 +59,15 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** Another engine on the machine, with a real file behind it: a claim whose path is gone is one nobody believes. */
-function otherEngine(version: string): void {
+/**
+ * Another engine on the machine, with a real file behind it: a claim whose path is gone is one nobody believes.
+ * `speaks: 0` unless a case says otherwise: the coexistence block below is the FALLBACK contract, each engine
+ * answering alone, and one mute claim is what sends a whole fleet back to it.
+ */
+function otherEngine(version: string, speaks = 0): void {
   const at = path.join(registerHome, `engine-${version}.js`);
   fs.writeFileSync(at, "", "utf8");
-  announce(peersDir(), { path: at, version, views: SHARED_VIEWS });
+  announce(peersDir(), { path: at, version, views: SHARED_VIEWS, speaks });
 }
 
 let n = 0;
@@ -214,7 +227,85 @@ describe("when another engine is registered on the machine", () => {
       ...options,
       viewsPath: [views, views],
     });
-    const [mine] = peers(peersDir(), { path: "/somewhere/else", version: OLDER, views: [] });
+    const [mine] = peers(peersDir(), { path: "/somewhere/else", version: OLDER, views: [], speaks: 0 });
     expect(mine.views).toEqual(["note"]);
+  });
+});
+
+// The COMPOSED dispatch, at the storey that casts it: the same fleets as above, every claim speaking the protocol.
+describe("when the whole fleet speaks the composition protocol", () => {
+  const block = "```view:note\nnote:\n- a\n```\n";
+  /** A zone only the peer declares, sitting BELOW this engine's own so the flush carries both. */
+  const theirs = "@{view:elsewhere}";
+  const mixed = `${block}${theirs}\nafter\n`;
+
+  /** A peer speaking the protocol and declaring the views handed to it, real file behind the claim. */
+  function composingPeer(version: string, peerViews: string[]): void {
+    const at = path.join(registerHome, `engine-composing-${version}.js`);
+    fs.writeFileSync(at, "", "utf8");
+    announce(peersDir(), { path: at, version, views: peerViews, speaks: COMPOSE_PROTOCOL });
+  }
+
+  it("a SPEAKER answers NOTHING, even for the flush its own render engaged", async () => {
+    otherEngine(NEWER, COMPOSE_PROTOCOL);
+    expect(await handleMessageDisplay(payload(msg(), 0, mixed, true), undefined, options)).toBeNull();
+  });
+
+  /** The names both sides compute alone: our block is the first `note` fenced zone, theirs the first `elsewhere` decorated one. */
+  const ourKey = zoneKey(FENCED_ZONE, "note", 0);
+  const theirKey = zoneKey(DECORATED_ZONE, "elsewhere", 0);
+
+  it("a SPEAKER that wins a view publishes that zone's piece under the message and the zone's key", async () => {
+    // The peer outranks this engine but declares only ITS view: `note` stays ours, rendered and published.
+    const at = path.join(registerHome, `engine-elsewhere.js`);
+    fs.writeFileSync(at, "", "utf8");
+    announce(peersDir(), { path: at, version: NEWER, views: ["elsewhere"], speaks: COMPOSE_PROTOCOL });
+    const id = msg();
+    expect(await handleMessageDisplay(payload(id, 0, mixed, true), undefined, options)).toBeNull();
+    const piece = JSON.parse(fs.readFileSync(piecePath(id, ourKey), "utf8")) as Piece;
+    expect(piece.text).toContain("NOTE");
+    expect(piece.text).toContain("- a");
+  });
+
+  it("the ASSEMBLER splices a peer's published piece into the one answer of the flush", async () => {
+    composingPeer(OLDER, ["elsewhere"]);
+    const id = msg();
+    const drawnByPeer = "PEER DREW THIS";
+    fs.mkdirSync(composeMessageDir(id), { recursive: true });
+    fs.writeFileSync(
+      piecePath(id, theirKey),
+      JSON.stringify({ span: 1, text: drawnByPeer } satisfies Piece), // the zone is its decorator line alone
+      "utf8"
+    );
+    const out = shown(await handleMessageDisplay(payload(id, 0, mixed, true), undefined, options));
+    expect(out).toContain("NOTE"); // its own zone, rendered by itself
+    expect(out).toContain(drawnByPeer); // the peer's zone, spliced from the piece
+    expect(out).not.toContain(theirs); // and the raw decorator is consumed by the splice
+    expect(out).toContain("after"); // the prose past the spliced zone survives the span
+  });
+
+  it("the ASSEMBLER leaves a zone whose RAW verdict is recorded exactly as written, no wait paid", async () => {
+    composingPeer(OLDER, ["elsewhere"]);
+    const id = msg();
+    fs.mkdirSync(composeMessageDir(id), { recursive: true });
+    fs.writeFileSync(rawVerdictPath(id, theirKey), "", "utf8");
+    const out = shown(await handleMessageDisplay(payload(id, 0, mixed, true), undefined, options));
+    expect(out).toContain("NOTE");
+    expect(out).toContain(theirs); // settled raw: the winner's word never came, the record stands
+  });
+
+  it("the ASSEMBLER withholds a peer zone still STREAMING instead of letting its head through raw", async () => {
+    // The leak that painted the collage: a flush carrying the end of OUR zone and the head of THEIRS re-emitted that
+    // head raw, irretrievably. Under a composition the deferred views join the cut, so the head is withheld and the
+    // winner's piece fills the zone at the close.
+    composingPeer(OLDER, ["elsewhere"]);
+    const id = msg();
+    const streamingHead = `${theirs}\n| still |`;
+    const out = shown(
+      await handleMessageDisplay(payload(id, 0, `${block}${streamingHead}`), undefined, options)
+    );
+    expect(out).toContain("NOTE");
+    expect(out).not.toContain(theirs);
+    expect(out).not.toContain("| still |");
   });
 });

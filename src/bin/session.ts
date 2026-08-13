@@ -6,10 +6,12 @@
 
 import { isDirectExecution } from "@tayomi/utils";
 import { VERSION_FLAG, engineBadge } from "../data/engine.js";
-import { runSessionEndHook, runSessionStartHook } from "../hook/session.js";
+import { runSessionEndHook, runSessionStartHook, runUserPromptHook } from "../hook/session.js";
 
 const START = "start";
 const END = "end";
+/** UserPromptSubmit's verb: the mid-session edge where a mixed fleet gets named in the session it degrades. */
+const PROMPT = "prompt";
 const VERB = 2;
 
 async function main(): Promise<void> {
@@ -20,6 +22,7 @@ async function main(): Promise<void> {
   const verb = process.argv[VERB];
   if (verb === START) await runSessionStartHook();
   else if (verb === END) await runSessionEndHook();
+  else if (verb === PROMPT) await runUserPromptHook();
   process.exit(0);
 }
 

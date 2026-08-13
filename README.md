@@ -66,14 +66,20 @@ Ordered directories resolve `.view` files: name one the same and yours beats a p
          { "hooks": [
             { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/node_modules/.bin/cc-views-session end" }
          ] }
+       ],
+       "UserPromptSubmit": [
+         { "hooks": [
+            { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/node_modules/.bin/cc-views-session prompt" }
+         ] }
        ]
      }
    }
    ```
 
-   The two session lines are OPTIONAL bookends. When several engines are installed (a plugin's, a project's), each view
-   is drawn by exactly one of them, elected per session: SessionStart signs the roster, SessionEnd tears it down, and a
-   first message finding no roster recreates it, so nothing breaks without them.
+   The three session lines are OPTIONAL. When several engines are installed (a plugin's, a project's), each view is
+   drawn by exactly one of them, elected per session: SessionStart signs the roster, SessionEnd tears it down, and a
+   first message finding no roster recreates it, so nothing breaks without them. The `prompt` line is how a fleet mixing
+   engine generations gets NAMED to you, once per session, instead of silently degrading.
 
 3. **Copy/paste this prompt:**
 

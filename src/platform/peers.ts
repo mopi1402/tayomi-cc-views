@@ -17,14 +17,25 @@ import { ENGINES_DIR, ENGINES_DIR_ENV, NO_YIELD_ENV, SCRATCH_DIR, SESSIONS_DIR }
 import { writeAtomic } from "./atomic.js";
 
 /**
- * One engine's claim: where it runs from, the version of the code that would draw, and the view NAMES it can resolve.
- * The names are what makes the election a per-ZONE decision: an engine draws the views it WINS, with its own templates
- * and its own host's colours, and stays silent on every view someone else wins.
+ * The COMPOSITION protocol this engine speaks: pieces published per zone, one elected assembler answering alone
+ * (platform/compose.ts). A protocol, not the engine version, because the question a claim answers is "can we compose
+ * together", and two versions apart can still say yes. Composition engages only where EVERY peer of the electorate
+ * declares this exact number: one engine from before it, and everyone falls back to answering alone, which is the
+ * release rule of docs/caveats.md holding here too.
+ */
+export const COMPOSE_PROTOCOL = 1;
+
+/**
+ * One engine's claim: where it runs from, the version of the code that would draw, the view NAMES it can resolve, and
+ * the composition protocol it speaks (0 for an engine from before composition). The names are what makes the election a
+ * per-ZONE decision: an engine draws the views it WINS, with its own templates and its own host's colours, and stays
+ * silent on every view someone else wins.
  */
 export interface Peer {
   path: string;
   version: string;
   views: string[];
+  speaks: number;
 }
 
 // A claim is a file another process wrote, read as input and never as truth. The cap bounds what one entry can cost on
@@ -121,7 +132,7 @@ function selfPath(): string {
 }
 
 /** THIS engine's IDENTITY: the module that would draw, and the version the drawing code answers with. */
-export const SELF: Peer = { path: selfPath(), version: ENGINE_VERSION, views: [] };
+export const SELF: Peer = { path: selfPath(), version: ENGINE_VERSION, views: [], speaks: COMPOSE_PROTOCOL };
 
 /**
  * The claim this flush announces. The names come from the CALLER's own search path, never from a default: a host
@@ -135,6 +146,11 @@ export function selfClaim(views: string[]): Peer {
 function statedViews(read: unknown): string[] {
   if (!Array.isArray(read)) return [];
   return read.slice(0, MAX_VIEWS).filter((name): name is string => typeof name === "string");
+}
+
+/** What a claim says it speaks. 0 for anything else, which is every claim written before composition existed. */
+function statedProtocol(read: unknown): number {
+  return typeof read === "number" && Number.isInteger(read) && read > 0 ? read : 0;
 }
 
 function entryPath(dir: string, of: string): string {
@@ -158,14 +174,21 @@ export function announce(dir: string = peersDir(), self: Peer = SELF): void {
  * The claims one directory holds, read with the same hygiene wherever they live. An expired claim (where an expiry
  * applies) and one whose path has gone are DROPPED on the way past: an engine that was uninstalled must not go on
  * silencing the ones left behind, and a claim nobody clears would cost a full expiry of raw screens.
+ *
+ * A claim OUTRUN at its own location dies here too. A claim proves an engine RAN, never that it is still wired, and
+ * an update leaves the old engine's claim standing for the full expiry: a ghost that accuses the very project the
+ * operator just fixed, and holds the whole fleet out of composition for an hour (measured 2026-08-14). A strictly
+ * newer claim at the SAME location is proof the location moved on, so the older claim is dropped and its file swept,
+ * whichever list it sits on. Self-correcting in both directions: an old engine still actually wired re-announces at
+ * its next flush and everything it deserves comes back.
  */
 function claims(dir: string, self: Peer, staleMs: number | null): Peer[] {
-  const out: Peer[] = [];
+  const found: Array<{ claim: Peer; file: string; location: string }> = [];
   let names: string[];
   try {
     names = fs.readdirSync(dir);
   } catch {
-    return out; // no register yet, or unreadable: nobody to defer to
+    return []; // no register yet, or unreadable: nobody to defer to
   }
   const now = Date.now();
   for (const name of names) {
@@ -183,10 +206,32 @@ function claims(dir: string, self: Peer, staleMs: number | null): Peer[] {
         fs.rmSync(file, { force: true });
         continue;
       }
-      out.push({ path: claim.path, version: claim.version, views: statedViews(claim.views) });
+      found.push({
+        claim: {
+          path: claim.path,
+          version: claim.version,
+          views: statedViews(claim.views),
+          speaks: statedProtocol(claim.speaks),
+        },
+        file,
+        location: locationOf(claim.path),
+      });
     } catch {
       // malformed, vanished under us, or unreadable: a claim that cannot be read silences nobody
     }
+  }
+  // SELF's word counts among the standing claims: in the updated project's own session, the newer engine IS self.
+  const standing = [
+    ...found.map((entry) => ({ version: entry.claim.version, location: entry.location })),
+    { version: self.version, location: locationOf(self.path) },
+  ];
+  const out: Peer[] = [];
+  for (const entry of found) {
+    const outrun = standing.some(
+      (peer) => peer.location === entry.location && compareVersions(peer.version, entry.claim.version) > 0
+    );
+    if (outrun) fs.rmSync(entry.file, { force: true });
+    else out.push(entry.claim);
   }
   return out;
 }
@@ -272,6 +317,27 @@ export function rosterPeers(sessionId: string, dir: string = peersDir(), self: P
   return claims(rosterDir(sessionId, dir), self, null);
 }
 
+/** The engine-internal tail every claim's path ends on: noise to a reader, and safe to strip without guessing. */
+const ENGINE_TAIL = `${path.sep}${path.join("dist", "platform", "peers.js")}`;
+
+/**
+ * WHERE an engine lives, the unit an update is performed on: the project when the path sits under one (a
+ * `package.json` at the prefix before the first `node_modules` is the test, and pnpm's global root passes it, which
+ * is right: that is where its update runs), otherwise the path whole minus our own internal tail, so a global install
+ * still shows `node_modules/@tayomi/cc-views` under its system prefix. Two claims sharing a location claim ONE
+ * install, which is what lets a newer claim retire an older one (claims above) and the warning name a place the
+ * reader can act on. Never cut in the MIDDLE: the identifying name is exactly what a fold would eat first.
+ */
+export function locationOf(enginePath: string): string {
+  const marker = `${path.sep}${NODE_MODULES}${path.sep}`;
+  const at = enginePath.indexOf(marker);
+  if (at > 0) {
+    const root = enginePath.slice(0, at);
+    if (fs.existsSync(path.join(root, "package.json"))) return root;
+  }
+  return enginePath.endsWith(ENGINE_TAIL) ? enginePath.slice(0, -ENGINE_TAIL.length) : enginePath;
+}
+
 // Proximity classes, nearest first: the checkout open in the project beats the project's own installed copy, which
 // beats an install belonging to anywhere else (a global, another project), which beats a path saying neither.
 const NODE_MODULES = "node_modules";
@@ -354,13 +420,77 @@ export function defersView(name: string): boolean {
 }
 
 /**
- * Announce this engine, then hold the election and install what this flush lost. Announcing precedes drawing ALWAYS:
- * an engine registered only while it drew would vanish once it deferred, and the two would take turns. The legacy
- * register is rewritten every flush (engines from before the election believe nothing else); the roster is re-signed
- * only where the signature is missing or stale, the net that lets a `.view` born mid-session elect without a restart.
+ * This flush's part in the COMPOSITION. `off` answers alone, exactly as before the protocol existed. `speaker` renders
+ * the zones it wins, publishes each as a piece, and answers NOTHING. `assembler` splices the speakers' pieces into its
+ * own render and is the ONE defined answer of the flush, which is what makes the dispatcher's order irrelevant.
+ */
+export type ComposeRole = "off" | "speaker" | "assembler";
+
+/**
+ * The role this electorate hands `self`, computed the SAME by every engine reading the same register. Off unless every
+ * peer speaks the protocol: one engine answering alone in a fleet that composes would speak OVER the assembler, so a
+ * single mute claim sends the whole fleet back to the old rule. The assembler is the TOP of the same total order the
+ * views elect by: no second ranking to disagree on, and exactly one engine computes itself the voice.
+ */
+export function composedRole(list: Peer[], self: Peer = SELF, cwd?: string): ComposeRole {
+  if (list.length === 0) return "off"; // alone: composition has nobody to compose with
+  if (self.speaks !== COMPOSE_PROTOCOL) return "off";
+  if (list.some((peer) => peer.speaks !== COMPOSE_PROTOCOL)) return "off";
+  let voice = self;
+  for (const peer of list) {
+    if (rank(peer, voice, cwd) < 0) voice = peer;
+  }
+  return voice === self ? "assembler" : "speaker";
+}
+
+// The role of THIS flush, installed beside DEFERRED by the same election and for the same reason: one synchronous pass.
+let ROLE: ComposeRole = "off";
+
+/** Install this flush's part in the composition. `off` is the answer for every failure: the behaviour that already ran. */
+export function setComposeRole(role: ComposeRole): void {
+  ROLE = role;
+}
+
+/** This flush's part in the composition, as the election cast it. */
+export function composeRole(): ComposeRole {
+  return ROLE;
+}
+
+/** The peers of a fleet that do NOT speak the composition protocol: the claims that send everyone back to solo answers. */
+export function mutePeers(list: Peer[]): Peer[] {
+  return list.filter((peer) => peer.speaks !== COMPOSE_PROTOCOL);
+}
+
+/** The marker's name in the session's roster: claims() skips it (empty is not a claim), and it dies with the roster. */
+const WARNED_FILE = "warned";
+
+/**
+ * The RIGHT to warn about a MIXED fleet, claimed ONCE per session: the first asker writes the marker into the
+ * session's roster and gets the CULPRITS to name, every later ask gets null. Write-once in the roster on purpose: the
+ * marker shares the roster's lifecycle (SessionEnd, or the age sweep) and needs no bookkeeping of its own. The facts
+ * alone leave here: what to SAY belongs to the edge that owns the channel, and each channel dresses them its own way.
+ */
+export function claimMuteWarning(sessionId: string, mute: Peer[], dir: string = peersDir()): Peer[] | null {
+  if (mute.length === 0 || sessionId === "") return null;
+  try {
+    const marker = path.join(rosterDir(sessionId, dir), WARNED_FILE);
+    if (fs.existsSync(marker)) return null;
+    writeAtomic(marker, "");
+    return mute;
+  } catch {
+    return null; // best effort: a warning that cannot be claimed is a warning the next session retries
+  }
+}
+
+/**
+ * Announce this engine, then hold the election and install what this flush lost and the part it plays. Announcing
+ * precedes drawing ALWAYS: an engine registered only while it drew would vanish once it deferred, and the two would
+ * take turns. The legacy register is rewritten every flush (engines from before the election believe nothing else);
+ * the roster is re-signed only where the signature is missing or stale, the net that lets a `.view` born mid-session
+ * elect without a restart.
  *
- * Total: every failure defers NOTHING, a wrong draw costing the screen this machine already had, a wrong deferral a
- * blank where a view was.
+ * Total: every failure defers NOTHING and composes NOTHING, a wrong draw costing the screen this machine already had,
+ * a wrong deferral a blank where a view was.
  */
 export function holdElection(
   views: string[],
@@ -373,7 +503,10 @@ export function holdElection(
     const self = { ...me, views: views.slice(0, MAX_VIEWS) };
     announce(dir, self);
     const off = process.env[NO_YIELD_ENV];
-    if (off !== undefined && off !== "") return setDeferred(new Set());
+    if (off !== undefined && off !== "") {
+      setComposeRole("off");
+      return setDeferred(new Set());
+    }
     let electorate = peers(dir, self);
     if (sessionId !== undefined && sessionId !== "") {
       if (!rosterCarries(sessionId, dir, self)) announceRoster(sessionId, dir, self);
@@ -383,7 +516,9 @@ export function holdElection(
       electorate = [...signed, ...electorate.filter((peer) => !signedPaths.has(peer.path))];
     }
     setDeferred(electedLosses(electorate, self, cwd));
+    setComposeRole(composedRole(electorate, self, cwd));
   } catch {
     setDeferred(new Set());
+    setComposeRole("off");
   }
 }

@@ -66,6 +66,11 @@ export {
 // Printed width, for a host that aligns text beside a rendered view.
 export { displayWidth } from "./layout/width.js";
 
+// A NOTICE a hook says to the operator through the host's `systemMessage`: an accent header over an auto-sized,
+// ANSI-aware box, with middleEllipsis as the shears for a row wider than a terminal. The dress the engine's own
+// mixed-fleet warning wears, exported so a host with something to say at a session edge does not redraw the box.
+export { notice, middleEllipsis } from "./notice.js";
+
 // The MessageDisplay edge itself: the whole stdin-to-stdout dance for a host with behaviour (runMessageDisplayHook),
 // and the process-free storey under it for a host that owns its own edge or a test (handleMessageDisplay).
 export {
@@ -75,11 +80,14 @@ export {
   type MessageContext,
 } from "./hook/runner.js";
 
-// The session bookends of the election's roster: a host wires SessionStart and SessionEnd to these, and the fleet a
-// session elects from holds still between them. The process-free storey (handleSession*) is the testable one.
+// The session edges of the election's roster: a host wires SessionStart, SessionEnd and UserPromptSubmit to these.
+// The bookends sign and tear down the fleet; the prompt edge is where a MIXED fleet gets named mid-session. The
+// process-free storeys (handle*) are the testable ones.
 export {
   runSessionStartHook,
   runSessionEndHook,
+  runUserPromptHook,
   handleSessionStart,
   handleSessionEnd,
+  handleUserPrompt,
 } from "./hook/session.js";

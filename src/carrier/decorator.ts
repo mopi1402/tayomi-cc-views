@@ -44,6 +44,7 @@ import {
 import { renderView, type Dressing } from "../template/render.js";
 import { resolvesView } from "../template/load.js";
 import { defersView } from "../platform/peers.js";
+import { DECORATED_ZONE, pieceFor, publishPiece, publishRaw, zoneKey } from "../platform/compose.js";
 import { namedFields } from "../template/view-data.js";
 import { inert, spanClose, spanOpen } from "../style.js";
 import { fenceAt, fenceSpans, type Fence } from "./fences.js";
@@ -403,6 +404,11 @@ export interface Decorated {
   outcome: Outcome | null;
 }
 
+/** A piece's span read defensively: the walk must always advance, whatever another engine's claim states. */
+function statedSpan(span: number): number {
+  return Number.isInteger(span) && span >= 1 ? span : 1;
+}
+
 /**
  * Render every decorated zone of a message, each through its named template (and type), the decorator line consumed.
  * Fail-open per zone: an unknown template, an unsupported payload shape, or any render error leaves the zone EXACTLY as
@@ -422,6 +428,14 @@ export function renderDecorated(
   const strict = host?.strict;
   const strictView = strict?.view;
   let outcome: Outcome | null = null;
+  // Every zone of a view spends its ordinal HERE, whatever branch takes it: the pre-pass counts every anchored zone
+  // the same way, and a branch that skipped the count would shift every later key of that view by one.
+  const ordinals = new Map<string, number>();
+  const nth = (name: string): number => {
+    const ordinal = ordinals.get(name) ?? 0;
+    ordinals.set(name, ordinal + 1);
+    return ordinal;
+  };
   const out: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const zone = zoneAt(lines, fences, starts, i);
@@ -429,9 +443,26 @@ export function renderDecorated(
       out.push(lines[i]);
       continue;
     }
+    const key = zoneKey(DECORATED_ZONE, zone.deco.view, nth(zone.deco.view));
+    // A zone whose election this engine LOST comes before every other reading, the strict view included: deferring
+    // means SILENCE, and a strict line drawn here would speak over the winner's render of this same zone. Where this
+    // engine ASSEMBLES, the winner's published piece replaces the zone over the span the piece states; everywhere
+    // else the zone is left exactly as written, decorator included, and reaches the winner untouched.
+    if (defersView(zone.deco.view)) {
+      const piece = pieceFor(key);
+      if (piece === undefined) {
+        out.push(lines[i]);
+        continue;
+      }
+      out.push(...piece.text.split("\n"));
+      i += statedSpan(piece.span) - 1;
+      continue;
+    }
     // A view this engine cannot RESOLVE is not this engine's zone: the run stays prose, exactly as a refusal leaves
-    // it, and whoever holds the template answers it. The strict view alone is exempt, its failures owed a line.
+    // it, and whoever holds the template answers it. The strict view alone is exempt, its failures owed a line. Won
+    // (or unopposed) and declined all the same, so the verdict is published: the assembler must not wait for it.
     if (zone.deco.view !== strictView && !resolvesView(zone.deco.view, dirs, zone.deco.type)) {
+      publishRaw(key);
       out.push(lines[i]);
       continue;
     }
@@ -443,22 +474,20 @@ export function renderDecorated(
       // never to show. The whole zone goes with the line, or the payload would follow the host's line raw.
       if (zone.deco.view === strictView && strict !== undefined) {
         outcome = failedOutcome(`view ${zone.deco.view}: payload refused`);
-        out.push(strictLine(strict));
+        const shown = strictLine(strict);
         // Only the lines its shape can CLAIM go with the replacement: the run also swallows prose and zones that were
         // never the payload's, and those are rescanned exactly as the non-strict path rescans them.
-        i = claimedEnd(lines, i) - 1;
+        const claimed = claimedEnd(lines, i);
+        publishPiece(key, claimed - i, shown);
+        out.push(shown);
+        i = claimed - 1;
         continue;
       }
+      publishRaw(key);
       out.push(lines[i]);
       continue; // a refused payload's lines follow untouched: raw markdown, valid anyway
     }
     const { deco, payload, end } = zone;
-    // A newer engine on this machine has this view too, so the zone is left exactly as written, decorator included, and
-    // reaches that engine untouched. Refused the way every other refusal here works: the payload's lines follow.
-    if (defersView(deco.view)) {
-      out.push(lines[i]);
-      continue;
-    }
     try {
       const data: Scope = payload === null ? {} : payload.data;
       // See Payload.type: the unset field IS the precedence rule. The shape rides along on a PARSED payload alone, so
@@ -474,26 +503,34 @@ export function renderDecorated(
       if (rendered.trim() === "") {
         if (deco.view === strictView && strict !== undefined) {
           outcome = failedOutcome(`view ${deco.view}: rendered hollow`);
-          out.push(strictLine(strict));
+          const shown = strictLine(strict);
+          publishPiece(key, end - i, shown);
+          out.push(shown);
           i = end - 1;
           continue;
         }
+        publishRaw(key);
         out.push(lines[i]);
         continue;
       }
       if (deco.view === strictView) outcome = okOutcome();
       // The render's own trailing blank is dropped, so the zone keeps the line structure the raw table had around it.
-      out.push(...rendered.replace(TRAILING_BLANKS_RE, "").split("\n"));
+      const shown = rendered.replace(TRAILING_BLANKS_RE, "");
+      publishPiece(key, end - i, shown);
+      out.push(...shown.split("\n"));
       i = end - 1;
     } catch (e) {
       if (deco.view === strictView && strict !== undefined) {
         outcome = failedOutcome(e);
         // The zone goes with the line it replaces, or the raw markdown this view was promised never to show would
         // follow it.
-        out.push(strictLine(strict));
+        const shown = strictLine(strict);
+        publishPiece(key, end - i, shown);
+        out.push(shown);
         i = end - 1;
         continue;
       }
+      publishRaw(key);
       out.push(lines[i]); // fail-open: the decorator stays, the table follows raw
     }
   }
@@ -528,6 +565,36 @@ export function decoratedZones(text: string): DecoratedZone[] {
     if (!zone.refused) i = zone.end - 1;
   }
   return zones;
+}
+
+/** One decorated zone's SEAT in a composition: the view whose election owns it, and whether it can still grow. */
+export interface ZoneSpan {
+  view: string;
+  closed: boolean;
+}
+
+/**
+ * Every decorated zone with its extent settled or not, for the layer that must know what a flush still OWES: a piece
+ * can only be awaited for a zone whose winner has rendered it, and the winner renders exactly the closed ones. Closed
+ * is the cut's own reading, a line past the shape's run: a trailing line terminator is not a line, and a zone running
+ * out with the text can still grow.
+ */
+export function zoneSpans(text: string): ZoneSpan[] {
+  if (!text.includes(DECORATOR_HINT)) return [];
+  const lines = text.split("\n");
+  const fences = fenceSpans(text);
+  const starts = lineStarts(lines);
+  let stop = lines.length;
+  if (stop > 0 && lines[stop - 1] === "") stop--;
+  const spans: ZoneSpan[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const zone = zoneAt(lines, fences, starts, i);
+    if (zone === null) continue;
+    spans.push({ view: zone.deco.view, closed: zone.end < stop });
+    // A REFUSED run is rescanned line by line, exactly as the render rescans it.
+    if (!zone.refused) i = zone.end - 1;
+  }
+  return spans;
 }
 
 /**
