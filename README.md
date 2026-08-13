@@ -56,10 +56,24 @@ Ordered directories resolve `.view` files: name one the same and yours beats a p
          { "hooks": [
             { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/node_modules/.bin/cc-views-messagedisplay" }
          ] }
+       ],
+       "SessionStart": [
+         { "matcher": "startup|clear|compact|resume", "hooks": [
+            { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/node_modules/.bin/cc-views-session start" }
+         ] }
+       ],
+       "SessionEnd": [
+         { "hooks": [
+            { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/node_modules/.bin/cc-views-session end" }
+         ] }
        ]
      }
    }
    ```
+
+   The two session lines are OPTIONAL bookends. When several engines are installed (a plugin's, a project's), each view
+   is drawn by exactly one of them, elected per session: SessionStart signs the roster, SessionEnd tears it down, and a
+   first message finding no roster recreates it, so nothing breaks without them.
 
 3. **Copy/paste this prompt:**
 

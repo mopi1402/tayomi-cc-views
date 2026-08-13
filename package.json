@@ -19,7 +19,8 @@
   },
   "bin": {
     "cc-views": "./dist/bin/cli.js",
-    "cc-views-messagedisplay": "./dist/bin/messagedisplay.js"
+    "cc-views-messagedisplay": "./dist/bin/messagedisplay.js",
+    "cc-views-session": "./dist/bin/session.js"
   },
   "publishConfig": {
     "exports": {

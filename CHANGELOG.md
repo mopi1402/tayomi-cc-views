@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- One engine WINS each view: an election every engine computes alike replaces the stand-aside
+- A view another engine declares and this one cannot resolve is left to its winner, never echoed as prose
+- The election tie-breaks by version, then proximity to the project, then a fixed path order: one winner, always
+- Engines sign a per-session roster at SessionStart; SessionEnd tears it down; a first flush recreates it
+- A view born mid-session enters the election at the next message: the roster re-signs itself, no restart
+- `cc-views-session` wires the two bookends (`start`, `end`), optional on any host
+
 ## 2.1.3
 
 - A fold cutting a code span seals and reopens one space off the text

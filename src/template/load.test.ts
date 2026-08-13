@@ -11,6 +11,7 @@ import path from "node:path";
 import { VIEWS_DIR, VIEW_EXT } from "../data/markup.js";
 import {
   bundledViewsDir,
+  declaredViews,
   defaultViewsPath,
   listViews,
   loadTemplate,
@@ -169,5 +170,20 @@ describe("the default search path", () => {
       if (before == null) delete process.env.CLAUDE_PLUGIN_ROOT;
       else process.env.CLAUDE_PLUGIN_ROOT = before;
     }
+  });
+});
+
+describe("declaredViews", () => {
+  const SHADOWED = NAME;
+  const FURTHER = "further";
+
+  it("declares each name ONCE across the path, however many dirs resolve it", () => {
+    // What the election register carries: an ordered path resolves one name once, so one claim states it once.
+    const near = mkdir();
+    const far = mkdir();
+    write(near, SHADOWED + VIEW_EXT, "@text\n");
+    write(far, SHADOWED + VIEW_EXT, "@text\n");
+    write(far, FURTHER + VIEW_EXT, "@text\n");
+    expect(declaredViews([near, far])).toEqual([SHADOWED, FURTHER]);
   });
 });

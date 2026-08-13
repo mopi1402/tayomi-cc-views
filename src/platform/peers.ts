@@ -1,12 +1,11 @@
-// WHICH engine draws when more than one is registered on the machine.
+// WHICH engine draws when more than one is registered on the machine: an ELECTION, one winner per view, computed the
+// SAME by every engine from a shared register. The dispatcher's hook order is not ours to choose (docs/caveats.md), so
+// each engine announces ITSELF and reads the others: two outputs for one block are impossible by construction.
 //
-// Claude Code chains every MessageDisplay hook and the FIRST to run consumes the zone, an order that is not ours to
-// choose (docs/caveats.md). So without this the engine that draws is whichever the dispatcher happened to call first,
-// and a plugin's older copy silently drew over a newer checkout: the only cure was a publish and a plugin bump per
-// change. Here each engine announces ITSELF and reads the others, so the newest one draws whatever the order.
-//
-// It never reads Claude Code's own settings or plugin manifests. That format is not ours and it moves; an engine
-// answering for itself alone is the one thing that cannot go out of date.
+// Two electorates for one transition's sake, folded into one and deduped by path. The session ROSTER is the design:
+// signed at SessionStart, held still until SessionEnd, recreated by a first flush finding no signature. The
+// machine-wide register is the legacy: engines from before the election announce and read nothing else. Claude Code's
+// own settings and manifests are never read: that format is not ours and it moves.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -14,12 +13,12 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { ENGINE_VERSION } from "../data/engine.js";
-import { ENGINES_DIR, NO_YIELD_ENV, SCRATCH_DIR } from "../data/markup.js";
+import { ENGINES_DIR, NO_YIELD_ENV, SCRATCH_DIR, SESSIONS_DIR } from "../data/markup.js";
 
 /**
  * One engine's claim: where it runs from, the version of the code that would draw, and the view NAMES it can resolve.
- * The names are what makes the yield a per-ZONE decision: an engine stands aside on a view a newer engine also has, and
- * draws every other one itself, with its own templates and its own host's colours.
+ * The names are what makes the election a per-ZONE decision: an engine draws the views it WINS, with its own templates
+ * and its own host's colours, and stays silent on every view someone else wins.
  */
 export interface Peer {
   path: string;
@@ -155,11 +154,11 @@ export function announce(dir: string = peersDir(), self: Peer = SELF): void {
 }
 
 /**
- * The other engines worth believing. An expired claim and one whose path has gone are DROPPED on the way past: an
- * engine that was uninstalled must not go on silencing the ones left behind, and a claim nobody clears would cost a
- * full expiry of raw screens.
+ * The claims one directory holds, read with the same hygiene wherever they live. An expired claim (where an expiry
+ * applies) and one whose path has gone are DROPPED on the way past: an engine that was uninstalled must not go on
+ * silencing the ones left behind, and a claim nobody clears would cost a full expiry of raw screens.
  */
-export function peers(dir: string = peersDir(), self: Peer = SELF): Peer[] {
+function claims(dir: string, self: Peer, staleMs: number | null): Peer[] {
   const out: Peer[] = [];
   let names: string[];
   try {
@@ -171,7 +170,7 @@ export function peers(dir: string = peersDir(), self: Peer = SELF): Peer[] {
   for (const name of names) {
     const file = path.join(dir, name);
     try {
-      if (now - fs.statSync(file).mtimeMs > PEER_STALE_MS) {
+      if (staleMs !== null && now - fs.statSync(file).mtimeMs > staleMs) {
         fs.rmSync(file, { force: true });
         continue;
       }
@@ -191,26 +190,156 @@ export function peers(dir: string = peersDir(), self: Peer = SELF): Peer[] {
   return out;
 }
 
+/** The other engines worth believing on the machine-wide register, the legacy electorate. */
+export function peers(dir: string = peersDir(), self: Peer = SELF): Peer[] {
+  return claims(dir, self, PEER_STALE_MS);
+}
+
 /**
- * The views a strictly NEWER engine also has. Those and only those are the zones this engine stands aside on: a view no
- * newer engine declares is one only this engine can draw, and a view nobody else has is nobody else's to draw.
- *
- * Names rather than a verdict on the whole message, which is the entire point. An engine that stood down for a message
- * left every zone in it to whoever ran next, so a view the newer engine did NOT have reached the screen as raw text
- * with nobody left to draw it. Standing aside per zone costs nothing: the chain already consumes zone by zone.
+ * A roster a SessionEnd never tore down, kept from outliving its machine: long enough that no live session is swept
+ * (a resume re-announces and refreshes it), short enough that a crashed session's roster does not elect ghosts for a
+ * week.
  */
-export function newerViews(list: Peer[], self: Peer = SELF): Set<string> {
+export const SESSION_STALE_MS = 24 * 60 * 60 * 1000;
+
+/** Where SESSION `id`'s roster lives. The id is a filename from another program: hashed, never trusted as a path. */
+export function rosterDir(sessionId: string, dir: string = peersDir()): string {
+  return path.join(dir, SESSIONS_DIR, createHash(DIGEST).update(sessionId).digest("hex").slice(0, KEY_LEN));
+}
+
+/**
+ * Sign this engine onto a session's roster, sweeping ABANDONED sibling rosters on the way: SessionEnd is the intended
+ * teardown, the sweep is the one for the session that never got its own.
+ */
+export function announceRoster(sessionId: string, dir: string = peersDir(), self: Peer = SELF): void {
+  try {
+    const roster = rosterDir(sessionId, dir);
+    announce(roster, self);
+    sweepRosters(path.dirname(roster), roster);
+  } catch {
+    // best effort by construction
+  }
+}
+
+/** Whether THIS engine signed the session's roster at all, whatever the signature says: the bookends' question. */
+export function rosterHolds(sessionId: string, dir: string = peersDir(), self: Peer = SELF): boolean {
+  try {
+    return fs.existsSync(entryPath(rosterDir(sessionId, dir), self.path));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The flush's stricter question: does the signature still SAY this claim? A roster lying about the catalogue (a view
+ * born or dead mid-session) hands a view two voices again. Every writer serialises the same shape, so comparing the
+ * words is comparing the claim.
+ */
+function rosterCarries(sessionId: string, dir: string, self: Peer): boolean {
+  try {
+    return fs.readFileSync(entryPath(rosterDir(sessionId, dir), self.path), "utf8") === JSON.stringify(self);
+  } catch {
+    return false;
+  }
+}
+
+/** Tear a session's roster down, which is SessionEnd's one job here. Someone else's roster is never touched. */
+export function clearRoster(sessionId: string, dir: string = peersDir()): void {
+  try {
+    fs.rmSync(rosterDir(sessionId, dir), { recursive: true, force: true });
+  } catch {
+    // a roster that cannot be removed expires by age instead
+  }
+}
+
+/** Drop sibling rosters whose sessions ended without a SessionEnd, sparing the one being written. */
+function sweepRosters(sessionsDir: string, spare: string): void {
+  const now = Date.now();
+  for (const name of fs.readdirSync(sessionsDir)) {
+    const dir = path.join(sessionsDir, name);
+    if (dir === spare) continue;
+    try {
+      if (now - fs.statSync(dir).mtimeMs > SESSION_STALE_MS) fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // a sibling swept by someone else mid-read is a sibling already handled
+    }
+  }
+}
+
+/** The engines signed onto a session's roster. No age limit inside a live session: a session outlasting an hour keeps its fleet. */
+export function rosterPeers(sessionId: string, dir: string = peersDir(), self: Peer = SELF): Peer[] {
+  return claims(rosterDir(sessionId, dir), self, null);
+}
+
+// Proximity classes, nearest first: the checkout open in the project beats the project's own installed copy, which
+// beats an install belonging to anywhere else (a global, another project), which beats a path saying neither.
+const NODE_MODULES = "node_modules";
+const IN_PROJECT = 0;
+const IN_PROJECT_MODULES = 1;
+const IN_OTHER_MODULES = 2;
+const ELSEWHERE = 3;
+
+/** How close an engine's code sits to the session's own project, the tie-break the user reaches for by instinct. */
+function proximity(enginePath: string, cwd: string | undefined): number {
+  const inModules = enginePath.includes(`${path.sep}${NODE_MODULES}${path.sep}`);
+  if (cwd !== undefined && cwd !== "" && enginePath.startsWith(`${cwd}${path.sep}`)) {
+    return inModules ? IN_PROJECT_MODULES : IN_PROJECT;
+  }
+  return inModules ? IN_OTHER_MODULES : ELSEWHERE;
+}
+
+/**
+ * The TOTAL order the election sorts by, first is elected: a rankable version over an unrankable one, then the newest,
+ * then the nearest, then the lesser path. Total on purpose, down to the last field: two engines left tied would each
+ * compute itself the winner, and two voices is the disease this module exists to cure.
+ */
+function rank(a: Peer, b: Peer, cwd: string | undefined): number {
+  const va = parse(a.version);
+  const vb = parse(b.version);
+  if (va === null || vb === null) {
+    if ((va === null) !== (vb === null)) return va === null ? 1 : -1;
+  } else {
+    const byVersion = compareVersions(a.version, b.version);
+    if (byVersion !== 0) return -byVersion;
+  }
+  const byProximity = proximity(a.path, cwd) - proximity(b.path, cwd);
+  if (byProximity !== 0) return byProximity;
+  return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+}
+
+/**
+ * Every view whose election SELF loses, which is exactly the set this flush stays silent on. A view nobody else
+ * declares is won unopposed and drawn; a view only OTHERS declare is lost by definition, resolvable here or not, and
+ * that last clause is the cure for the worst screen this module ever produced: an older peer's own view echoed back as
+ * raw prose above that peer's render, by an engine that could not resolve it and never asked who could.
+ */
+export function electedLosses(list: Peer[], self: Peer = SELF, cwd?: string): Set<string> {
   const out = new Set<string>();
-  if (parse(self.version) === null) return out; // unrankable: this engine outranks nobody and defers to nobody
+  const mine = new Set(self.views);
+  const contested = new Map<string, Peer[]>();
   for (const peer of list) {
-    if (compareVersions(peer.version, self.version) <= 0) continue;
-    for (const name of peer.views) out.add(name);
+    for (const name of peer.views) {
+      const entry = contested.get(name);
+      if (entry === undefined) contested.set(name, [peer]);
+      else entry.push(peer);
+    }
+  }
+  for (const [name, candidates] of contested) {
+    if (!mine.has(name)) {
+      out.add(name); // only others declare it: lost unopposed, theirs to draw
+      continue;
+    }
+    let winner: Peer = self;
+    for (const candidate of candidates) {
+      if (rank(candidate, winner, cwd) < 0) winner = candidate;
+    }
+    if (winner !== self) out.add(name);
   }
   return out;
 }
 
-// The names this flush stands aside on, installed once by the hook edge and read per zone by the carriers. Module state
-// rather than an argument threaded through the pipeline: a flush is one synchronous pass in a process of its own.
+// The views this flush LOST, installed once by the hook edge and read per zone by the carriers. Module state rather
+// than an argument threaded through the pipeline: a flush is one synchronous pass in a process of its own.
 let DEFERRED: ReadonlySet<string> = new Set();
 
 /** Install what this flush defers. Empty is the answer for every failure, and empty means DRAW. */
@@ -218,26 +347,41 @@ export function setDeferred(names: ReadonlySet<string>): void {
   DEFERRED = names;
 }
 
-/** Whether a newer engine on this machine also has this view, so this one leaves the zone for it. */
+/** Whether another engine on this machine WON this view's election, so this one leaves the zone for it. */
 export function defersView(name: string): boolean {
   return DEFERRED.has(name);
 }
 
 /**
- * Announce this engine and work out what it stands aside on. The announce comes first and always: an engine that only
- * appeared on the register when it drew would vanish from it the moment it started deferring, and the two would take
- * turns.
+ * Announce this engine, then hold the election and install what this flush lost. Announcing precedes drawing ALWAYS:
+ * an engine registered only while it drew would vanish once it deferred, and the two would take turns. The legacy
+ * register is rewritten every flush (engines from before the election believe nothing else); the roster is re-signed
+ * only where the signature is missing or stale, the net that lets a `.view` born mid-session elect without a restart.
  *
- * Total. Every failure defers NOTHING, because the cost of a wrong deferral is a blank where a view was, and the cost
- * of a wrong draw is the screen this machine already had.
+ * Total: every failure defers NOTHING, a wrong draw costing the screen this machine already had, a wrong deferral a
+ * blank where a view was.
  */
-export function standAside(views: string[], dir: string = peersDir(), me: Peer = SELF): void {
+export function holdElection(
+  views: string[],
+  sessionId: string | undefined,
+  cwd: string | undefined,
+  dir: string = peersDir(),
+  me: Peer = SELF
+): void {
   try {
     const self = { ...me, views: views.slice(0, MAX_VIEWS) };
     announce(dir, self);
     const off = process.env[NO_YIELD_ENV];
     if (off !== undefined && off !== "") return setDeferred(new Set());
-    setDeferred(newerViews(peers(dir, self), self));
+    let electorate = peers(dir, self);
+    if (sessionId !== undefined && sessionId !== "") {
+      if (!rosterCarries(sessionId, dir, self)) announceRoster(sessionId, dir, self);
+      // The roster's word outranks the legacy register's for one same engine: it was signed for THIS session.
+      const signed = rosterPeers(sessionId, dir, self);
+      const signedPaths = new Set(signed.map((peer) => peer.path));
+      electorate = [...signed, ...electorate.filter((peer) => !signedPaths.has(peer.path))];
+    }
+    setDeferred(electedLosses(electorate, self, cwd));
   } catch {
     setDeferred(new Set());
   }

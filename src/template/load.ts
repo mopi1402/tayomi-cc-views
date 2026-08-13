@@ -107,6 +107,11 @@ export function listViews(dir: string): string[] {
   }
 }
 
+/** The names one engine DECLARES to the election: every view its search path resolves, each name once. */
+export function declaredViews(searchPath: string[] = defaultViewsPath()): string[] {
+  return [...new Set(searchPath.flatMap(listViews))];
+}
+
 /** The files a (name, type) pair may resolve to, most specific first. */
 function candidateFiles(name: string, type?: string): string[] {
   return type ? [`${name}.${type}${VIEW_EXT}`, name + VIEW_EXT] : [name + VIEW_EXT];

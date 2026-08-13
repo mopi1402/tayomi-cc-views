@@ -175,6 +175,9 @@ try {
     const env = { ...process.env, CC_VIEWS_WIDTH: String(columns) };
     delete env.CLAUDE_PLUGIN_ROOT; // the adopter case: no plugin root anywhere
     delete env.CC_VIEWS_PATH;
+    // The machine running this harness has real engines on the election register, and the packed bin would lose to a
+    // newer one and defer every view: this proves the PACK renders, so the register is opted out of, never raced.
+    env.CC_VIEWS_NO_YIELD = "1";
     const run = spawnSync("node", [bin], { input: payload, cwd: proj, env, encoding: "utf8" });
     if (run.status !== 0) fail(`the installed bin exited ${run.status} at ${columns}: ${run.stderr}`);
     let shown;

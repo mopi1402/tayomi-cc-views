@@ -71,3 +71,5 @@ export const NO_YIELD_ENV = `${ENV_PREFIX}NO_YIELD`;
 export const SCRATCH_DIR = `cc-${VIEWS}`;
 /** Where the engines registered on this machine announce themselves, one file each. */
 export const ENGINES_DIR = "engines";
+/** Under the register, one roster directory per SESSION: the fleet a session elects from, torn down with it. */
+export const SESSIONS_DIR = "sessions";

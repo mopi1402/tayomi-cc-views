@@ -25,6 +25,8 @@ const EXCLUDED = {
     "an executable's wiring: a shebang and a main() guard over parts tested elsewhere, and importing it RUNS it",
   "src/bin/messagedisplay.ts":
     "an executable's wiring: a shebang and a main() guard over parts tested elsewhere, and importing it RUNS it",
+  "src/bin/session.ts":
+    "an executable's wiring: a shebang and a main() guard over parts tested elsewhere, and importing it RUNS it",
   "src/data/markup.ts":
     "one word and the tokens derived from it, with no behaviour: a test here would restate the constants it reads",
   "src/options.ts": "a public interface: types and JSDoc, no runtime behaviour to state",

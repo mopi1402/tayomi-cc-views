@@ -74,3 +74,12 @@ export {
   type HostSource,
   type MessageContext,
 } from "./hook/runner.js";
+
+// The session bookends of the election's roster: a host wires SessionStart and SessionEnd to these, and the fleet a
+// session elects from holds still between them. The process-free storey (handleSession*) is the testable one.
+export {
+  runSessionStartHook,
+  runSessionEndHook,
+  handleSessionStart,
+  handleSessionEnd,
+} from "./hook/session.js";
