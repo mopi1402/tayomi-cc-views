@@ -15,16 +15,15 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE_VERSION } from "./data/engine.js";
+import { MERMAID_THEME_ENV } from "./data/markup.js";
 import { printedWidth } from "./layout/measure.js";
 import { DEFAULT_STATE_DIR } from "./platform/scratch.js";
+import { activeTheme, isLight } from "./platform/theme.js";
 // TYPES alone, erased at compile time. Naming the module in a VALUE import is exactly what load() exists to avoid.
 import type * as Termaid from "@tayomi/termaid-ts";
 
 /** The renderer's npm home. Resolved from THIS module, so the engine's own dependency answers wherever it is installed. */
 const RENDERER_PKG = "@tayomi/termaid-ts";
-
-/** The palette every drawing is painted in. */
-const THEME = "neon";
 
 let renderer: typeof Termaid | undefined;
 
@@ -43,6 +42,31 @@ function load(): typeof Termaid {
 
 /** What a renderer ends its output with, and what a DRAWING does not include. */
 const TRAILING_NEWLINES = /\n+$/;
+
+/** The SIDE a drawing is painted for, in the two words the renderer's future background option will take. */
+export const DARK_BACKGROUND = "dark";
+export const LIGHT_BACKGROUND = "light";
+export type Background = typeof DARK_BACKGROUND | typeof LIGHT_BACKGROUND;
+
+/** A theme the operator asked for, and the side of the terminal it will be painted onto. */
+export interface Paint {
+  theme: string;
+  background: Background;
+}
+
+/**
+ * What the environment asks a drawing painted with, or undefined for the unpainted default. The background rides along
+ * from the host's own declared theme (`platform/theme.ts`): it is NOT consumed yet, the renderer having no background
+ * option to hand it to, but resolving it here is what makes that day one argument instead of a plumbing change.
+ */
+export function requestedPaint(env: NodeJS.ProcessEnv = process.env): Paint | undefined {
+  const theme = (env[MERMAID_THEME_ENV] ?? "").trim();
+  if (theme === "") return undefined;
+  return { theme, background: isLight(activeTheme(env)) ? LIGHT_BACKGROUND : DARK_BACKGROUND };
+}
+
+/** The cache key's word for the unpainted render, which no theme can be named as: a name is never empty. */
+const UNPAINTED = "";
 
 /** Enough of a digest to name a file, and far past collision for the handful of diagrams one message holds. */
 const KEY_CHARS = 32;
@@ -82,9 +106,9 @@ function sizeOf(drawn: string): DiagramSize {
  * The key a source draws under. The WIDTH is part of it: the same graph at two terminal widths is two different
  * drawings, and a key that ignored it would hand a narrow screen the wide render.
  */
-function cacheKey(source: string, width: number): string {
+function cacheKey(source: string, width: number, theme: string = UNPAINTED): string {
   return createHash(DIGEST)
-    .update(`${width}\n${source}`)
+    .update(`${width}\n${theme}\n${source}`)
     .digest(HEX)
     .slice(0, KEY_CHARS);
 }
@@ -100,9 +124,10 @@ function cacheKey(source: string, width: number): string {
 export function diagramCachePath(
   source: string,
   width: number,
-  stateDir: string = DEFAULT_STATE_DIR
+  stateDir: string = DEFAULT_STATE_DIR,
+  theme?: string
 ): string {
-  return path.join(stateDir, CACHE_SUBDIR, ENGINE_VERSION, cacheKey(source, width));
+  return path.join(stateDir, CACHE_SUBDIR, ENGINE_VERSION, cacheKey(source, width, theme));
 }
 
 /** Best effort by construction: a cache that cannot be read is a cache miss, never an error on screen. */
@@ -129,22 +154,27 @@ function writeCache(file: string, text: string): void {
 /**
  * One diagram source, drawn to the text a terminal shows.
  *
- * THROWS where the renderer answers a void, and that is the contract: the caller's fail-open turns the throw into the
- * block's own markdown on screen, which for a diagram source is a graph that draws itself anywhere the hook does not run.
+ * THROWS where the source declares no type the renderer knows and where the renderer answers a void, and that is the
+ * contract: the caller's fail-open turns the throw into the block's own markdown on screen, which for a diagram source
+ * is a graph that draws itself anywhere the hook does not run.
  */
 export function renderDiagram(
   source: string,
   width: number,
   stateDir: string | undefined = DEFAULT_STATE_DIR,
-  direction?: Direction
+  direction?: Direction,
+  env: NodeJS.ProcessEnv = process.env
 ): string {
   stateDir = stateDir ?? DEFAULT_STATE_DIR;
-  // Forcing rewrites the SOURCE, so the cache needs no direction in its key: an oriented twin IS another source.
+  const paint = requestedPaint(env);
+  // Forcing rewrites the SOURCE, so the cache needs no direction in its key: an oriented twin IS another source. The
+  // THEME is in it: the same graph painted and plain is two drawings, and a key ignoring it would hand one screen the
+  // other's. The background is not, until the day it varies the bytes.
   const oriented = direction === undefined ? source : orient(source, direction);
-  const file = diagramCachePath(oriented, width, stateDir);
+  const file = diagramCachePath(oriented, width, stateDir, paint?.theme);
   const hit = readCache(file);
   if (hit !== undefined) return hit;
-  const drawn = draw(oriented, width);
+  const drawn = draw(oriented, width, paint);
   writeCache(file, drawn);
   return drawn;
 }
@@ -165,13 +195,29 @@ export function measureDiagram(
   };
 }
 
-/** One drawing, laid out and painted: THROWS where the renderer answers a void. */
-function draw(source: string, width: number): string {
+/** One drawing, laid out: THROWS on a source the renderer does not know, and where it answers a void. */
+function draw(source: string, width: number, paint?: Paint): string {
   const termaid = load();
+  // The version-skew seam: a type from a mermaid newer than this renderer is no error to it, the fallback draws ANY
+  // text as flowchart boxes of its own syntax. `null` is the renderer's own word that it holds no parser for this
+  // source, and the one chance to show the fence instead of nonsense.
+  if (termaid.declaredType(source) === null) {
+    throw new Error("diagram: the source declares no type the renderer knows");
+  }
+  // UNPAINTED by default: every theme the renderer ships writes its labels in white or near-white, unreadable on a
+  // light terminal, so plain text in the terminal's own foreground is the only render safe everywhere. The env var is
+  // the one door to paint, and it is the OPERATOR's word: whoever set it can see their own background. A name the
+  // renderer does not hold paints nothing, so a typo does exactly what unset does rather than surprising the screen
+  // with the default palette. `wanted.background` waits here for the renderer's background option: resolved and
+  // carried so the day the renderer takes it costs one argument.
+  const wanted = paint !== undefined && termaid.THEMES.has(paint.theme) ? paint : undefined;
   // Folded at the width this module was GIVEN, which is the box the drawing has to sit in. Worth saying because the
   // reference binary cannot: it folds at its own console's 80 columns whatever `--width` asked for, so any box wider
   // than that came back cut through its own frame. A graph too wide to lay out still folds, at the right number now.
-  const drawn = termaid.printToConsole(termaid.renderThemedText(source, { width }, THEME), width);
+  const drawn =
+    wanted === undefined
+      ? termaid.printToConsole(new termaid.Text(termaid.render(source, { width })), width)
+      : termaid.printToConsole(termaid.renderThemedText(source, { width }, wanted.theme), width);
   // A renderer drawing nothing is a failure the caller must see as one, or the view renders a void. An empty source and
   // ordinary prose both land here: neither is an error to the renderer, and both come back blank.
   if (drawn.trim() === "") throw new Error("diagram: the renderer drew nothing");

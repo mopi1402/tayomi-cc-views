@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@tayomi/termaid-ts':
-        specifier: ^0.8.0
-        version: 0.8.0
+        specifier: ^0.8.1
+        version: 0.8.1
       '@tayomi/utils':
         specifier: ^0.2.0
         version: 0.2.0
@@ -202,8 +202,8 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@tayomi/termaid-ts@0.8.0':
-    resolution: {integrity: sha512-oEcoDsDossSSxUtAmJHK0X4cN2ybP6dHyKYo/53OcLvd+8L0n1h/HKQSRcR8jvWcgOofLULtaVFf7foE0P+ZGw==}
+  '@tayomi/termaid-ts@0.8.1':
+    resolution: {integrity: sha512-r3zfwmXx+uKCk7yp3l+WBRr9RFdNxuO5O0q0YaC7/N5yT56ZAdcG7Mm2OQIrKVCJ4hZg3Rv8VMAAX7sF3pHhXA==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -964,7 +964,7 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@tayomi/termaid-ts@0.8.0': {}
+  '@tayomi/termaid-ts@0.8.1': {}
 
   '@tayomi/utils@0.2.0': {}
 

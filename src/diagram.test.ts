@@ -8,8 +8,18 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONSOLE_WIDTH } from "@tayomi/termaid-ts";
-import { diagramCachePath, measureDiagram, renderDiagram, TALL, WIDE } from "./diagram.js";
+import {
+  DARK_BACKGROUND,
+  diagramCachePath,
+  LIGHT_BACKGROUND,
+  measureDiagram,
+  renderDiagram,
+  requestedPaint,
+  TALL,
+  WIDE,
+} from "./diagram.js";
 import { ENGINE_VERSION } from "./data/engine.js";
+import { MERMAID_THEME_ENV, THEME_ENV } from "./data/markup.js";
 import { printedText, printedWidth } from "./layout/measure.js";
 
 /** Two widths, because the same graph drawn at each is two different drawings and the key has to say so. */
@@ -21,6 +31,14 @@ const SOURCE = "flowchart TD\n    A[un] --> B[deux]\n";
 
 /** Text no renderer could produce, which is what makes a cache HIT provable rather than plausible. */
 const SENTINEL = "cache-hit-sentinel";
+
+/** No theme asked for: the DEFAULT this suite pins, immune to whatever the machine running it exports. */
+const NO_PAINT_ENV: NodeJS.ProcessEnv = {};
+/** A theme the renderer ships, and the same name one letter off, which must do exactly what unset does. */
+const A_THEME = "nord";
+const NEAR_MISS_THEME = "nordd";
+/** The host's side pinned too, so the paint under test never depends on this machine's settings file. */
+const PAINTED_ENV: NodeJS.ProcessEnv = { [MERMAID_THEME_ENV]: A_THEME, [THEME_ENV]: DARK_BACKGROUND };
 
 /** A chain wide ACROSS and tall DOWN (measured: 55 columns against 26), so its two footprints are tellable apart. */
 const CHAIN =
@@ -99,23 +117,57 @@ describe("the diagram cache", () => {
 });
 
 describe("the drawing itself", () => {
-  it("draws a flowchart as box-drawing text, PAINTED by the renderer", () => {
-    const out = renderDiagram(SOURCE, WIDTH, stateDir);
-    // Read through printedText, because a painted drawing carries a sequence PER GLYPH: the label `un` is no longer a
-    // substring of what comes back, its two letters sitting in separate spans.
+  it("draws a flowchart as box-drawing text, UNPAINTED, in the terminal's own foreground", () => {
+    const out = renderDiagram(SOURCE, WIDTH, stateDir, undefined, NO_PAINT_ENV);
     expect(printedText(out)).toContain("un");
     expect(printedText(out)).toContain("deux");
-    // A themed render paints unconditionally in process, where the binary painted only where the environment said so.
-    // Asserted all the same: it is what tells a themed render from the plain one, which draws the same boxes unpainted.
+    // Plain by DECISION, not by accident: every theme the renderer ships writes white-ish labels, unreadable on a
+    // light terminal this module cannot see. The env var is the ONE door to paint, and this pins the door shut being
+    // the default.
     // eslint-disable-next-line no-control-regex
-    expect(out).toMatch(/\x1b\[/);
+    expect(out).not.toMatch(/\x1b\[/);
   });
 
-  it("carries a colour DECLARED in the source, which is the whole reason the drawing is painted at all", () => {
-    // The case that says this is not decoration: a source naming its own colours is saying something about the graph,
-    // and a drawing that dropped them would lose meaning the author wrote. Truecolor, so the value is exact.
-    const drawn = renderDiagram(`${SOURCE}    linkStyle 0 stroke:#00cc00\n`, WIDTH, stateDir);
-    expect(drawn).toContain("\x1b[38;2;0;204;0m");
+  it("paints with the theme the env var names, the operator's word being the one door to colour", () => {
+    const out = renderDiagram(SOURCE, WIDTH, stateDir, undefined, PAINTED_ENV);
+    // eslint-disable-next-line no-control-regex
+    expect(out).toMatch(/\x1b\[/);
+    expect(printedText(out)).toContain("un");
+    expect(printedText(out)).toContain("deux");
+  });
+
+  it("paints NOTHING for a theme name the renderer does not hold: a typo does exactly what unset does", () => {
+    // The near-miss the renderer itself would hide: its own lookup falls back to the DEFAULT PALETTE silently, and a
+    // typoed name would paint the screen the operator never asked for. Falling to unpainted is what tells them.
+    const out = renderDiagram(SOURCE, WIDTH, stateDir, undefined, {
+      [MERMAID_THEME_ENV]: NEAR_MISS_THEME,
+      [THEME_ENV]: DARK_BACKGROUND,
+    });
+    // eslint-disable-next-line no-control-regex
+    expect(out).not.toMatch(/\x1b\[/);
+  });
+
+  it("keys the cache on the THEME too, so a themed screen is never handed the plain drawing", () => {
+    expect(diagramCachePath(SOURCE, WIDTH, stateDir, A_THEME)).not.toBe(diagramCachePath(SOURCE, WIDTH, stateDir));
+  });
+
+  it("resolves the SIDE a paint is for from the host's own theme, carried unconsumed to the renderer's seam", () => {
+    // The background rides along for the day the renderer takes it as an option. Resolved from the same chain the
+    // ink adaptation reads (platform/theme.ts), and absent entirely where no theme was asked for.
+    expect(requestedPaint({ [MERMAID_THEME_ENV]: A_THEME, [THEME_ENV]: LIGHT_BACKGROUND })?.background).toBe(
+      LIGHT_BACKGROUND
+    );
+    expect(requestedPaint(PAINTED_ENV)?.background).toBe(DARK_BACKGROUND);
+    expect(requestedPaint({ [THEME_ENV]: LIGHT_BACKGROUND })).toBeUndefined();
+  });
+
+  it("DROPS a colour the source declares, the accepted cost of the unpainted render", () => {
+    // Written down because it is a loss an author can hit: a linkStyle says something about the graph, and paint was
+    // its only carrier. The drawing itself must still stand, the declaration consumed rather than printed as text.
+    const drawn = renderDiagram(`${SOURCE}    linkStyle 0 stroke:#00cc00\n`, WIDTH, stateDir, undefined, NO_PAINT_ENV);
+    expect(drawn).not.toContain("\x1b[38;2;0;204;0m");
+    expect(printedText(drawn)).not.toContain("stroke");
+    expect(printedText(drawn)).toContain("un");
   });
 
   it("ends on the drawing, never on the renderer's own trailing newline", () => {
@@ -207,7 +259,13 @@ describe("the drawing itself", () => {
     expect(() => renderDiagram("ceci est une phrase, pas un diagramme.\n", WIDTH, stateDir)).toThrow();
   });
 
-  it("does NOT fail open on malformed syntax: the renderer draws it, and that is the known hole", () => {
+  it("THROWS on a type the renderer does not know, so the fence shows instead of boxes of its syntax", () => {
+    // The version-skew seam: a sankey-beta is a real diagram to a newer mermaid and NOTHING to this renderer, whose
+    // fallback would draw its data lines as flowchart nodes. declaredType is the renderer's own word on what it holds.
+    expect(() => renderDiagram("sankey-beta\nAmont,Aval,30\n", WIDTH, stateDir)).toThrow();
+  });
+
+  it("does NOT fail open on malformed syntax of a KNOWN type: the renderer draws it, and that is the known hole", () => {
     // Written down because it is the one failure this chain cannot catch. A broken graph comes back as boxes of
     // nonsense, so a reader gets garbage on the terminal rather than the readable source. It costs nothing in the
     // transcript, where the block keeps its own text and renders natively. Any future guard belongs HERE, and this

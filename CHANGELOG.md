@@ -10,10 +10,13 @@
 - `cc-views-session` wires the two bookends (`start`, `end`), optional on any host
 - `CC_VIEWS_ENGINES_DIR` redirects the register: a test harness never writes where real engines elect
 
-## 2.3.0
+## 2.3.1
 
 - New `mermaid` view: a mermaid fence under its decorator is drawn in the terminal
 - Diagrams are drawn IN PROCESS by `@tayomi/termaid-ts`: nothing spawns, no Python, no binary to install
+- A diagram is drawn unpainted, in the terminal's own foreground, readable on light and dark alike
+- A source of no known diagram type shows its fence instead of boxes of its own syntax
+- `CC_VIEWS_MERMAID_THEME` paints the diagram with a named renderer theme, unpainted staying the default
 - A diagram fills the box it was drawn for, folded at that width and no other
 - A drawing is cached under the engine's version, so an upgrade never serves the previous engine's render
 - A flowchart's direction can be forced to `TD` or `LR` at render
