@@ -6,14 +6,12 @@
 
 import { announce, announceRoster, clearRoster, peersDir, selfClaim } from "../platform/peers.js";
 import { declaredViews } from "../template/load.js";
-import { parseStdin, readStdin } from "@tayomi/utils";
+import { parseStdin, readStdin, stringField } from "@tayomi/utils";
 import type { RenderOptions } from "../options.js";
 
-/** The one payload field both edges read. Claude Code writes it on every hook event, absent here on a bad payload. */
+/** The one payload field both edges read, non-empty or absent: an edge has no use for a roster keyed on "". */
 function sessionOf(payload: unknown): string | undefined {
-  if (payload === null || typeof payload !== "object") return undefined;
-  const id = (payload as Record<string, unknown>).session_id;
-  return typeof id === "string" && id !== "" ? id : undefined;
+  return stringField(payload, "session_id") || undefined;
 }
 
 /**

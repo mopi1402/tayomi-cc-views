@@ -14,7 +14,7 @@ import {
 import { DEFAULT_STATE_DIR } from "../platform/scratch.js";
 import { holdElection } from "../platform/peers.js";
 import { declaredViews } from "../template/load.js";
-import { parseStdin, readStdin } from "@tayomi/utils";
+import { parseStdin, readStdin, stringField } from "@tayomi/utils";
 import type { RenderOptions } from "../options.js";
 
 /** The payload meta a host may key on, parsed once by the runner. */
@@ -45,14 +45,14 @@ export async function handleMessageDisplay(
   try {
     if (payload === null || typeof payload !== "object") return null;
     const d = payload as Record<string, unknown>;
-    const id = typeof d.message_id === "string" && d.message_id !== "" ? d.message_id : "nomsg";
-    const cwd = typeof d.cwd === "string" ? d.cwd : undefined;
-    const delta = typeof d.delta === "string" ? d.delta : "";
+    const id = stringField(d, "message_id") || "nomsg";
+    const cwd = stringField(d, "cwd");
+    const delta = stringField(d, "delta") ?? ""; // ?? and not ||: an empty delta is a real delta
     const final = d.final === true;
     const ctx: MessageContext = {
       messageId: id,
-      promptId: typeof d.prompt_id === "string" ? d.prompt_id : undefined,
-      sessionId: typeof d.session_id === "string" ? d.session_id : undefined,
+      promptId: stringField(d, "prompt_id"),
+      sessionId: stringField(d, "session_id"),
       cwd,
       final,
     };

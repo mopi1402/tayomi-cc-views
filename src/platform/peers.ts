@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { ENGINE_VERSION } from "../data/engine.js";
 import { ENGINES_DIR, NO_YIELD_ENV, SCRATCH_DIR, SESSIONS_DIR } from "../data/markup.js";
+import { writeAtomic } from "./atomic.js";
 
 /**
  * One engine's claim: where it runs from, the version of the code that would draw, and the view NAMES it can resolve.
@@ -143,11 +144,7 @@ function entryPath(dir: string, of: string): string {
  */
 export function announce(dir: string = peersDir(), self: Peer = SELF): void {
   try {
-    fs.mkdirSync(dir, { recursive: true });
-    const target = entryPath(dir, self.path);
-    const tmp = `${target}.${process.pid}.part`;
-    fs.writeFileSync(tmp, JSON.stringify(self), "utf8");
-    fs.renameSync(tmp, target);
+    writeAtomic(entryPath(dir, self.path), JSON.stringify(self));
   } catch {
     // best effort by construction
   }

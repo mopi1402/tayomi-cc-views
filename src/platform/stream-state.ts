@@ -10,6 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_STATE_DIR } from "./scratch.js";
+import { writeAtomic } from "./atomic.js";
 
 // Its own subdirectory, so a sweep by age can never reach another file of the state dir (the probed terminal width
 // lives there, and a host may keep files of its own beside it).
@@ -60,11 +61,7 @@ export function recordDelta(
 ): void {
   const dir = messageDir(id, stateDir);
   try {
-    fs.mkdirSync(dir, { recursive: true });
-    const target = deltaPath(dir, index);
-    const tmp = `${target}.${process.pid}.part`;
-    fs.writeFileSync(tmp, delta, "utf8");
-    fs.renameSync(tmp, target);
+    writeAtomic(deltaPath(dir, index), delta);
   } catch {
     // best effort by construction
   }

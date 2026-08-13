@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@tayomi/utils':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.2.0
+        version: 0.2.0
     devDependencies:
       '@types/node':
         specifier: ^25.6.0
@@ -199,8 +199,8 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@tayomi/utils@0.1.0':
-    resolution: {integrity: sha512-bFHisCNmRdqaeCN406Yng5/AC2JGEc0tVJlHUGf+1nmypa3OH/ZGWVFUd927tqc95DXBGvlbhKSfArFgeqIjvQ==}
+  '@tayomi/utils@0.2.0':
+    resolution: {integrity: sha512-8PsYmw0kJMFJHTBLC8I9hF63OcoJT2/qh9ggCgI9SBNFCX7NSBndC16zUZRhcafO8ykt5/i5iFxbNYyd6KngsQ==}
 
   '@tybys/wasm-util@0.10.3':
     resolution: {integrity: sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==}
@@ -956,7 +956,7 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@tayomi/utils@0.1.0': {}
+  '@tayomi/utils@0.2.0': {}
 
   '@tybys/wasm-util@0.10.3':
     dependencies:
