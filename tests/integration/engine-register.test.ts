@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { handleMessageDisplay } from "../../src/hook/runner.js";
 import { announce, peersDir } from "../../src/platform/peers.js";
 import { ENGINE_VERSION } from "../../src/data/engine.js";
-import { SCRATCH_DIR } from "../../src/data/markup.js";
+import { ENGINES_DIR_ENV, SCRATCH_DIR } from "../../src/data/markup.js";
 import { ANSI_RE } from "../../src/style.js";
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -57,8 +57,9 @@ const drawn = (envelope: string | null): string =>
         .hookSpecificOutput.displayContent.replace(ANSI_RE, "");
 
 beforeEach(() => {
-  fs.rmSync(path.join(home, SCRATCH_DIR), { recursive: true, force: true });
-  vi.stubEnv("TMPDIR", home);
+  fs.rmSync(home, { recursive: true, force: true });
+  fs.mkdirSync(home, { recursive: true });
+  vi.stubEnv(ENGINES_DIR_ENV, home);
 });
 
 afterEach(() => {

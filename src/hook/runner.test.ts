@@ -12,7 +12,7 @@ import { announce, peers, peersDir } from "../platform/peers.js";
 import { ANSI_RE } from "../style.js";
 import { ENGINE_VERSION } from "../data/engine.js";
 import { BOX, EACH, END, ENDBOX, HEAD } from "../data/language.js";
-import { DECORATOR_HINT, SCRATCH_DIR, VIEW_EXT } from "../data/markup.js";
+import { DECORATOR_HINT, ENGINES_DIR_ENV, SCRATCH_DIR, VIEW_EXT } from "../data/markup.js";
 
 const VIEW = [
   BOX,
@@ -30,9 +30,9 @@ fs.writeFileSync(path.join(views, "note" + VIEW_EXT), VIEW);
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-runner-state-`));
 const options = { viewsPath: [views], width: 100, stateDir };
 
-// This edge consults the machine's engine register on every flush, and that register lives under the temp dir. Pointed
-// at an EMPTY one for every case here: a real engine installed on the developer's machine would otherwise stand this
-// whole suite down, and a green run would mean nothing.
+// This edge consults the machine's engine register on every flush. Pointed at an EMPTY register of this suite's own,
+// through the same redirect a harness uses (ENGINES_DIR_ENV, which outranks any TMPDIR arithmetic): a real engine
+// installed on the developer's machine would otherwise stand this whole suite down, and a green run would mean nothing.
 const registerHome = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-runner-peers-`));
 /** Told apart from this engine by version alone, and DERIVED from it so neither can drift into the other. */
 const NEWER = `${Number(ENGINE_VERSION.split(".")[0]) + 1}.0.0`;
@@ -41,8 +41,9 @@ const OLDER = "0.0.1";
 const SHARED_VIEWS = ["note"];
 
 beforeEach(() => {
-  fs.rmSync(path.join(registerHome, SCRATCH_DIR), { recursive: true, force: true });
-  vi.stubEnv("TMPDIR", registerHome);
+  fs.rmSync(registerHome, { recursive: true, force: true });
+  fs.mkdirSync(registerHome, { recursive: true });
+  vi.stubEnv(ENGINES_DIR_ENV, registerHome);
 });
 
 afterEach(() => {
