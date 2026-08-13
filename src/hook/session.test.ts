@@ -12,8 +12,8 @@ import { SELF, clearRoster, peersDir, rosterHolds } from "../platform/peers.js";
 /** The payload field Claude Code writes on every hook event. */
 const SESSION = "session-under-test";
 
-// The edges write where the engines really register: each case cleans its own session up, and the machine-wide entry
-// this engine announces alongside is one every flush rewrites anyway.
+// The edges write through the REAL default paths on purpose, which the suite's register isolation redirects to a
+// directory of this worker's own (tests/register-isolation.ts): each case still cleans its own session up.
 afterEach(() => {
   clearRoster(SESSION);
 });

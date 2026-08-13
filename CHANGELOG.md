@@ -8,6 +8,7 @@
 - Engines sign a per-session roster at SessionStart; SessionEnd tears it down; a first flush recreates it
 - A view born mid-session enters the election at the next message: the roster re-signs itself, no restart
 - `cc-views-session` wires the two bookends (`start`, `end`), optional on any host
+- `CC_VIEWS_ENGINES_DIR` redirects the register: a test harness never writes where real engines elect
 
 ## 2.1.3
 

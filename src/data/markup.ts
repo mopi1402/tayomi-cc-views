@@ -68,6 +68,8 @@ export const WIDTH_ENV = `${ENV_PREFIX}WIDTH`;
 export const THEME_ENV = `${ENV_PREFIX}THEME`;
 /** Set to anything and this engine draws whatever else is registered. Off means DRAW, so the hatch cannot cause a silence. */
 export const NO_YIELD_ENV = `${ENV_PREFIX}NO_YIELD`;
+/** Where the election register lives, instead of the machine-wide directory: a harness's engines elect among themselves. */
+export const ENGINES_DIR_ENV = `${ENV_PREFIX}ENGINES_DIR`;
 export const SCRATCH_DIR = `cc-${VIEWS}`;
 /** Where the engines registered on this machine announce themselves, one file each. */
 export const ENGINES_DIR = "engines";

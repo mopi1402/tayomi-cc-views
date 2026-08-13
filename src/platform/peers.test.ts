@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { NO_YIELD_ENV } from "../data/markup.js";
+import { ENGINES_DIR, ENGINES_DIR_ENV, NO_YIELD_ENV, SCRATCH_DIR } from "../data/markup.js";
 import {
   PEER_STALE_MS,
   SESSION_STALE_MS,
@@ -65,8 +65,14 @@ const other = (version: string, views: string[] = []): Peer => claim(theirs, ver
 describe("where the register lives", () => {
   it("is machine-wide, under the temp dir and never under a host's own state dir", () => {
     // The property that makes the whole mechanism work: two engines must land in ONE directory, and stateDir is the
-    // knob a host turns precisely so it does NOT share.
-    expect(peersDir().startsWith(os.tmpdir())).toBe(true);
+    // knob a host turns precisely so it does NOT share. Empty redirect means unset: a variable nobody meant to set.
+    vi.stubEnv(ENGINES_DIR_ENV, "");
+    expect(peersDir()).toBe(path.join(os.tmpdir(), SCRATCH_DIR, ENGINES_DIR));
+  });
+
+  it("honours the redirect, read at CALL time: a harness's engines elect among themselves", () => {
+    vi.stubEnv(ENGINES_DIR_ENV, dir);
+    expect(peersDir()).toBe(dir);
   });
 
   it("keeps each session's roster under the register, keyed by the session and never by its raw name", () => {

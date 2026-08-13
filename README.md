@@ -158,7 +158,7 @@ What each degrades to, where the hook is absent:
 
 ## Configuration
 
-Four environment variables, all optional.
+Five environment variables, all optional.
 
 | Variable | Takes | Does |
 | --- | --- | --- |
@@ -166,6 +166,7 @@ Four environment variables, all optional.
 | `CC_VIEWS_WIDTH` | a positive number | the width boxes are drawn to, instead of the terminal's |
 | `CC_VIEWS_THEME` | `light`, `dark`, or either with `-ansi` or `-daltonized` | the theme, instead of the one detected |
 | `CC_VIEWS_STEERING` | `off`, `0`, `false`, `no` | silences the plugin's `SessionStart` briefing; the skill and the engine stay |
+| `CC_VIEWS_ENGINES_DIR` | a directory | where engines register for the per-view election, instead of the machine-wide directory; for test harnesses, whose engines then elect among themselves |
 
 ## Use it in your plugin or framework
 

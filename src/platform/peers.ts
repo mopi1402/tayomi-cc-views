@@ -13,7 +13,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { ENGINE_VERSION } from "../data/engine.js";
-import { ENGINES_DIR, NO_YIELD_ENV, SCRATCH_DIR, SESSIONS_DIR } from "../data/markup.js";
+import { ENGINES_DIR, ENGINES_DIR_ENV, NO_YIELD_ENV, SCRATCH_DIR, SESSIONS_DIR } from "../data/markup.js";
 import { writeAtomic } from "./atomic.js";
 
 /**
@@ -34,8 +34,12 @@ const MAX_VIEWS = 256;
 /**
  * Read at CALL time, and machine-wide on purpose: `RenderOptions.stateDir` exists so a host does NOT share scratch with
  * another host, and a registry honouring it would put two engines in two directories where neither ever sees the other.
+ * The env override is not that hole: an environment is shared by every engine spawned under it, so a harness's engines
+ * still elect among themselves, in a register that never touches the machine's real one.
  */
 export function peersDir(): string {
+  const configured = process.env[ENGINES_DIR_ENV];
+  if (configured !== undefined && configured !== "") return configured;
   return path.join(os.tmpdir(), SCRATCH_DIR, ENGINES_DIR);
 }
 
