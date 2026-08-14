@@ -152,12 +152,14 @@ describe("handleMessageDisplay", () => {
     }
   });
 
-  it("cleans its message dir on the final flush", async () => {
+  it("leaves its store standing past the final flush, where a DUPLICATE of itself still reads", async () => {
+    // The same engine wired twice (a settings hook and a plugin) runs every flush in two processes: the one that
+    // finishes second must still find the prefix, or it renders its delta alone and the dispatcher keeps THAT.
+    // Forgetting is the age sweep's alone.
     const id = msg();
     await handleMessageDisplay(payload(id, 0, "just prose"), undefined, options);
-    expect(readEarlier(id, 1, stateDir).complete).toBe(true);
     await handleMessageDisplay(payload(id, 1, ", the end", true), undefined, options);
-    expect(readEarlier(id, 1, stateDir).complete).toBe(false);
+    expect(readEarlier(id, 1, stateDir).complete).toBe(true);
   });
 
   it("hands the payload meta to a factory host", async () => {

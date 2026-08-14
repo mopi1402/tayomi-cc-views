@@ -182,6 +182,27 @@ describe("one message, two engines, one voice", () => {
       options
     );
     expect(last).toBeNull(); // still the raw echo: the record outranks the late piece
-    expect(fs.existsSync(composeMessageDir(id))).toBe(false); // and the final flush swept the store
+    expect(fs.existsSync(composeMessageDir(id))).toBe(true); // the store stands for a duplicate; age sweeps it
+  });
+
+  it("answers the SAME screen from a duplicate final flush, the engine wired twice by human hands", async () => {
+    // The incident of 2026-08-14: one engine registered by two hook entries (user settings and project settings)
+    // runs every flush in two processes. The first final flush used to drop the store behind it; the duplicate then
+    // found nothing, expired its wait, and its RAW answer, dispatched last, overwrote the drawn screen. The store
+    // now outlives the flush, so the duplicate converges on the same pixels.
+    peerWith(OLDER, [THEIRS]);
+    const id = msg();
+    fs.mkdirSync(composeMessageDir(id), { recursive: true });
+    fs.writeFileSync(
+      piecePath(id, zoneKey(DECORATED_ZONE, THEIRS, 0)),
+      JSON.stringify({ span: 2, text: PEER_RENDER } satisfies Piece),
+      "utf8"
+    );
+    const delta = `${THEIR_DECORATOR}\n| a |\n\nafter\n`;
+    const flush = { message_id: id, index: 0, delta, final: true };
+    const first = answered(await handleMessageDisplay(flush, undefined, options));
+    const second = answered(await handleMessageDisplay(flush, undefined, options));
+    expect(first).toContain(PEER_RENDER);
+    expect(second).toBe(first); // identical answers: the last-writer overwrite paints the same pixels
   });
 });

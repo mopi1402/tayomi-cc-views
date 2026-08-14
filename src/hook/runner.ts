@@ -5,20 +5,11 @@
 // over it. Neither ever exits the process: the exit belongs to the caller (the bin below, or a host's own edge).
 
 import { deferredZoneKeys, slice, type DisplayHost } from "../pipeline.js";
-import {
-  awaitEarlier,
-  dropMessage,
-  recordDelta,
-  sweepStale,
-} from "../platform/stream-state.js";
+import { awaitEarlier, recordDelta, sweepStale } from "../platform/stream-state.js";
 import { DEFAULT_STATE_DIR } from "../platform/scratch.js";
 import { composeRole, holdElection } from "../platform/peers.js";
-import {
-  dropComposition,
-  gatherPieces,
-  setComposition,
-  sweepCompose,
-} from "../platform/compose.js";
+import { journal } from "../platform/journal.js";
+import { gatherPieces, setComposition, sweepCompose } from "../platform/compose.js";
 import { declaredViews } from "../template/load.js";
 import { parseStdin, readStdin, stringField } from "@tayomi/utils";
 import type { RenderOptions } from "../options.js";
@@ -90,6 +81,7 @@ export async function handleMessageDisplay(
       prev = earlier.text;
       whole = earlier.complete;
     }
+    journal("flush", { msg: id, index: index ?? "none", final, role, whole });
     // The assembler's PRE-PASS, on the same text the slice below will read: the zones the election owes a peer are
     // resolved here, waiting BOUNDED for the pieces the winners render in sibling processes of this same flush, so the
     // carriers splice synchronously and no render ever blocks mid-walk.
@@ -102,10 +94,11 @@ export async function handleMessageDisplay(
     const display = whole
       ? slice(prev, delta, resolved, final, cwd, options)
       : slice("", delta, resolved, final, cwd, options);
+    // The final flush sweeps BY AGE and never drops its own message: the same engine wired twice (a settings hook
+    // and a plugin, say) runs every flush in two processes, and the one finishing second must still find the prefix
+    // and the pieces, or it diverges and the dispatcher's last-writer paints the drawn zone raw (measured 2026-08-14).
     if (final && index !== null) {
-      dropMessage(id, stateDir);
       sweepStale(undefined, stateDir);
-      if (role === "assembler") dropComposition(id);
       sweepCompose();
     }
     // A SPEAKER answers NOTHING whatever it rendered: its zones travelled as pieces, its host's own duties (inject,
@@ -120,8 +113,11 @@ export async function handleMessageDisplay(
         displayContent: display,
       },
     });
-  } catch {
-    return null; // fail open: emit nothing, the host shows the original text
+  } catch (err) {
+    // fail open: emit nothing, the host shows the original text. Recorded, because this silence is the one a
+    // raw screen leaves no other trace of.
+    journal("hook-error", { err: err instanceof Error ? err.message : String(err) });
+    return null;
   }
 }
 

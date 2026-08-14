@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.4
+
+- Under `CC_VIEWS_DEBUG`, the engine journals every flush under the register: a display gone wrong is read, not guessed at
+- An engine wired twice draws ONCE and the same: a final flush no longer drops the store its own duplicate still reads
+
 ## 2.3.3
 
 - Engines COMPOSE one answer per flush: claims speak a protocol, all-or-nothing per fleet

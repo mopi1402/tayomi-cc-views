@@ -110,7 +110,11 @@ export async function awaitEarlier(
   }
 }
 
-/** Forget a finished message. Called on the final flush, which is the only flush that knows. */
+/**
+ * Forget one message surgically. The runner never calls this: the same engine wired twice runs every flush in two
+ * processes, and a final flush dropping its own store starves the duplicate still reading it (measured 2026-08-14),
+ * so production forgets by AGE alone (sweepStale). For a harness cleaning the ids it wrote, and nothing wider.
+ */
 export function dropMessage(id: string, stateDir: string = DEFAULT_STATE_DIR): void {
   try {
     fs.rmSync(messageDir(id, stateDir), { recursive: true, force: true });

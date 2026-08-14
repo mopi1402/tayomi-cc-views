@@ -159,7 +159,7 @@ describe("gathering, the assembler's half", () => {
 });
 
 describe("forgetting", () => {
-  it("drops a finished message's pieces, the final flush's business", () => {
+  it("drops one message's pieces surgically, a harness's own cleanup and nobody's flush", () => {
     setComposeRole("speaker");
     publishPiece(AT, SPAN, "drawn");
     dropComposition(MSG, dir);

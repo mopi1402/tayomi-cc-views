@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { composeRole, peersDir } from "./peers.js";
+import { journal } from "./journal.js";
 import { writeAtomic } from "./atomic.js";
 
 /**
@@ -118,6 +119,7 @@ export function setComposition(messageId: string | null, dir: string = peersDir(
 export function publishPiece(key: string, span: number, text: string): void {
   if (composeRole() !== "speaker" || MESSAGE === null) return;
   writeOnce(piecePath(MESSAGE.id, key, MESSAGE.dir), JSON.stringify({ span, text }));
+  journal("piece", { msg: MESSAGE.id, key, span }, MESSAGE.dir);
 }
 
 /**
@@ -127,6 +129,7 @@ export function publishPiece(key: string, span: number, text: string): void {
 export function publishRaw(key: string): void {
   if (composeRole() !== "speaker" || MESSAGE === null) return;
   writeOnce(rawVerdictPath(MESSAGE.id, key, MESSAGE.dir), "");
+  journal("declined", { msg: MESSAGE.id, key }, MESSAGE.dir);
 }
 
 /** A piece file's word, or null for one missing or unreadable: the caller keeps waiting, the budget decides. */
@@ -159,12 +162,16 @@ export async function gatherPieces(zoneKeys: string[], budgetMs: number = PIECE_
   if (composeRole() !== "assembler" || MESSAGE === null || zoneKeys.length === 0) return;
   const { id, dir } = MESSAGE;
   const found = new Map<string, Piece>();
+  const declined: string[] = [];
   let pending = [...new Set(zoneKeys)];
   let waited = 0;
   for (;;) {
     pending = pending.filter((key) => {
       try {
-        if (fs.existsSync(rawVerdictPath(id, key, dir))) return false; // settled raw: absent from the map
+        if (fs.existsSync(rawVerdictPath(id, key, dir))) {
+          declined.push(key);
+          return false; // settled raw: absent from the map
+        }
         const piece = readPiece(piecePath(id, key, dir));
         if (piece === null) return true;
         found.set(key, piece);
@@ -178,6 +185,12 @@ export async function gatherPieces(zoneKeys: string[], budgetMs: number = PIECE_
     waited += POLL_MS;
   }
   for (const key of pending) writeOnce(rawVerdictPath(id, key, dir), ""); // the give-up, recorded so the screen stays re-derivable
+  const keysWord = (keys: Iterable<string>): string => [...keys].join(",") || "none";
+  journal(
+    "gather",
+    { msg: id, waited, found: keysWord(found.keys()), declined: keysWord(declined), expired: keysWord(pending) },
+    dir
+  );
   PIECES = found;
 }
 
@@ -190,7 +203,11 @@ export function pieceFor(key: string): Piece | undefined {
   return PIECES.get(key);
 }
 
-/** Forget a finished message's pieces. The assembler's final flush is the one that knows. */
+/**
+ * Forget one message's pieces surgically. The runner never calls this: a final flush dropping the store starves the
+ * DUPLICATE of its own engine still gathering from it, whose expired wait then paints the drawn zone raw (measured
+ * 2026-08-14). Production forgets by AGE alone (sweepCompose); this is for a harness cleaning the ids it wrote.
+ */
 export function dropComposition(messageId: string, dir: string = peersDir()): void {
   try {
     fs.rmSync(composeMessageDir(messageId, dir), { recursive: true, force: true });
@@ -200,8 +217,8 @@ export function dropComposition(messageId: string, dir: string = peersDir()): vo
 }
 
 /**
- * Drop the piece stores nothing will come back for: a speaker lagging past the assembler's drop recreates a directory
- * nobody drops on purpose, and a message abandoned mid-stream never sees its final flush.
+ * Drop the piece stores nothing will come back for: the ONLY forgetting production runs. By age and never by message,
+ * because a finished message's store may still be feeding a duplicate of this same engine, wired twice by human hands.
  */
 export function sweepCompose(maxAgeMs = COMPOSE_STALE_MS, dir: string = peersDir()): void {
   try {

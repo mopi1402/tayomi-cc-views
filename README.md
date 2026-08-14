@@ -175,6 +175,7 @@ Environment variables, all optional.
 | `CC_VIEWS_ENGINES_DIR` | a directory | where engines register for the per-view election, instead of the machine-wide directory; for test harnesses, whose engines then elect among themselves |
 | `CC_VIEWS_NO_MERMAID` | any non-empty value | keeps the diagram view out of the briefing |
 | `CC_VIEWS_NO_YIELD` | any non-empty value | draws every zone even where the election gave the view to another engine |
+| `CC_VIEWS_DEBUG` | any non-empty value | journals every flush (ids, roles, durations, never message text) under the engines register, size-capped; read it when a view rendered raw |
 
 ## Use it in your plugin or framework
 

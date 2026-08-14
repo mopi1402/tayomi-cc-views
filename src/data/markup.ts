@@ -79,6 +79,8 @@ export const MERMAID_THEME_ENV = `${ENV_PREFIX}MERMAID_THEME`;
 export const NO_YIELD_ENV = `${ENV_PREFIX}NO_YIELD`;
 /** Where the election register lives, instead of the machine-wide directory: a harness's engines elect among themselves. */
 export const ENGINES_DIR_ENV = `${ENV_PREFIX}ENGINES_DIR`;
+/** Set to anything and the engine journals every flush under the register; absent, the recorder stays silent. */
+export const DEBUG_ENV = `${ENV_PREFIX}DEBUG`;
 export const SCRATCH_DIR = `cc-${VIEWS}`;
 /** Where the engines registered on this machine announce themselves, one file each. */
 export const ENGINES_DIR = "engines";
