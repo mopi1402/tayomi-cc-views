@@ -14,6 +14,6 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     // The suite must never write where real engines elect: each worker gets a register of its own.
-    setupFiles: ["tests/register-isolation.ts"],
+    setupFiles: ["tests/env-isolation.ts"],
   },
 });

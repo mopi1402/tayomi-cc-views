@@ -26,7 +26,7 @@ function announceMuteEngine(): string {
 }
 
 // The edges write through the REAL default paths on purpose, which the suite's register isolation redirects to a
-// directory of this worker's own (tests/register-isolation.ts): each case still cleans its own session up.
+// directory of this worker's own (tests/env-isolation.ts): each case still cleans its own session up.
 afterEach(() => {
   clearRoster(SESSION);
   fs.rmSync(path.join(peersDir(), "mute-engine.js"), { force: true }); // its claim dies with its path

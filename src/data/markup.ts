@@ -69,7 +69,8 @@ export const VIEW_EXT = `.${VIEW}`;
 export const VIEWS_DIR = VIEWS;
 
 /** The operator-facing names, one prefix so they read as one family. */
-const ENV_PREFIX = `CC_${VIEWS.toUpperCase()}_`;
+/** The root every engine variable derives from, exported so a harness can neutralise the whole family at once. */
+export const ENV_PREFIX = `CC_${VIEWS.toUpperCase()}_`;
 export const VIEWS_PATH_ENV = `${ENV_PREFIX}PATH`;
 export const WIDTH_ENV = `${ENV_PREFIX}WIDTH`;
 export const THEME_ENV = `${ENV_PREFIX}THEME`;
