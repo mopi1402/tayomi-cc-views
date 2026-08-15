@@ -3,6 +3,31 @@
   "version": "2.4.0",
   "type": "module",
   "description": "Template-driven terminal rendering for Claude Code's MessageDisplay hook: data blocks in, coloured views on screen, zero tokens spent on presentation.",
+  "keywords": [
+    "claude-code",
+    "claude code",
+    "claude",
+    "anthropic",
+    "claude-code-plugin",
+    "claude-code-hooks",
+    "messagedisplay",
+    "hooks",
+    "template-engine",
+    "colors",
+    "colours",
+    "terminal-colors",
+    "layout",
+    "formatting",
+    "pretty-print",
+    "tables",
+    "mermaid",
+    "diagram",
+    "diagrams",
+    "terminal",
+    "terminal-output",
+    "ansi",
+    "cli"
+  ],
   "license": "MIT",
   "files": [
     "dist",
@@ -43,6 +68,7 @@
     "check:vocabulary": "node scripts/check-vocabulary.mjs",
     "verify:pack": "pnpm build && node scripts/verify-pack.mjs",
     "gen:catalogue": "node scripts/gen-catalogue.mjs",
+    "gen:gallery": "pnpm build && node scripts/gen-gallery.mjs",
     "check:catalogue": "node scripts/gen-catalogue.mjs --check",
     "assemble:plugin": "node scripts/assemble-plugin.mjs",
     "check:plugin": "node scripts/assemble-plugin.mjs --check",
@@ -68,6 +94,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mopi1402/tayomi-cc-views.git"
+  },
+  "homepage": "https://github.com/mopi1402/tayomi-cc-views#readme",
+  "bugs": {
+    "url": "https://github.com/mopi1402/tayomi-cc-views/issues"
   },
   "engines": {
     "node": ">=22.12"

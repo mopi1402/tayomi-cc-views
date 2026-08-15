@@ -2,6 +2,11 @@
 
 # @tayomi/cc-views
 
+[![npm](https://img.shields.io/npm/v/@tayomi/cc-views?color=cb3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/@tayomi/cc-views)
+[![node](https://img.shields.io/node/v/@tayomi/cc-views?color=339933&logo=node.js&logoColor=white)](https://nodejs.org)
+[![types](https://img.shields.io/npm/types/@tayomi/cc-views?color=3178c6&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![license](https://img.shields.io/npm/l/@tayomi/cc-views?color=blue)](LICENSE)
+
 **Colour and layout for Claude Code's answers: boxes, aligned columns and coloured status chips, drawn live in your terminal.**
 
 <img src="docs/images/tayomi-tldr-view.png" alt="A TL;DR view rendered in the terminal" width="689"/>
@@ -38,6 +43,33 @@ Ordered directories resolve `.view` files: name one the same and yours beats a p
 
 **✨ Your palette.**  
 `extendTags` adds your own `{{tags}}` process-wide, and yours shadow the built-ins.
+
+## What ships in the box
+
+Every picture below is the real engine's output, turned into an SVG by
+[@tayomi/term2svg](https://github.com/mopi1402/term2svg). Nothing is a screenshot. The left
+column is the name you write, as `@{view:box}`, over ordinary markdown.
+
+| View | Render |
+| --- | --- |
+| `box` | <img src="docs/images/gallery/box.svg" alt="A framed TL;DR summary with a version badge set into the top rule"/> |
+| `columns` | <img src="docs/images/gallery/columns.svg" alt="A three-column table of checks, results and timings, with coloured headers"/> |
+| `banner` | <img src="docs/images/gallery/banner.svg" alt="A single warning band reading: two flaky suites, publication is blocked"/> |
+
+<details>
+<summary>Three more: ruled rows, a set-apart line, and a diagram</summary>
+
+| View | Render |
+| --- | --- |
+| `lines` | <img src="docs/images/gallery/lines.svg" alt="Two entries, each ruled underneath, naming a package and what it does"/> |
+| `quote` | <img src="docs/images/gallery/quote.svg" alt="One sentence set apart behind a coloured bar"/> |
+| `mermaid` | <img src="docs/images/gallery/mermaid.svg" alt="A flowchart from commit through lint, test and pack to publish, branching to stop on failure"/> |
+
+Colour is one variable away: `CC_VIEWS_MERMAID_THEME=default` is what painted the diagram
+above, and ten more themes ship with it, `terra`, `nord`, `dracula` and `gruvbox` among
+them.
+
+</details>
 
 ## Minimal installation
 
