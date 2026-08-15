@@ -54,7 +54,7 @@
     "version": "node scripts/sync-version.mjs && node scripts/assemble-plugin.mjs && git add .claude-plugin src/data/engine.ts plugin"
   },
   "dependencies": {
-    "@tayomi/termaid-ts": "^0.8.1",
+    "@tayomi/termaid-ts": "^0.8.2",
     "@tayomi/utils": "^0.2.0"
   },
   "devDependencies": {

@@ -21,6 +21,7 @@ import {
 import { ENGINE_VERSION } from "./data/engine.js";
 import { MERMAID_THEME_ENV, THEME_ENV } from "./data/markup.js";
 import { printedText, printedWidth } from "./layout/measure.js";
+import { ANSI_RE } from "./style.js";
 
 /** Two widths, because the same graph drawn at each is two different drawings and the key has to say so. */
 const WIDTH = 72;
@@ -148,12 +149,30 @@ describe("the drawing itself", () => {
   });
 
   it("keys the cache on the THEME too, so a themed screen is never handed the plain drawing", () => {
-    expect(diagramCachePath(SOURCE, WIDTH, stateDir, A_THEME)).not.toBe(diagramCachePath(SOURCE, WIDTH, stateDir));
+    const painted = { theme: A_THEME, background: DARK_BACKGROUND } as const;
+    expect(diagramCachePath(SOURCE, WIDTH, stateDir, painted)).not.toBe(diagramCachePath(SOURCE, WIDTH, stateDir));
   });
 
-  it("resolves the SIDE a paint is for from the host's own theme, carried unconsumed to the renderer's seam", () => {
-    // The background rides along for the day the renderer takes it as an option. Resolved from the same chain the
-    // ink adaptation reads (platform/theme.ts), and absent entirely where no theme was asked for.
+  it("keys the cache on the SIDE as well: one theme is two drawings, and neither may serve the other's screen", () => {
+    const onDark = diagramCachePath(SOURCE, WIDTH, stateDir, { theme: A_THEME, background: DARK_BACKGROUND });
+    const onLight = diagramCachePath(SOURCE, WIDTH, stateDir, { theme: A_THEME, background: LIGHT_BACKGROUND });
+    expect(onLight).not.toBe(onDark);
+  });
+
+  it("MIRRORS the palette for a light terminal, the same drawing under different escapes", () => {
+    const strip = (drawn: string): string => drawn.replace(ANSI_RE, "");
+    const onDark = renderDiagram(SOURCE, WIDTH, stateDir, undefined, PAINTED_ENV);
+    const onLight = renderDiagram(SOURCE, WIDTH, stateDir, undefined, {
+      [MERMAID_THEME_ENV]: A_THEME,
+      [THEME_ENV]: LIGHT_BACKGROUND,
+    });
+    expect(onLight).not.toBe(onDark);
+    expect(strip(onLight)).toBe(strip(onDark)); // a side is a palette, never a layout
+  });
+
+  it("resolves the SIDE a paint is for from the host's own theme, and hands it to the renderer", () => {
+    // Resolved from the same chain the ink adaptation reads (platform/theme.ts), and absent entirely where no theme
+    // was asked for.
     expect(requestedPaint({ [MERMAID_THEME_ENV]: A_THEME, [THEME_ENV]: LIGHT_BACKGROUND })?.background).toBe(
       LIGHT_BACKGROUND
     );

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.0
+
+- A themed diagram is painted for the SIDE the host's theme names: on a light terminal the palette is mirrored, never fog on white
+- The side joins the drawing's cache key, so one terminal is never served the other's colours
+
 ## 2.3.4
 
 - Under `CC_VIEWS_DEBUG`, the engine journals every flush under the register: a display gone wrong is read, not guessed at
