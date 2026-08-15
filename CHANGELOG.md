@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.1
+
+- The README shows what every view draws, each picture the engine's own render and never a screenshot
+- The npm page carries keywords, a homepage and a bugs URL
+
 ## 2.4.0
 
 - A themed diagram is painted for the SIDE the host's theme names: on a light terminal the palette is mirrored, never fog on white
