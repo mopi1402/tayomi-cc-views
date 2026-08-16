@@ -277,6 +277,7 @@ describe("the version drift the hook reports", () => {
 
   it("DRAWS the notice with the installed engine, which a drift proves is there to draw it", async () => {
     // The bare sentence is the fallback and passes every other case here, so only a real dist tells the two apart.
+    if (!fs.existsSync(path.join(REPO, "dist"))) throw new Error("this case needs a built dist: run pnpm build");
     const root = pluginSaying("1.0.29");
     const opened = projectSaying("1.0.27");
     try {
