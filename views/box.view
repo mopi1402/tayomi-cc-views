@@ -24,14 +24,14 @@
 # box with nothing above the rule is a table with a border. Want no title, use lines.view.
 #
 # Every row is SET OFF by a blank line, which is what makes the block read as a summary
-# rather than as a table with a border. The blank is emitted per row and unconditionally:
-# the container's blank-run collapsing is what keeps it to one and drops the one trailing
-# the last row, so a separator appears only BETWEEN two rows that printed.
+# rather than as a table with a border. The blank is emitted per row: the container's
+# blank-run collapsing is what keeps it to one and drops the one trailing the last row, so
+# a separator appears only BETWEEN two rows that printed.
 #
-# It falls between a labelled row and its CONTINUATION too, and there is no way around it:
-# an empty label cell continues the section above, but nothing in this language is
-# conditional on a row's own value, so a blank drawn per row is drawn for every row. Two
-# lines that must stay glued belong in one cell, where the wrap keeps them together.
+# Never between a row and its CONTINUATION, though: an empty label cell continues the
+# section above, and the loop drops a separator written before one, the blank exactly as it
+# drops an `@rule`. So several lines under one label read as one section, and a table whose
+# rows carry no label at all is one section too, drawn dense.
 #
 # That wrap is the other half: a long line folds inside the border, and the fold keeps the
 # bar and blanks the label, so it stays in its column instead of restarting at the margin.

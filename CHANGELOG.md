@@ -1,10 +1,13 @@
 # Changelog
 
-## Unreleased
+## 2.6.0
 
 - A diagram asked for no theme now draws in SHADES rather than flat, so a `classDef` or a `style` the source declares reaches the screen
 - The env var still chooses OUR palette; its absence no longer means "no colour", it means "no palette of ours"
 - A theme name the renderer does not hold falls to those same shades, so a typo still shows as the one drawing with no colour of ours in it
+- A bare `>` inside a quote is a paragraph break the author wrote, and it reaches the screen as one
+- A band still draws as one paragraph, that break spent as a single space
+- Several lines under one label in a `box` read as one section, no blank line parting them
 
 ## 2.5.0
 

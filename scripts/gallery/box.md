@@ -1,6 +1,7 @@
 @{view:box}
-| TL;DR | 2.4.0 |
+| Release Note | Version 2.6.0 |
 | --- | --- |
-| SAID | the flaky retry test is fixed, a shared fixture was the cause |
-| DID | pinned the fixture per suite, 3 files touched |
-| NEXT | bump the patch version, or wait for the queue refactor? |
+| FIX | - a bare `>` in a quote is a paragraph break, drawn as one |
+| FEAT | - a diagram asked for no theme draws in shades, never flat |
+| | - lines under one label read as one section, as these two do |
+| DOC | - the gallery draws six situations, each picture a real render |

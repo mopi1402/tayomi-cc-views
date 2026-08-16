@@ -1,9 +1,11 @@
 @{view:mermaid}
 ```mermaid
 flowchart LR
-    A[commit] --> B{lint}
-    B -->|pass| C[test]
+    A[commit] --> B{verify}
+    B -->|pass| C[publish]
     B -->|fail| S[stop]
-    C --> D[pack]
-    D --> E[publish]
+    classDef ok stroke:#2ecc71
+    classDef ko stroke:#e74c3c
+    class C ok
+    class S ko
 ```

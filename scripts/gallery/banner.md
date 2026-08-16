@@ -1,3 +1,3 @@
 @{view:banner}
 > [!WARNING]
-> two flaky suites, publication is blocked
+> 1226 tests pass but 5 are skipped

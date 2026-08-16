@@ -303,6 +303,27 @@ describe("@rule", () => {
   });
 });
 
+describe("a blank line in an @each body", () => {
+  const ROWS = [
+    { k: "a", v: "1" },
+    { k: "", v: "still a" },
+    { k: "b", v: "2" },
+  ];
+  const ROW = `${ref("k")}|${ref("v")}`;
+  const draw = (rows: Record<string, string>[]): string[] =>
+    bare(render([`${EACH} rows`, ROW, "", END], { rows }, NO_TABLES, { rows: ["k", "v"] }));
+
+  it("sets every item off, once per item, the container collapsing what that costs", () => {
+    expect(draw(ROWS.filter((r) => r.k !== ""))).toEqual(["a|1", "", "b|2", ""]);
+  });
+
+  it("is dropped before an item CONTINUING the entry above, exactly as a rule is", () => {
+    // The same reading as @rule's: a blank written in the body separates ENTRIES, and a continuation is not one.
+    // Without this the two halves disagree, the rule holding a section together and the blank pulling it apart.
+    expect(draw(ROWS)).toEqual(["a|1", " |still a", "", "b|2", ""]);
+  });
+});
+
 describe("@box", () => {
   it("frames what it encloses, and leaves what follows outside the frame", () => {
     const out = render([BOX, "inside", ENDBOX, "outside"]);

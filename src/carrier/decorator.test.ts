@@ -855,6 +855,21 @@ describe("a decorated blockquote", () => {
     expect(out.trim().split("\n")).toEqual(["one", "two", "three"]);
   });
 
+  it("KEEPS a blank line the author wrote between two paragraphs", () => {
+    const out = plain(decorator(QUOTING), "one", "", "two");
+    expect(out.trim().split("\n")).toEqual(["one", "", "two"]);
+  });
+
+  it("drops the blank lines at either END, which are spacing and not a paragraph", () => {
+    const out = plain(decorator(QUOTING), "", "one", "");
+    expect(out.trim().split("\n")).toEqual(["one"]);
+  });
+
+  it("spends a paragraph break as NOTHING in `flow`, never as a doubled space", () => {
+    const out = plain(decorator(BANDED), marker("WARNING"), "one", "", "two");
+    expect(out).toContain("one two");
+  });
+
   it("takes the reserved entry and the template's own tone with NO marker", () => {
     const out = render(decorator(BANDED), "just a sentence");
     expect(out).toContain(GOLD);

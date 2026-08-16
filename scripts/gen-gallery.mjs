@@ -24,10 +24,30 @@ const OUT = path.join(REPO, "docs", "images", "gallery");
 const WIDTH = 80;
 
 // term2svg supplies no font, deliberately: this one is CHOSEN here, under a licence that may be
-// redistributed. term2svg downloads it once and caches it.
-const FONT =
-  process.env.GALLERY_FONT ??
-  "https://raw.githubusercontent.com/JetBrains/JetBrainsMono/master/fonts/ttf/JetBrainsMono-Regular.ttf";
+// redistributed.
+//
+// A DIRECTORY and not a file: term2svg reads a directory's faces off their OS/2 tables, and with the
+// regular alone it falls back to it for every one of them, so `**bold**` draws no heavier than plain
+// text. Fetched once per machine, into the OS temp dir: a font is not this repository's to carry.
+const FONT_URLS = [
+  "https://raw.githubusercontent.com/JetBrains/JetBrainsMono/master/fonts/ttf/JetBrainsMono-Regular.ttf",
+  "https://raw.githubusercontent.com/JetBrains/JetBrainsMono/master/fonts/ttf/JetBrainsMono-Bold.ttf",
+];
+
+async function faceDir(urls) {
+  const dir = path.join(os.tmpdir(), "cc-views-gallery-fonts");
+  fs.mkdirSync(dir, { recursive: true });
+  for (const url of urls) {
+    const file = path.join(dir, path.basename(new URL(url).pathname));
+    if (fs.existsSync(file)) continue;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`font ${url}: ${res.status}`);
+    fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+  }
+  return dir;
+}
+
+const FONT = process.env.GALLERY_FONT ?? (await faceDir(FONT_URLS));
 
 // term2svg lives its own life in its own package: cc-views does not install it, it calls it.
 const TERM2SVG = process.env.TERM2SVG ?? "@tayomi/term2svg";
@@ -39,10 +59,9 @@ process.env.CC_VIEWS_NO_YIELD = "1";
 // The engine register is a side effect: generating images has nothing to write there, and a
 // directory of its own proves it rather than hoping for it.
 process.env.CC_VIEWS_ENGINES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-gallery-"));
-// A diagram takes no PALETTE unless one is named, only shades, which would make the one image
-// showing a diagram the greyest of the set. The gallery names one, and the README says so under
-// it, or the picture would promise a colour nobody gets by default.
-process.env.CC_VIEWS_MERMAID_THEME ??= "default";
+// No theme NAMED here, deliberately: the gallery must show what an unasked diagram draws, which is
+// the neutral one, shades of ours and every colour the source declares for itself.
+delete process.env.CC_VIEWS_MERMAID_THEME;
 
 const { handleMessageDisplay } = await import(`file://${path.join(REPO, "dist", "index.js")}`);
 

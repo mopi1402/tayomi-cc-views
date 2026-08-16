@@ -260,6 +260,15 @@ interface Payload {
   type?: string;
 }
 
+/** The same lines, less the blank ones at either end. */
+function trimBlanks(lines: string[]): string[] {
+  let from = 0;
+  let to = lines.length;
+  while (from < to && lines[from] === "") from++;
+  while (to > from && lines[to - 1] === "") to--;
+  return lines.slice(from, to);
+}
+
 /**
  * The payload parsed as a blockquote, or null when a line of the zone is not one. `content` KEEPS the lines the author
  * wrote, so a quote of two lines is two lines on screen; a view drawing ONE band spends `flow` instead, which render.ts
@@ -278,15 +287,16 @@ function parseQuote(zone: string[]): Payload | null {
   }
   const marked = body[0].trim().match(MARKER_RE);
   const type = marked === null ? undefined : marked[1].toLowerCase();
-  const lines = (marked === null ? body : body.slice(1))
-    .map((l) => l.trim())
-    .filter((l) => l !== "");
+  // A blank line INSIDE the body is a paragraph break the author wrote, and it survives; the ones at either end are
+  // spacing around the quote and never reach the screen.
+  const lines = trimBlanks((marked === null ? body : body.slice(1)).map((l) => l.trim()));
   const pack = (content: string): Scope =>
     type === undefined
       ? { [FIELD_CONTENT]: content }
       : { [FIELD_TYPE]: type, [FIELD_CONTENT]: content };
-  // Neutralised line by line: inertText over a joined body would mark the separator it is joined on.
-  return { data: pack(lines.map(inertText).join(NL)), bare: pack(lines.join(NL)), type };
+  // Neutralised line by line, and never an empty one: a mark on a blank line is a line no reader can tell from text.
+  const inertLine = (l: string): string => (l === "" ? "" : inertText(l));
+  return { data: pack(lines.map(inertLine).join(NL)), bare: pack(lines.join(NL)), type };
 }
 
 /**

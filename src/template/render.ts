@@ -92,7 +92,9 @@ export function traceView(
   // The same body with the author's breaks spent as spaces, for a view that draws ONE band. Derived HERE so every way
   // in yields it (a decorator's quote and a fenced block alike), and never over a diagram, whose lines are its syntax.
   if (!diagram && typeof scope[FIELD_CONTENT] === "string" && scope[FIELD_FLOW] === undefined) {
-    scope = { ...scope, [FIELD_FLOW]: scope[FIELD_CONTENT].split(NL).join(" ") };
+    // A paragraph break DROPS rather than doubling the space: one band is one paragraph however the author spaced it.
+    const flow = scope[FIELD_CONTENT].split(NL).filter((l) => l !== "");
+    scope = { ...scope, [FIELD_FLOW]: flow.join(" ") };
   }
   if (diagram) {
     // The source arrived RAW (the carrier styles nothing bound for a renderer), and the DRAWING is what gets

@@ -1,5 +1,6 @@
 @{view:lines}
-| Package | Note |
+| File | What changed |
 | --- | --- |
-| @tayomi/cc-views | the engine, renders a message into a terminal screen |
-| @tayomi/term2svg | turns that screen into an SVG a README can show |
+| `src/queue.ts` | the retry counter reset on every poll, so a poisoned job never reached the dead letter |
+| `src/queue.test.ts` | a case that poisons a job and asserts it lands in the dead letter on the third try |
+| `docs/runbook.md` | the paragraph on draining the queue by hand, gone now that nothing needs it |

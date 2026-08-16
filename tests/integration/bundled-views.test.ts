@@ -673,13 +673,24 @@ describe("the box view the package ships", () => {
     ]);
   });
 
-  it("sets a CONTINUATION off too, the cost of a language with no per-row conditional", () => {
-    // Pinned because it is the one place this view reads worse than the summary it draws: an empty label continues the
-    // section above and still gets its blank. Two lines that must stay glued belong in one cell, where the wrap keeps
-    // them. A silent change here would be a look nobody chose.
-    const drawn = plainly(render(box("@{view:box}", HEAD, ROWS[0], "| | and more |"))).split("\n");
+  it("glues a CONTINUATION to the entry above, the blank falling where a section ends", () => {
+    // The other half of the rule above: the blank sets off ENTRIES, and a continuation is not one. So the two rows
+    // read as one section here, and the blank still stands between this section and the next.
+    const drawn = plainly(
+      render(box("@{view:box}", HEAD, ROWS[0], "| | and more |", ROWS[1]))
+    ).split("\n");
     const at = drawn.findIndex((l) => l.includes("and more"));
-    expect(drawn[at - 1].replaceAll("│", "").trim()).toBe("");
+    expect(drawn[at - 1]).toContain("retry test"); // glued to the row it continues
+    expect(drawn[at + 1].replaceAll("│", "").trim()).toBe(""); // and the next section still set off
+  });
+
+  it("draws a box whose rows carry NO label dense, having one section and nothing to part", () => {
+    const body = plainly(render(box("@{view:box}", HEAD, "| | first |", "| | second |")))
+      .split("\n")
+      .slice(3, -1) // the top rule, the title and the rule under it, then the bottom border
+      .map((l) => l.replaceAll("│", "").trim());
+    expect(body).toHaveLength(2);
+    expect(body.some((l) => l === "")).toBe(false);
   });
 
   it("folds a long line inside the border and redraws the bar on the fold", () => {
@@ -786,6 +797,12 @@ describe("the quote view the package ships", () => {
     // The band would print `⚠ WARNING` here off its @text table. This view carries no
     // table, so the kind reaches the screen as a colour and in no other way.
     expect(plainly(marked)).toBe(`${GUTTER} ${SENTENCE}`);
+  });
+
+  it("carries the bar through a paragraph break, the row blank beside it", () => {
+    // A bare `>` between two paragraphs, which markdown itself draws as a gap in the quote.
+    const plain = plainly(render(quote("@{view:quote}", "premiere", "", "seconde")));
+    expect(plain).toBe(`${GUTTER} premiere\n${GUTTER} \n${GUTTER} seconde`);
   });
 
   it("KEEPS the rows the author wrote, each one under its own bar", () => {

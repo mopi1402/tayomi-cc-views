@@ -44,24 +44,25 @@ column is the name you write, as `@{view:box}`, over ordinary markdown.
 
 | View | Render |
 | --- | --- |
-| `box` | <img src="docs/images/gallery/box.svg" alt="A framed TL;DR summary with a version badge set into the top rule"/> |
-| `columns` | <img src="docs/images/gallery/columns.svg" alt="A three-column table of checks, results and timings, with coloured headers"/> |
-| `banner` | <img src="docs/images/gallery/banner.svg" alt="A single warning band reading: two flaky suites, publication is blocked"/> |
+| `box` | <img src="docs/images/gallery/box.svg" alt="A framed release note, its version set into the top rule as a badge, with FIX, FEAT and DOC entries down a labelled column"/> |
+| `columns` | <img src="docs/images/gallery/columns.svg" alt="A four-column comparison of the Claude models: context window, price per million tokens, and when to reach for each"/> |
+| `banner` | <img src="docs/images/gallery/banner.svg" alt="A single warning band reading: 1226 tests pass but 5 are skipped"/> |
 
 <details>
 <summary>Three more: ruled rows, a set-apart line, and a diagram</summary>
 
 | View | Render |
 | --- | --- |
-| `lines` | <img src="docs/images/gallery/lines.svg" alt="Two entries, each ruled underneath, naming a package and what it does"/> |
-| `quote` | <img src="docs/images/gallery/quote.svg" alt="One sentence set apart behind a coloured bar"/> |
-| `mermaid` | <img src="docs/images/gallery/mermaid.svg" alt="A flowchart from commit through lint, test and pack to publish, branching to stop on failure"/> |
+| `lines` | <img src="docs/images/gallery/lines.svg" alt="Three files, each ruled underneath, and what changed in each"/> |
+| `quote` | <img src="docs/images/gallery/quote.svg" alt="A passage set apart behind a coloured bar, its first line bold"/> |
+| `mermaid` | <img src="docs/images/gallery/mermaid.svg" alt="A flowchart from commit through verify, branching to publish on pass and to stop on fail"/> |
 
 A diagram draws in shades, never in a palette you did not ask for. That is what lets YOUR
 colours through: a `classDef` or a `style` in the source is the only hue on screen.
 
-`CC_VIEWS_MERMAID_THEME=default` is what painted the diagram above, and ten more ship with
-it, `terra`, `nord`, `dracula` and `gruvbox` among them.
+The diagram above asked for no theme, which is exactly what those shades are. Name one in
+`CC_VIEWS_MERMAID_THEME` to paint it instead: `default`, `terra`, `nord`, `dracula` and
+`gruvbox` among them.
 
 </details>
 

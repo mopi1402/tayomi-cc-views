@@ -333,8 +333,9 @@ export function renderBody(
       const label = labelDecl?.[1];
       const bullet = bulletDecl?.[1];
       const labelCol = scope.__labelWidth ?? 0;
-      // An item with nothing in its FIRST column opens no entry, it continues the one above, so no rule may part them.
-      // Read off the NEXT item: a template writes its rule after the row it closes.
+      // An item with nothing in its FIRST column opens no entry, it continues the one above, so nothing the template
+      // wrote to SEPARATE two entries may part them: neither a rule, nor a blank line.
+      // Read off the NEXT item: a template writes its separator after the row it closes.
       const continues = (next: unknown): boolean =>
         fields != null &&
         fields.length > 0 &&
@@ -363,7 +364,7 @@ export function renderBody(
         const joined = continues(items[idx + 1]);
         for (const l of inner) {
           const rule = readsHere(IN_EACH, RULE) && isRuleLine(l);
-          if (rule && joined) continue;
+          if (joined && (rule || l.trim() === "")) continue;
           out.push(rule ? ruleLine(l, itemScope, tables, pad) : subst(l, itemScope, tables, pad));
         }
       });
