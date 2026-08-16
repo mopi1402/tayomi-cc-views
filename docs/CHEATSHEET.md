@@ -112,7 +112,7 @@ markdown, which still reads where the hook does not run:
 - `@{view:<name>}` sits alone on its line, directly above its payload. Attributes: `type:` (the KIND of
   content, may select a typed file `demo.warning.view`) and `tone:` (the LOOK only, and it outranks the kind).
 - The FIRST line decides the shape: a leading pipe is a table, a leading `>` a blockquote (reaching the
-  template as `content`), an exact ` ```mermaid ` a diagram source (drawn, then reaching it as `content`).
+  template as `content` and `flow`), an exact ` ```mermaid ` a diagram source (drawn, then as `content`).
   A table ends on the first non-pipe line, a quote needs a blank line under it or the end of the message,
   a fence runs to its closing ` ``` `.
 - ONE view, ONE shape: each template accepts a single payload form (the `payload` column below), and any
@@ -121,6 +121,9 @@ markdown, which still reads where the hook does not run:
   in `box`, where the header IS the frame: first cell the title, last cell a badge.
 - A quote's first line may be a kind marker, `[!TOKEN]` alone, one uppercase run. It arrives LOWERCASED in
   the `type` field. No space, no glyph, no second word, or it is not a marker.
+- A quote's body reaches the template as `content`, LINE FOR LINE, and as `flow`, the same body with those
+  breaks spent as spaces. `quote` spends `content` and draws two `>` lines as two lines; `banner` spends
+  `flow`, one band being one paragraph.
 - No payload at all (blank line under the decorator, or end of message) asks for a static view: `@{view:welcome}`.
 
 ## The bundled views

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.0
+
+- A quote keeps the lines its author wrote: two `>` lines draw as two lines, each under its own bar
+- `content` yields those lines to any template, the fold honouring a break as it honours a full column
+- A view drawing ONE band spends the new `flow` field instead, the same body with its breaks as spaces
+
 ## 2.4.1
 
 - The README shows what every view draws, each picture the engine's own render and never a screenshot

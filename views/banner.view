@@ -48,6 +48,10 @@
 # the readable foreground over it are both DERIVED from the colour, so a host's own tag
 # bands the day it is registered, and nothing here has to be kept in step with the palette.
 #
+# The message arrives as `flow` and not as `content`: ONE band is one paragraph, so the
+# line breaks the author wrote between two `>` lines are spent as spaces here. `content` is
+# the same body line for line, which is what quote.view draws instead.
+#
 # A long band WRAPS here rather than at the terminal's mercy: `@box bare` buys the body
 # machinery without the chrome. A wrapped row leaves the word's columns EMPTY and picks the
 # fill back up one column past the pipe, so the message reads as one paragraph in one column.
@@ -61,5 +65,5 @@
 @tone chip
 @text kinds note="ⓘ NOTE" tip="✔ TIP" important="★ IMPORTANT" warning="⚠ WARNING" caution="⛔ CAUTION" error="✖ ERROR" success="✔ SUCCESS" info="ⓘ INFO" warn="⚠ WARN" fail="✖ FAIL" pass="✔ PASS" high="▲ HIGH" med="■ MED" low="▼ LOW" version="◆ VERSION" *="ⓘ NOTE"
 @box bare
-{{/}}{{tone_cap}}{{/}}{{tone_bg}}${type:kinds} |${#fold}{{tone_bg}} ${#hang}${content}${#tail}{{/}}{{tone_cap}}{{/}}
+{{/}}{{tone_cap}}{{/}}{{tone_bg}}${type:kinds} |${#fold}{{tone_bg}} ${#hang}${flow}${#tail}{{/}}{{tone_cap}}{{/}}
 @endbox

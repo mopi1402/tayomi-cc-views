@@ -788,11 +788,11 @@ describe("the quote view the package ships", () => {
     expect(plainly(marked)).toBe(`${GUTTER} ${SENTENCE}`);
   });
 
-  it("joins the quote's rows on ONE space, markdown's own soft-wrap semantics", () => {
-    // Load-bearing rather than cosmetic: the bar prefixes ONE line, so a body arriving as
-    // several would leave every row after the first with no bar at all.
+  it("KEEPS the rows the author wrote, each one under its own bar", () => {
+    // Two `>` lines are two lines on screen, as they are in the markdown this falls back to.
+    // The bar prefixes ONE line, so every row past the first is REDRAWN from it (wrap.ts).
     const plain = plainly(render(quote("@{view:quote}", "premiere moitie", "seconde moitie")));
-    expect(plain).toBe(`${GUTTER} premiere moitie seconde moitie`);
+    expect(plain).toBe(`${GUTTER} premiere moitie\n${GUTTER} seconde moitie`);
   });
 
   it("FOLDS a sentence wider than the screen, the bar redrawn on every row it takes", () => {

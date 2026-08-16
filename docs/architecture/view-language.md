@@ -192,7 +192,7 @@ Alone on its line (surrounding whitespace allowed), directly above its payload. 
 > two flaky suites, publication is blocked
 ```
 
-- The body reaches the template as `content`: the `>` prefixes come off and the lines join with ONE space, which is markdown's own soft-wrap, so the render and the hookless fallback read the same sentence.
+- The body reaches the template TWICE, the `>` prefixes off both times. `content` keeps the lines the author wrote, so a quote of two lines draws as two lines, exactly as it does in the markdown this falls back to. `flow` is the same body with those breaks spent as spaces, for a view drawing ONE band: `banner.view` spends it, `quote.view` spends `content`. A fenced block naming only `content` gets `flow` derived from it, so both ways in fill either slot.
 - The first body line may be a KIND MARKER, `[!TOKEN]` alone on the line, matching one uppercase run (`[A-Z][A-Z0-9_-]*`). It reaches the template LOWERCASED in the `type` field, and the uppercase comes back at the other end from the template's `@text` table.
 - No space, no glyph, no lowercase, no second word. `[!📦 VERSION]`, `[! WARNING]`, `[!warning]` and `[!TWO WORDS]` are NOT markers: each stays the first line of the content and prints inside the band, where the author sees it.
 - The marker BEATS a `type:` attribute, and never selects a typed FILE. With no marker, `type:` behaves exactly as it does over a table.

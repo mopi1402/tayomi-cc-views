@@ -19,6 +19,7 @@ import {
   trackTag,
   type CodeSpan,
 } from "../style.js";
+import { NL } from "../data/markup.js";
 import { CELL_MARK, HANG_MARK, STACK_MARK, TAIL_MARK, VOID_MARK } from "./marks.js";
 import { padCell, printedWidth } from "./measure.js";
 import { clusterMap, displayWidth } from "./width.js";
@@ -117,6 +118,9 @@ const IS_KEPT = new RegExp(`^(?:${TAG_SOURCE}|${SPAN_MARK}|${RESUME_MARK}|${RULE
 /** The plain indent a line opens on: the prefix a line with no gutter bar hangs from. */
 const INDENT_RE = /^[ \t]*/;
 
+/** What a value carrying a line break becomes where nothing can fold it: the break spent as a space, never printed. */
+const flatten = (s: string): string => s.split(NL).join(SPACE);
+
 // What a column writes BETWEEN itself and the next: markup, blanks and the rule glyph, nothing that says anything. It
 // belongs to the prefix, or the separator is drawn on an entry's first row and lost on every other.
 // eslint-disable-next-line security/detect-non-literal-regexp
@@ -183,12 +187,21 @@ function foldPrefix(prefix: string): string {
  * A run of text folded to `width`: greedy fill, breaking at the last space of the row and hard-splitting a token wider
  * than the whole column (a long path, which must break somewhere rather than push the border out). A code span cut in
  * two is closed and reopened, otherwise the orphan backtick reaches the screen and neither half renders as code.
+ *
+ * A NEWLINE in the text is a break the author WROTE: it ends the row wherever it falls, and the caller redraws its
+ * prefix on the next exactly as it does for a row the fill ran out of.
  */
 export function foldText(text: string, width: number): string[] {
   const groups: Atom[][] = [];
   let cur: Atom[] = [];
   let w = 0;
   for (const a of atomize(text)) {
+    if (a.s === NL) {
+      groups.push(cur);
+      cur = [];
+      w = 0;
+      continue;
+    }
     if (w + a.w > width && cur.length > 0) {
       let cut = -1;
       for (let i = cur.length - 1; i >= 0; i--) {
@@ -263,7 +276,10 @@ export function wrapLine(line: string, limit: number): string[] {
   // side, so the line "fits" exactly when it is about to print every one of them on the same screen row.
   const cells = line.includes(CELL_MARK);
   const folded = line.includes(STACK_MARK);
-  if (limit < MIN_LIMIT || (!folded && printedWidth(line) <= limit)) return [line];
+  // A break makes the line long whatever it measures: it has rows to deal out even when every one of them fits.
+  const breaks = line.includes(NL);
+  if (limit < MIN_LIMIT) return [flatten(line)];
+  if (!folded && !breaks && printedWidth(line) <= limit) return [line];
   // A declared TAIL only ever belonged to a line that fits: past here the fold drops it and squares every row to the
   // limit instead, which is what parts a rectangle from a staircase. Measured ABOVE with the tail still on, so a band
   // keeps its closing furniture for as long as that furniture fits.
@@ -301,10 +317,10 @@ export function wrapLine(line: string, limit: number): string[] {
   const head = bareCells(pickRow(prefix, 0).split(VOID_MARK).join(""));
   // Measured on the row that is DRAWN, never on the prefix: a stacked cell counts all of its rows at once.
   const width = limit - printedWidth(head);
-  if (width < MIN_CONT && !folded) return [line];
+  if (width < MIN_CONT && !folded) return [flatten(line)];
   // Too narrow to fold INTO, yet a cell is waiting to be dealt: the prose stays whole rather than being shredded into
   // single letters, and the rows below still reach the screen.
-  const filled = width < MIN_CONT ? [rest] : foldText(rest, width);
+  const filled = width < MIN_CONT ? [flatten(rest)] : foldText(rest, width);
   const out: string[] = [];
   // The taller of the two: prose that outruns the cells, or cells that outrun the prose. Whichever ends first leaves
   // its column blank on the rows that remain.

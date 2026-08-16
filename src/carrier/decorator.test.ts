@@ -133,7 +133,8 @@ write(second, viewFile(TONED), rowsView("{{tone}}${label}{{/}}" + SEP + "${conte
 write(second, viewFile(DEFAULTED), `${TONE} gold\n` + rowsView("{{tone}}${label}{{/}}" + SEP + "${content}"));
 write(second, viewFile(CHIPPED), rowsView("{{tone_bg}}${label}{{/}}" + SEP + "${content}"));
 // A view reading the BLOCKQUOTE payload. Its @tone default is what an unmarked quote falls to, so every colour
-// assertion below reads against a class no marker and no attribute named.
+// assertion below reads against a class no marker and no attribute named. It spends `flow` because it models ONE band,
+// where the author's line breaks are spent as spaces; QUOTING below is the same payload read the other way.
 const BANDED = "banded";
 const WARNING_WORD = "⚠ WARNING";
 const NOTE_WORD = "ⓘ NOTE";
@@ -143,9 +144,12 @@ write(
   lines(
     `${TONE} gold`,
     `${TEXT} kinds warning="${WARNING_WORD}" *="${NOTE_WORD}"`,
-    "{{tone}}[${type:kinds}] ${content}{{/}}"
+    "{{tone}}[${type:kinds}] ${flow}{{/}}"
   )
 );
+/** The same payload spent LINE FOR LINE, which is what `content` yields and what views/quote.view draws. */
+const QUOTING = "quoting";
+write(second, viewFile(QUOTING), "${content}\n");
 // A typed FILE for the same view, on the earlier dir so it would win if it were ever reached: a marker names a kind,
 // never a file, and this fixture is how that is observed.
 write(first, viewFile(BANDED, "warning"), "TYPED FILE\n");
@@ -840,10 +844,15 @@ describe("a decorated blockquote", () => {
     expect(out).not.toContain(">");
   });
 
-  it("joins the body on ONE space, which is markdown's own soft-wrap", () => {
+  it("spends the body's line breaks as ONE space in `flow`, a band being one band", () => {
     const out = plain(decorator(BANDED), marker("WARNING"), "one", "two", "three");
     expect(out).toContain("one two three");
     expect(out.trim().split("\n")).toHaveLength(1);
+  });
+
+  it("hands the SAME body to `content` line for line, which is what a quote draws", () => {
+    const out = plain(decorator(QUOTING), "one", "two", "three");
+    expect(out.trim().split("\n")).toEqual(["one", "two", "three"]);
   });
 
   it("takes the reserved entry and the template's own tone with NO marker", () => {

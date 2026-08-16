@@ -60,6 +60,9 @@ export const FIELD_LABEL = "label";
 export const FIELD_CONTENT = "content";
 export const FIELD_TYPE = "type";
 
+/** The same quote body with its line breaks spent as spaces: what a view drawing ONE band asks for instead. */
+export const FIELD_FLOW = "flow";
+
 /**
  * The row a table payload HEADS its list with. Absent when the header's cells are all blank, the form markdown forces
  * on a table that wants no header (`| | |`), and a template's `@head` line then draws nothing.
@@ -100,7 +103,7 @@ export const PAYLOAD_FENCE = "fence";
 /** Which shape yields which fields. Spending one of them is what says a view expects that payload. */
 export const PAYLOAD_FIELDS: Record<string, readonly string[]> = {
   [PAYLOAD_TABLE]: [FIELD_ROWS, FIELD_HEAD, FIELD_LABEL, ...MIDDLE_FIELDS, FIELD_CONTENT],
-  [PAYLOAD_QUOTE]: [FIELD_CONTENT, FIELD_TYPE],
+  [PAYLOAD_QUOTE]: [FIELD_CONTENT, FIELD_FLOW, FIELD_TYPE],
 };
 
 /** A directive stripped of its `@`. Its closer derives from it, and so does the name of the region an opener opens. */

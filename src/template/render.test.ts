@@ -258,6 +258,37 @@ describe("raw over hollow", () => {
 
 // The SECOND reading of a table payload, folded in HERE and nowhere else: SPLITTING a list is the template's own
 // declaration (@fields), so the derivation has to run where the template is known.
+// `flow` is `content` with the author's breaks spent as spaces. Derived HERE and not in a carrier, so a view drawing
+// ONE band gets it whichever way its data arrived.
+describe("the flow field derived from content", () => {
+  const FLOW = `\${${LANG.FIELD_FLOW}}`;
+  const CONTENT = `\${${LANG.FIELD_CONTENT}}`;
+
+  it("spends the breaks a pre-parsed value carries, leaving content itself untouched", () => {
+    view(`${FLOW}\n${CONTENT}`);
+    const out = plain(render({ [LANG.FIELD_CONTENT]: "one\ntwo" }));
+    expect(out.split("\n")).toEqual(["one two", "one", "two"]);
+  });
+
+  it("derives it for a FENCED block too, which names no flow of its own", () => {
+    view(FLOW);
+    expect(plain(render(`${LANG.FIELD_CONTENT}: shipped to staging`))).toContain(
+      "shipped to staging"
+    );
+  });
+
+  it("leaves a flow the data named ITSELF standing, deriving over nothing", () => {
+    view(FLOW);
+    const out = plain(render({ [LANG.FIELD_CONTENT]: "one\ntwo", [LANG.FIELD_FLOW]: "its own" }));
+    expect(out.trim()).toBe("its own");
+  });
+
+  it("derives NOTHING where no content arrived, so an absent slot stays absent", () => {
+    view(`\${${LANG.FIELD_LABEL}}[${FLOW}]`);
+    expect(plain(render({ [LANG.FIELD_LABEL]: "alone" })).trim()).toBe("alone[]");
+  });
+});
+
 describe("a two-column table read as named fields", () => {
   /** The rows a carrier builds from a two-column table: first cell in the label anchor, last in the content one. */
   const rows = (...pairs: [string, string][]): object => ({

@@ -5,8 +5,8 @@ import { WRAP_MARKS } from "../data/marks.js";
 import { holdsCells, wrapLine } from "../layout/wrap.js";
 import { dropInert, fillTone, inert, markCode, renderTags, toneClass } from "../style.js";
 import { nameField, type Scope } from "../scope.js";
-import { FIELD_CONTENT, FIELD_TONE, FIELD_TYPE, PAYLOAD_FENCE } from "../data/language.js";
-import { DIAGRAM_INFO, FENCE } from "../data/markup.js";
+import { FIELD_CONTENT, FIELD_FLOW, FIELD_TONE, FIELD_TYPE, PAYLOAD_FENCE } from "../data/language.js";
+import { DIAGRAM_INFO, FENCE, NL } from "../data/markup.js";
 import { renderBody } from "./directives.js";
 import { loadTemplate, viewsDir } from "./load.js";
 import { maxBoxWidth } from "../platform/tty-width.js";
@@ -89,6 +89,11 @@ export function traceView(
     typeof data === "string"
       ? (inertData(parseData(data, objectLists)) as Scope)
       : (namedFields(data, objectLists) as Scope);
+  // The same body with the author's breaks spent as spaces, for a view that draws ONE band. Derived HERE so every way
+  // in yields it (a decorator's quote and a fenced block alike), and never over a diagram, whose lines are its syntax.
+  if (!diagram && typeof scope[FIELD_CONTENT] === "string" && scope[FIELD_FLOW] === undefined) {
+    scope = { ...scope, [FIELD_FLOW]: scope[FIELD_CONTENT].split(NL).join(" ") };
+  }
   if (diagram) {
     // The source arrived RAW (the carrier styles nothing bound for a renderer), and the DRAWING is what gets
     // neutralised: `A{{hexagon}}` is valid diagram source, so the glyphs coming back must reach the template as text

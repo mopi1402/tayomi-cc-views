@@ -6,7 +6,7 @@
 // gutter bar and blanking everything before it.
 
 import { describe, it, expect } from "vitest";
-import { FENCE } from "../data/markup.js";
+import { FENCE, NL } from "../data/markup.js";
 import { RESET_MARK, RESUME_MARK, SPAN_MARK, chip, tagMark } from "../style.js";
 import { CELL_MARK, HANG_MARK, STACK_MARK, TAIL_MARK, VOID_MARK } from "./marks.js";
 import { printedText, printedWidth } from "./measure.js";
@@ -35,6 +35,31 @@ describe("when it declines to wrap", () => {
   it("leaves a line whose prefix eats the whole column, rather than emit letters", () => {
     const deep = " ".repeat(LIMIT - 2) + "some text that will not fit";
     expect(wrapLine(deep, LIMIT)).toEqual([deep]);
+  });
+});
+
+// A break the AUTHOR wrote, which the fold honours wherever it falls. Its whole point is the prefix: a second line
+// with no bar stops reading as the same quote, which is the bug the join was hiding.
+describe("a line break in the text", () => {
+  it("ends the row where it falls, even on a line that would have fit whole", () => {
+    expect(wrapLine(`${BAR} one${NL}two`, LIMIT)).toEqual([`${BAR} one`, `${BAR} two`]);
+  });
+
+  it("folds each of its rows on its own, so a break and the fill compose", () => {
+    const rows = wrapLine(`${BAR} alpha beta gamma delta${NL}epsilon`, LIMIT);
+    expect(rows.length).toBeGreaterThan(2);
+    expect(fits(rows, LIMIT)).toBe(true);
+    expect(rows.every((r) => r.startsWith(BAR))).toBe(true);
+    expect(rows[rows.length - 1]).toBe(`${BAR} epsilon`);
+  });
+
+  it("spends the break as a SPACE where the limit is too narrow to fold at all", () => {
+    // The degraded reading, and the one thing it must never do is print the break itself.
+    expect(wrapLine(`one${NL}two`, TOO_NARROW)).toEqual(["one two"]);
+  });
+
+  it("is a break foldText answers for on its own, prefix or no prefix", () => {
+    expect(foldText(`one${NL}two`, LIMIT)).toEqual(["one", "two"]);
   });
 });
 

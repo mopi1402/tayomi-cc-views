@@ -254,6 +254,7 @@
     "quote": {
       "fields": [
         "content",
+        "flow",
         "type"
       ],
       "selectedBy": "a first line starting with >",
@@ -340,7 +341,7 @@
       "static": false,
       "payload": "quote",
       "spends": [
-        "content",
+        "flow",
         "type"
       ],
       "tone": "chip",

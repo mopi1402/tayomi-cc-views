@@ -6,9 +6,9 @@
 //   | Decorator | one line above the payload |
 //
 // THREE payload shapes, decided by the zone's FIRST line and nowhere else. A leading pipe is a table, reaching the
-// template as `rows`. A leading `>` is a blockquote, reaching it as `content`, its optional `[!WARNING]` marker as
-// `type`. A ```mermaid fence is a diagram source, reaching it RAW as `content` for the engine to draw. Why a quote
-// rather than a paragraph: docs/architecture/architecture.md, "The decorator's trade".
+// template as `rows`. A leading `>` is a blockquote, reaching it as `content` line for line, its optional `[!WARNING]`
+// marker as `type`. A ```mermaid fence is a diagram source, reaching it RAW as `content` for the engine to draw. Why a
+// quote rather than a paragraph: docs/architecture/architecture.md, "The decorator's trade".
 //
 // The carrier only NAMES the shape it parsed (Dressing.payload); which shape a view accepts is the template's own
 // declaration, and render.ts is where a mismatch refuses. One view, one form: a banner takes a quote and nothing else.
@@ -38,6 +38,7 @@ import {
   EMPHASIS_STAR,
   FENCE,
   NAME_MARK,
+  NL,
   QUOTE_MARK,
   TABLE_MARK,
 } from "../data/markup.js";
@@ -260,8 +261,9 @@ interface Payload {
 }
 
 /**
- * The payload parsed as a blockquote, or null when a line of the zone is not one. The body joins with ONE space,
- * markdown's own soft-wrap semantics, so the render and the hookless fallback read the same sentence.
+ * The payload parsed as a blockquote, or null when a line of the zone is not one. `content` KEEPS the lines the author
+ * wrote, so a quote of two lines is two lines on screen; a view drawing ONE band spends `flow` instead, which render.ts
+ * derives from this for every way in.
  *
  * The optional marker is `[!TOKEN]` alone on the FIRST body line, reaching the template LOWERCASED in `type` because
  * the palette's classes are lowercase. A first line that is not exactly a marker STAYS the first line of the content.
@@ -276,15 +278,15 @@ function parseQuote(zone: string[]): Payload | null {
   }
   const marked = body[0].trim().match(MARKER_RE);
   const type = marked === null ? undefined : marked[1].toLowerCase();
-  const joined = (marked === null ? body : body.slice(1))
+  const lines = (marked === null ? body : body.slice(1))
     .map((l) => l.trim())
-    .filter((l) => l !== "")
-    .join(" ");
+    .filter((l) => l !== "");
   const pack = (content: string): Scope =>
     type === undefined
       ? { [FIELD_CONTENT]: content }
       : { [FIELD_TYPE]: type, [FIELD_CONTENT]: content };
-  return { data: pack(inertText(joined)), bare: pack(joined), type };
+  // Neutralised line by line: inertText over a joined body would mark the separator it is joined on.
+  return { data: pack(lines.map(inertText).join(NL)), bare: pack(lines.join(NL)), type };
 }
 
 /**
