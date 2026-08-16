@@ -74,7 +74,7 @@ export const ENV_PREFIX = `CC_${VIEWS.toUpperCase()}_`;
 export const VIEWS_PATH_ENV = `${ENV_PREFIX}PATH`;
 export const WIDTH_ENV = `${ENV_PREFIX}WIDTH`;
 export const THEME_ENV = `${ENV_PREFIX}THEME`;
-/** Names one of the diagram renderer's own themes; empty or absent draws unpainted, which stays the default. */
+/** Names one of the renderer's palettes; empty or absent draws in the neutral theme (`diagram.ts`), shades only. */
 export const MERMAID_THEME_ENV = `${ENV_PREFIX}MERMAID_THEME`;
 /** Set to anything and this engine draws whatever else is registered. Off means DRAW, so the hatch cannot cause a silence. */
 export const NO_YIELD_ENV = `${ENV_PREFIX}NO_YIELD`;

@@ -39,9 +39,9 @@ process.env.CC_VIEWS_NO_YIELD = "1";
 // The engine register is a side effect: generating images has nothing to write there, and a
 // directory of its own proves it rather than hoping for it.
 process.env.CC_VIEWS_ENGINES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-gallery-"));
-// A diagram is UNPAINTED unless a theme is named, which is deliberate, and which would make the
-// one image showing a diagram the greyest of the set. The gallery names one, and the README says
-// so under it, or the picture would promise a colour nobody gets by default.
+// A diagram takes no PALETTE unless one is named, only shades, which would make the one image
+// showing a diagram the greyest of the set. The gallery names one, and the README says so under
+// it, or the picture would promise a colour nobody gets by default.
 process.env.CC_VIEWS_MERMAID_THEME ??= "default";
 
 const { handleMessageDisplay } = await import(`file://${path.join(REPO, "dist", "index.js")}`);

@@ -2,6 +2,7 @@
 
 # @tayomi/cc-views
 
+[![ci](https://github.com/mopi1402/tayomi-cc-views/actions/workflows/ci.yml/badge.svg)](https://github.com/mopi1402/tayomi-cc-views/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@tayomi/cc-views?color=cb3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/@tayomi/cc-views)
 [![node](https://img.shields.io/node/v/@tayomi/cc-views?color=339933&logo=node.js&logoColor=white)](https://nodejs.org)
 [![types](https://img.shields.io/npm/types/@tayomi/cc-views?color=3178c6&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -23,26 +24,17 @@
 **✨ What matters gets seen.**  
 Titled frames, aligned rows, coloured chips: the answer stops looking like the scroll.
 
-**✨ Zero tokens on presentation** (minus one decorator line).  
-Not one extra token for the model: nothing that is drawn ever enters its context window.
+**✨ Zero tokens, zero influence** (minus one decorator line).  
+Nothing drawn ever reaches the model. No tokens spent. No influence on the next answer. The transcript keeps plain text.
 
 **✨ Nothing to write to start.**  
 Columns, ruled rows, framed summaries, bands, quotes and rules ship with the package. Yours come later.
 
-**✨ Fail-open.**  
-A failing view shows its original text in place, the rest still renders. Never a blank.
+**✨ Never worse than plain markdown.**  
+A failing view prints its own text in place. The rest still renders. Never a blank. Under a decorator, the payload stands alone. No hook, and it still reads. A real table, a real quote, a real alert box.
 
-**✨ Block or markdown.**  
-A fenced `view:` block, or a decorator over markdown that survives without any hook.
-
-**✨ Yours always wins.**  
-Ordered directories resolve `.view` files: name one the same and yours beats a plugin's.
-
-**✨ One template, any tone.**  
-`type:warning` or `tone:dim` recolours a view where it stands, like a class. No second file.
-
-**✨ Your palette.**  
-`extendTags` adds your own `{{tags}}` process-wide, and yours shadow the built-ins.
+**✨ Yours to shape.**  
+`tone:` and `type:` recolour any view where it stands. `extendTags` adds your own `{{tags}}`. Your `.view` beats a plugin's by sharing its name. The `write-view` skill writes it for you.
 
 ## What ships in the box
 
@@ -65,9 +57,32 @@ column is the name you write, as `@{view:box}`, over ordinary markdown.
 | `quote` | <img src="docs/images/gallery/quote.svg" alt="One sentence set apart behind a coloured bar"/> |
 | `mermaid` | <img src="docs/images/gallery/mermaid.svg" alt="A flowchart from commit through lint, test and pack to publish, branching to stop on failure"/> |
 
-Colour is one variable away: `CC_VIEWS_MERMAID_THEME=default` is what painted the diagram
-above, and ten more themes ship with it, `terra`, `nord`, `dracula` and `gruvbox` among
-them.
+A diagram draws in shades, never in a palette you did not ask for. That is what lets YOUR
+colours through: a `classDef` or a `style` in the source is the only hue on screen.
+
+`CC_VIEWS_MERMAID_THEME=default` is what painted the diagram above, and ten more ship with
+it, `terra`, `nord`, `dracula` and `gruvbox` among them.
+
+</details>
+
+<details>
+<summary>The 18 diagram kinds a <code>mermaid</code> block draws</summary>
+
+A fence is drawn by its declared kind, and a kind the renderer does not hold prints the
+fence as it stands rather than failing. These 18 draw:
+
+| | |
+| --- | --- |
+| Flow and structure | `flowchart` (also as `graph`), `classDiagram`, `erDiagram`, `block`, `architecture`, `treemap` |
+| Time and sequence | `sequenceDiagram`, `stateDiagram`, `gantt`, `timeline`, `journey`, `gitGraph` |
+| Figures | `pie`, `xychart`, `quadrantChart`, `packet` |
+| Boards and trees | `kanban`, `mindmap` |
+
+The `-beta` and `-v2` spellings are accepted where mermaid uses them, so a fence pasted
+from mermaid's own docs draws unchanged.
+
+Four kinds mermaid knows are NOT drawn: `requirementDiagram`, `sankey`, `radar` and
+`C4Context`. Each prints its fence, untouched and readable.
 
 </details>
 

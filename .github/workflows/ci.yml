@@ -1,0 +1,46 @@
+# The gate this repository already runs locally, run again where nobody can skip it.
+#
+# `pnpm verify` is the WHOLE chain and the only thing invoked here: lint, typecheck, the sidecar
+# and vocabulary gates, the suites, then verify:pack, which packs a real tarball, installs it and
+# spawns the built binary. Naming the steps one by one here would let CI and the local run drift.
+#
+# `gen:gallery` is deliberately absent: it leaves the repository to fetch a font and its verdict is
+# a screen, not an assertion. See the head of scripts/gen-gallery.mjs.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # The floor `engines` declares, and the current release. A break on either is a break.
+      matrix:
+        node: ["22.12", "24"]
+    steps:
+      - uses: actions/checkout@v4
+
+      # PNPM before Node: setup-node's pnpm cache needs the store to exist already.
+      # The version comes from `packageManager` in package.json, so it is named once.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm verify

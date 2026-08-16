@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- A diagram asked for no theme now draws in SHADES rather than flat, so a `classDef` or a `style` the source declares reaches the screen
+- The env var still chooses OUR palette; its absence no longer means "no colour", it means "no palette of ours"
+- A theme name the renderer does not hold falls to those same shades, so a typo still shows as the one drawing with no colour of ours in it
+
 ## 2.5.0
 
 - A quote keeps the lines its author wrote: two `>` lines draw as two lines, each under its own bar

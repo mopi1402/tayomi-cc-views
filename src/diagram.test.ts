@@ -13,6 +13,7 @@ import {
   diagramCachePath,
   LIGHT_BACKGROUND,
   measureDiagram,
+  NEUTRAL_THEME,
   renderDiagram,
   requestedPaint,
   TALL,
@@ -118,15 +119,15 @@ describe("the diagram cache", () => {
 });
 
 describe("the drawing itself", () => {
-  it("draws a flowchart as box-drawing text, UNPAINTED, in the terminal's own foreground", () => {
+  it("draws a flowchart in the NEUTRAL theme when nothing asks for one, spending no hue of ours", () => {
     const out = renderDiagram(SOURCE, WIDTH, stateDir, undefined, NO_PAINT_ENV);
     expect(printedText(out)).toContain("un");
     expect(printedText(out)).toContain("deux");
-    // Plain by DECISION, not by accident: every theme the renderer ships writes white-ish labels, unreadable on a
-    // light terminal this module cannot see. The env var is the ONE door to paint, and this pins the door shut being
-    // the default.
+    // It draws, so escapes there are, and every one is a SHADE: not one names a hue.
     // eslint-disable-next-line no-control-regex
-    expect(out).not.toMatch(/\x1b\[/);
+    expect(out).toMatch(/\x1b\[/);
+    // eslint-disable-next-line no-control-regex
+    expect(out).not.toMatch(/\x1b\[[0-9;]*(3[1-6]|9[1-6]|38;5;|38;2;)/);
   });
 
   it("paints with the theme the env var names, the operator's word being the one door to colour", () => {
@@ -137,15 +138,14 @@ describe("the drawing itself", () => {
     expect(printedText(out)).toContain("deux");
   });
 
-  it("paints NOTHING for a theme name the renderer does not hold: a typo does exactly what unset does", () => {
-    // The near-miss the renderer itself would hide: its own lookup falls back to the DEFAULT PALETTE silently, and a
-    // typoed name would paint the screen the operator never asked for. Falling to unpainted is what tells them.
+  it("falls to the NEUTRAL theme for a name the renderer does not hold: a typo does exactly what unset does", () => {
+    // The near-miss the renderer itself would hide: its own lookup falls to the DEFAULT PALETTE silently.
     const out = renderDiagram(SOURCE, WIDTH, stateDir, undefined, {
       [MERMAID_THEME_ENV]: NEAR_MISS_THEME,
       [THEME_ENV]: DARK_BACKGROUND,
     });
-    // eslint-disable-next-line no-control-regex
-    expect(out).not.toMatch(/\x1b\[/);
+    const neutral = renderDiagram(SOURCE, WIDTH, stateDir, undefined, NO_PAINT_ENV);
+    expect(out).toBe(neutral);
   });
 
   it("keys the cache on the THEME too, so a themed screen is never handed the plain drawing", () => {
@@ -170,21 +170,28 @@ describe("the drawing itself", () => {
     expect(strip(onLight)).toBe(strip(onDark)); // a side is a palette, never a layout
   });
 
-  it("resolves the SIDE a paint is for from the host's own theme, and hands it to the renderer", () => {
-    // Resolved from the same chain the ink adaptation reads (platform/theme.ts), and absent entirely where no theme
-    // was asked for.
-    expect(requestedPaint({ [MERMAID_THEME_ENV]: A_THEME, [THEME_ENV]: LIGHT_BACKGROUND })?.background).toBe(
+  it("resolves the SIDE a paint is for from the host's own theme, named or not", () => {
+    // Same chain the ink adaptation reads (platform/theme.ts), and it answers even where no theme was asked for.
+    expect(requestedPaint({ [MERMAID_THEME_ENV]: A_THEME, [THEME_ENV]: LIGHT_BACKGROUND }).background).toBe(
       LIGHT_BACKGROUND
     );
-    expect(requestedPaint(PAINTED_ENV)?.background).toBe(DARK_BACKGROUND);
-    expect(requestedPaint({ [THEME_ENV]: LIGHT_BACKGROUND })).toBeUndefined();
+    expect(requestedPaint(PAINTED_ENV).background).toBe(DARK_BACKGROUND);
+    expect(requestedPaint({ [THEME_ENV]: LIGHT_BACKGROUND })).toEqual({
+      theme: NEUTRAL_THEME,
+      background: LIGHT_BACKGROUND,
+    });
   });
 
-  it("DROPS a colour the source declares, the accepted cost of the unpainted render", () => {
-    // Written down because it is a loss an author can hit: a linkStyle says something about the graph, and paint was
-    // its only carrier. The drawing itself must still stand, the declaration consumed rather than printed as text.
+  it("keys the cache on the SIDE of an UNASKED drawing too, the neutral shades being mirrored like any palette", () => {
+    const onDark = diagramCachePath(SOURCE, WIDTH, stateDir, requestedPaint(NO_PAINT_ENV));
+    const onLight = diagramCachePath(SOURCE, WIDTH, stateDir, requestedPaint({ [THEME_ENV]: LIGHT_BACKGROUND }));
+    expect(onLight).not.toBe(onDark);
+  });
+
+  it("CARRIES a colour the source declares, with no theme asked for at all", () => {
+    // The whole reason the neutral theme beats no theme: a `linkStyle` says something, and a flat render dropped it.
     const drawn = renderDiagram(`${SOURCE}    linkStyle 0 stroke:#00cc00\n`, WIDTH, stateDir, undefined, NO_PAINT_ENV);
-    expect(drawn).not.toContain("\x1b[38;2;0;204;0m");
+    expect(drawn).toContain("\x1b[38;2;0;204;0m");
     expect(printedText(drawn)).not.toContain("stroke");
     expect(printedText(drawn)).toContain("un");
   });

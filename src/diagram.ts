@@ -54,18 +54,17 @@ export interface Paint {
   background: Background;
 }
 
-/**
- * What the environment asks a drawing painted with, or undefined for the unpainted default. The SIDE rides along from
- * the host's own declared theme (`platform/theme.ts`), so a painted drawing turns with the terminal on its own.
- */
-export function requestedPaint(env: NodeJS.ProcessEnv = process.env): Paint | undefined {
-  const theme = (env[MERMAID_THEME_ENV] ?? "").trim();
-  if (theme === "") return undefined;
-  return { theme, background: isLight(activeTheme(env)) ? LIGHT_BACKGROUND : DARK_BACKGROUND };
-}
+/** Shades only, no hue: what an unasked drawing takes, and what lets the source's own `classDef` through. */
+export const NEUTRAL_THEME = "mono";
 
-/** The cache key's word for the unpainted render, which no theme can be named as: a name is never empty. */
-const UNPAINTED = "";
+/** Never undefined: an unasked drawing has a side too, and the two sides are two entries in the cache key. */
+export function requestedPaint(env: NodeJS.ProcessEnv = process.env): Paint {
+  const named = (env[MERMAID_THEME_ENV] ?? "").trim();
+  return {
+    theme: named === "" ? NEUTRAL_THEME : named,
+    background: isLight(activeTheme(env)) ? LIGHT_BACKGROUND : DARK_BACKGROUND,
+  };
+}
 
 /** Enough of a digest to name a file, and far past collision for the handful of diagrams one message holds. */
 const KEY_CHARS = 32;
@@ -105,9 +104,9 @@ function sizeOf(drawn: string): DiagramSize {
  * The key a source draws under. Width and paint are both in it: the same graph at another width, under another theme
  * or on the other side is another drawing, and a key blind to any of them hands one screen another's render.
  */
-function cacheKey(source: string, width: number, paint?: Paint): string {
+function cacheKey(source: string, width: number, paint: Paint): string {
   return createHash(DIGEST)
-    .update(`${width}\n${paint?.theme ?? UNPAINTED}\n${paint?.background ?? UNPAINTED}\n${source}`)
+    .update(`${width}\n${paint.theme}\n${paint.background}\n${source}`)
     .digest(HEX)
     .slice(0, KEY_CHARS);
 }
@@ -124,7 +123,7 @@ export function diagramCachePath(
   source: string,
   width: number,
   stateDir: string = DEFAULT_STATE_DIR,
-  paint?: Paint
+  paint: Paint = requestedPaint()
 ): string {
   return path.join(stateDir, CACHE_SUBDIR, ENGINE_VERSION, cacheKey(source, width, paint));
 }
@@ -193,7 +192,7 @@ export function measureDiagram(
 }
 
 /** One drawing, laid out: THROWS on a source the renderer does not know, and where it answers a void. */
-function draw(source: string, width: number, paint?: Paint): string {
+function draw(source: string, width: number, paint: Paint): string {
   const termaid = load();
   // The version-skew seam: a type from a mermaid newer than this renderer is no error to it, the fallback draws ANY
   // text as flowchart boxes of its own syntax. `null` is the renderer's own word that it holds no parser for this
@@ -201,21 +200,16 @@ function draw(source: string, width: number, paint?: Paint): string {
   if (termaid.declaredType(source) === null) {
     throw new Error("diagram: the source declares no type the renderer knows");
   }
-  // UNPAINTED by default: painting is the OPERATOR's word, whoever set the env var being the one who can see their own
-  // screen. The SIDE rides with the theme, every palette here having been drawn for a dark terminal and mirrored onto a
-  // light one. A name the renderer does not hold paints nothing, so a typo does exactly what unset does.
-  const wanted = paint !== undefined && termaid.THEMES.has(paint.theme) ? paint : undefined;
+  // A name the renderer does not hold falls to the neutral one, never to its silent default: a typo paints no palette.
+  const theme = termaid.THEMES.has(paint.theme) ? paint.theme : NEUTRAL_THEME;
   // Folded at the width this module was GIVEN, which is the box the drawing has to sit in. Worth saying because the
   // reference binary cannot: it folds at its own console's 80 columns whatever `--width` asked for, so any box wider
   // than that came back cut through its own frame. A graph too wide to lay out still folds, at the right number now.
-  const drawn =
-    wanted === undefined
-      ? termaid.printToConsole(new termaid.Text(termaid.render(source, { width })), width)
-      : termaid.printToConsole(
-          termaid.renderThemedText(source, { width }, wanted.theme),
-          width,
-          wanted.background
-        );
+  const drawn = termaid.printToConsole(
+    termaid.renderThemedText(source, { width }, theme),
+    width,
+    paint.background
+  );
   // A renderer drawing nothing is a failure the caller must see as one, or the view renders a void. An empty source and
   // ordinary prose both land here: neither is an error to the renderer, and both come back blank.
   if (drawn.trim() === "") throw new Error("diagram: the renderer drew nothing");
