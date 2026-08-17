@@ -36,6 +36,11 @@ export { viewZones, type ViewZone } from "./carrier/zones.js";
 // (@map, @text) under the one name they share.
 export { stringify, type Scope, type Table, type Tables } from "./scope.js";
 
+// The authoring gate, for a host that wants its OWN views swept by its OWN test run rather than by the cli. Exported
+// because the cli is a separate process and knows nothing of the tags a host adds (extendTags, above): a host calling
+// this in-process has already registered them, so its views are judged against the palette they actually draw with.
+export { check, checkAll, failed, report, takes, type Finding, type Swept } from "./check.js";
+
 // The {{tag}} markup, for a host that colours its own lines with the same vocabulary, and the one seam by which a host
 // adds tags of its own (process-global, additive).
 export {

@@ -72,7 +72,7 @@ function check() {
   for (const rel of copied(out)) {
     if (!wanted.has(rel)) failures.push(`${OUT_DIR}/${rel} matches no source entry`);
   }
-  if (failures.length > 0) {
+  if (failures.length) {
     for (const failure of failures) console.error(`check-plugin: ${failure}`);
     console.error("check-plugin: FAIL. Run `pnpm assemble:plugin` and commit the result.");
     process.exit(1);

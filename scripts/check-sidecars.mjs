@@ -55,7 +55,7 @@ const sidecar = (source) => source.slice(0, -SOURCE_EXT.length) + TEST_EXT;
 
 const failures = [];
 const report = (title, items) => {
-  if (items.length > 0) failures.push([title, items]);
+  if (items.length) failures.push([title, items]);
 };
 
 report(
@@ -78,7 +78,7 @@ report(
   [...tests].filter((t) => !sources.includes(t.slice(0, -TEST_EXT.length) + SOURCE_EXT))
 );
 
-if (failures.length > 0) {
+if (failures.length) {
   for (const [title, items] of failures) {
     console.error(`\ncheck-sidecars: ${title}`);
     for (const item of items) console.error(`  ${item}`);

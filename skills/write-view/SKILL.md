@@ -91,9 +91,23 @@ template you wrote is the only thing allowed to open a colour.
 cc-views check deploy 'title: staging'
 ```
 
-It renders the view against that sample and answers with the reason it will not draw, naming the
-template line. Silence means it draws. Non-zero is an error to fix. A warning is zero and is yours to
-judge: a field that arrived and is read nowhere may be a view narrowing what it shows on purpose.
+It first names the payload SHAPE the view resolved to, then answers with the reason it will not draw,
+naming the template line. Nothing after the shape line means it draws. Non-zero is an error to fix. A
+warning is zero and is yours to judge: a field that arrived and is read nowhere may be a view narrowing
+what it shows on purpose.
+
+Read that shape line. A template never declares its shape, it is derived from what it spends, so a view
+you wrote for a table can resolve to a quote and take nothing you send it.
+
+Run it on the block a MODEL will write, the decorated one, and not on flat data alone:
+
+```
+cc-views check deploy "$(printf '@{view:deploy}\n| | |\n| --- | --- |\n| ENV | staging |\n')"
+```
+
+Only a decorator names the payload SHAPE, and a view takes exactly one. So a view that clears the flat
+sample above can still refuse every real block and show raw markdown instead, and this second run is
+the only one that reports it.
 
 Do not hand back a template you have not run this on. The engine never throws at runtime, so an
 untested view fails silently in front of the user rather than in front of you.

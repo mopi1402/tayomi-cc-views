@@ -303,11 +303,11 @@ export function renderBody(
       // otherwise pad every label to a width nothing in the list occupies.
       const fields = objectLists[eachField];
       const headRow = peek(scope, FIELD_HEAD);
-      const measured = heads.length > 0 && isRow(headRow) ? [...items, headRow] : items;
+      const measured = heads.length && isRow(headRow) ? [...items, headRow] : items;
       const pad: PadCtx = {
         widths: columnWidths(measured, fields, [...heads, ...inner], tables),
         hollow: hollowFields(measured, fields),
-        tail: fields && fields.length > 0 ? fields[fields.length - 1] : undefined,
+        tail: fields && fields.length ? fields[fields.length - 1] : undefined,
       };
       if (capDecl) {
         const cap = Math.max(
@@ -320,7 +320,7 @@ export function renderBody(
       }
       // Only when the payload carried a row for it: a template declaring @head against a table that headed nothing
       // draws NOTHING here, which is what makes one file answer both.
-      if (heads.length > 0 && isRow(lookup(scope, FIELD_HEAD))) {
+      if (heads.length && isRow(lookup(scope, FIELD_HEAD))) {
         const headScope: Scope = { ...scope, ...(peek(scope, FIELD_HEAD) as Scope) };
         for (const l of heads) {
           out.push(
@@ -336,12 +336,13 @@ export function renderBody(
       // An item with nothing in its FIRST column opens no entry, it continues the one above, so nothing the template
       // wrote to SEPARATE two entries may part them: neither a rule, nor a blank line.
       // Read off the NEXT item: a template writes its separator after the row it closes.
-      const continues = (next: unknown): boolean =>
-        fields != null &&
-        fields.length > 0 &&
-        next != null &&
-        typeof next === "object" &&
-        stringify((next as Record<string, unknown>)[fields[0]] ?? "").trim() === "";
+      const continues = (next: unknown): boolean => {
+        // The FIRST field standing in for the list itself: a list that is absent or empty has none, which is the same
+        // guard the length test used to spell, one step nearer what the line below actually reads.
+        const first = fields?.[0];
+        if (first === undefined || next === null || typeof next !== "object") return false;
+        return stringify((next as Record<string, unknown>)[first] ?? "").trim() === "";
+      };
       items.forEach((item: unknown, idx: number) => {
         const itemScope: Scope = {
           ...scope,

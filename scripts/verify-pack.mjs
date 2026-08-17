@@ -67,7 +67,7 @@ try {
   const typedBanner = listing
     .split("\n")
     .filter((f) => f.startsWith("package/views/banner.") && f !== "package/views/banner.view");
-  if (typedBanner.length > 0) {
+  if (typedBanner.length) {
     fail(`a typed banner shipped: ${typedBanner.join(", ")}`);
   }
   // The HUMAN page, and the worked example the generated grammar below has no room for. The
@@ -95,7 +95,7 @@ try {
   const strayDocs = listing
     .split("\n")
     .filter((f) => f.startsWith("package/docs/") && f !== CHEATSHEET && !f.endsWith("/"));
-  if (strayDocs.length > 0) {
+  if (strayDocs.length) {
     fail(`documentation leaked into the tarball: ${strayDocs.join(", ")}`);
   }
   for (const dir of ["package/examples/", "package/src/"]) {

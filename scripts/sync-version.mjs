@@ -36,7 +36,7 @@ if (plugin.version !== version) {
 // versioned by them.
 const marketplace = read(MARKETPLACE);
 const mine = marketplace.plugins.filter((p) => p.name === plugin.name && p.version !== version);
-if (mine.length > 0) {
+if (mine.length) {
   for (const entry of mine) entry.version = version;
   write(MARKETPLACE, marketplace);
   changed.push(MARKETPLACE);

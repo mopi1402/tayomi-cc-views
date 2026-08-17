@@ -252,6 +252,62 @@ describe("the payload a view accepts", () => {
     expect(parseTemplate("a static line").payload).toBeNull();
   });
 
+  // The defect this block exists for: a list item's sub-field carries no payload vocabulary, because it is no field of
+  // the block at all. Pooled with the block's own names, an item field named `type` scored a sectioned view into the
+  // quote shape; the render then refused the table it was handed, and the carrier fell open to raw markdown, on screen
+  // and with no message.
+  describe("scored on the BLOCK's own names, never on a list item's", () => {
+    const verdictView = (middle: string): string =>
+      lines(
+        `${FIELDS} concerns severity ${middle} text`,
+        ref("verdict"),
+        `${EACH} concerns`,
+        `  ${ref("severity")} ${ref(middle)} ${ref("text")}`,
+        END
+      );
+
+    it("keeps the table where an item field is named after the quote's own", () => {
+      expect(parseTemplate(verdictView(FIELD_TYPE)).payload).toBe(PAYLOAD_TABLE);
+    });
+
+    it("places it as it places any other item field, the NAME being all that differed", () => {
+      expect(parseTemplate(verdictView(FIELD_TYPE)).payload).toBe(
+        parseTemplate(verdictView("kind")).payload
+      );
+    });
+
+    it("publishes the item field all the same, which a block does have to supply", () => {
+      expect(parseTemplate(verdictView(FIELD_TYPE)).spends).toContain(FIELD_TYPE);
+    });
+
+    // The other half of the same law, and the one a level-based reading gets wrong: splitting `rows` names the TABLE's
+    // own columns, so those names are the evidence columns.view rests its whole shape on.
+    it("scores the parts of a list the payload ITSELF yields, which are its columns", () => {
+      const t = parseTemplate(
+        lines(
+          `${FIELDS} ${FIELD_ROWS} label mid1 mid2 ${FIELD_CONTENT}`,
+          `${EACH} ${FIELD_ROWS}`,
+          `  ${ref("label")} ${ref(FIELD_CONTENT)}`,
+          END
+        )
+      );
+      expect(t.payload).toBe(PAYLOAD_TABLE);
+    });
+
+    it("reads that same name OUTSIDE the region as the block field it is there", () => {
+      const t = parseTemplate(
+        lines(
+          `${FIELDS} concerns severity ${FIELD_TYPE} text`,
+          `${ref(FIELD_CONTENT)} ${ref(FIELD_TYPE)}`,
+          `${EACH} concerns`,
+          `  ${ref("severity")} ${ref(FIELD_TYPE)} ${ref("text")}`,
+          END
+        )
+      );
+      expect(t.payload).toBe(PAYLOAD_QUOTE);
+    });
+  });
+
   it("expects none from a STATIC template, its optional garnish notwithstanding", () => {
     // The welcome case: an @foot names a field, but a template spending no slot draws on nothing, so it is not a
     // view a message summons and the teaching gate must not demand it be taught.

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.7.0
+
+- The payload a view takes is scored on the names the BLOCK carries, never on the fields a list splits into
+- A view whose loop named `type`, a word of the quote, takes its table again instead of falling open to raw markdown
+- `cc-views check` reads a sample written as a DECORATED block, which is the only form naming a payload shape
+- It prints the shape the view resolved to before any verdict, an answer no author could read anywhere
+- `cc-views check --all <dir>` sweeps a whole set of views, one `<view>.md` sample per view
+- `check`, `checkAll` and `takes` are exported, for a host gating its own views in its own suite
+- A sample that only ever fell open now FAILS a check that used to pass it
+- A field the block carried and the view draws nowhere is reported on a decorated sample too, the form the skill asks for
+- A view spending `flow` is no longer accused of dropping the `content` it drew, the two being one body under two names
+
 ## 2.6.0
 
 - A diagram asked for no theme now draws in SHADES rather than flat, so a `classDef` or a `style` the source declares reaches the screen

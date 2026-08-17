@@ -139,9 +139,9 @@ const POSIX_SEP = "/";
 const TERMINATORS = new Set(Object.values(CLOSES));
 
 function kindOf(word: string, opens: string[], readIn: string[]): string {
-  if (opens.length > 0) return OPENER;
+  if (opens.length) return OPENER;
   if (TERMINATORS.has(word)) return TERMINATOR;
-  return readIn.length > 0 ? LINE : DECLARATION;
+  return readIn.length ? LINE : DECLARATION;
 }
 
 function directives(): DirectiveDoc[] {

@@ -9,7 +9,12 @@ import os from "node:os";
 import path from "node:path";
 import { transform, slice, type DisplayHost } from "../pipeline.js";
 import { handleMessageDisplay } from "../hook/runner.js";
-import { cutStreamingDecorated, DECORATOR_HINT } from "./decorator.js";
+import {
+  cutStreamingDecorated,
+  renderDecorated,
+  DECORATOR_HINT,
+  type Decorated,
+} from "./decorator.js";
 import { setDeferred } from "../platform/peers.js";
 import { VIEW_EXT } from "../template/load.js";
 import { ANSI_RE, INERT_STAR, renderTags, tagMark } from "../style.js";
@@ -1271,5 +1276,63 @@ describe("a decorated fence", () => {
     );
     const closed = lines(decorator(GRAPH), MERMAID_OPEN, ...SOURCE_ROWS, FENCE, "after");
     expect(cutStreamingDecorated(closed)).toBe(closed);
+  });
+});
+
+describe("why a zone fell open", () => {
+  // Fail-open is the RUNTIME rule and it does not move: nothing may erase what the model sent. What was missing is the
+  // record of WHY, kept for the strict view alone, so no caller could ever name the reason a zone showed raw. Recording
+  // it for every zone is what lets an authoring-time check speak where the screen must stay quiet.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-deco-why-`));
+  const QUOTED = "quoted";
+  const ROWED = "rowed";
+  write(dir, viewFile(QUOTED), lines("${content}"));
+  write(dir, viewFile(ROWED), rowsView("${label} ${content}"));
+  const pass = (text: string): Decorated => renderDecorated(text, [dir], { width: WIDTH });
+
+  it("names the view and the engine's own words, the zone still showing exactly as written", () => {
+    const text = decorated(decorator(QUOTED), KV_ROW);
+    const { out, refusals } = pass(text);
+    expect(out).toBe(text);
+    expect(refusals).toMatchObject([{ view: QUOTED }]);
+    expect(refusals[0].reason).toContain(QUOTED);
+  });
+
+  it("records nothing for a zone that drew", () => {
+    expect(pass(decorated(decorator(ROWED), KV_ROW)).refusals).toEqual([]);
+  });
+
+  it("records a payload that announced a shape and would not parse", () => {
+    // No delimiter row, so the table refuses before any template is loaded: a near-miss, and its own reason.
+    const { refusals } = pass(lines(decorator(ROWED), EMPTY_HEADER, KV_ROW));
+    expect(refusals).toMatchObject([{ view: ROWED }]);
+  });
+
+  it("records one entry per zone, so a message with several is fully answered", () => {
+    const text = [decorated(decorator(QUOTED), KV_ROW), decorated(decorator(QUOTED), KV_ROW)].join(
+      "\n"
+    );
+    expect(pass(text).refusals.map((r) => r.view)).toEqual([QUOTED, QUOTED]);
+  });
+});
+
+describe("why a zone fell open, the two sites no check can reach", () => {
+  // `check` loads the template before it renders, so neither of these can arrive through it. They are recorded all the
+  // same: the field claims EVERY zone that did not draw, and a site left out would make it quietly untrue.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `${SCRATCH_DIR}-deco-sites-`));
+  const HOLLOW = "hollow";
+  write(dir, viewFile(HOLLOW), rowsView("${label}"));
+  const pass = (text: string): Decorated => renderDecorated(text, [dir], { width: WIDTH });
+
+  it("records a view no template on the search path answers for", () => {
+    const { refusals } = pass(decorated(decorator("nowhere-at-all"), KV_ROW));
+    expect(refusals).toMatchObject([{ view: "nowhere-at-all" }]);
+  });
+
+  it("records a render that came out hollow, every field having arrived blank", () => {
+    // Both guards of render.ts pass (fields arrived, one was read) and the ink is still nothing.
+    const { out, refusals } = pass(decorated(decorator(HOLLOW), "|  | v |"));
+    expect(refusals).toMatchObject([{ view: HOLLOW }]);
+    expect(out).toContain(decorator(HOLLOW)); // fail-open, unchanged
   });
 });

@@ -131,7 +131,7 @@ for (const route of INSTALL_ROUTES) {
   if (!readme.includes(route)) fail(`${README} names no install route \`${route}\``);
 }
 
-if (failures.length > 0) {
+if (failures.length) {
   console.error(`\ncheck-skill: the skill is out of step with the engine or with its delivery:\n`);
   for (const f of failures) console.error(`  ${f}`);
   console.error(`\ncheck-skill: FAIL (${failures.length})`);

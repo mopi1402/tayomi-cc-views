@@ -90,7 +90,7 @@ function sift(run: string, prev: boolean, next: boolean): string {
   parts.forEach((p, i) => {
     if (!p.tag) return;
     if (p.s !== RESET_MARK) opened.push(i);
-    else if (opened.length > 0) opened.pop();
+    else if (opened.length) opened.pop();
     else role[i] = "close";
   });
   for (const i of opened) role[i] = "open";

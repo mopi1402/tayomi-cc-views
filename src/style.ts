@@ -622,7 +622,7 @@ export function trackTag(open: string[], name: string): void {
  * stack, which is a resume reaching a line no span of the engine's had opened.
  */
 export function popSpan(open: string[]): void {
-  while (open.length > 0) {
+  while (open.length) {
     if (open.pop() === SPAN_MARK) return;
   }
 }
@@ -683,7 +683,7 @@ export function closeCut(cut: string, open: readonly string[]): string {
   if (open.length === 0) return cut;
   const rest = [SPAN_MARK, ...open];
   let frames = 0;
-  while (rest.length > 0) {
+  while (rest.length) {
     popSpan(rest);
     frames += 1;
   }

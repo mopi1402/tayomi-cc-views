@@ -184,7 +184,7 @@ if (pkgName === undefined) {
 // 4. A human reads ABOUT the file rather than a copy of it: the one an adopter pastes is always the stale one.
 if (!read(README).includes(STEERING)) fail(`${README} points nobody at ${STEERING}`);
 
-if (failures.length > 0) {
+if (failures.length) {
   for (const why of failures) console.error(`check-steering: ${why}`);
   process.exit(1);
 }

@@ -2,7 +2,9 @@
 
 Every form and every edge: [architecture/view-language.md](architecture/view-language.md). For a machine:
 `agent/catalogue.json`. For THIS install's views and tags: `cc-views dict`. To find out why one draws
-nothing: `cc-views check <view> '<block>'`, which names the line that failed.
+nothing: `cc-views check <view> '<block>'`, which names the shape the view takes, then the line that
+failed. Write that block as a MODEL would, decorator and all: only a decorated block names a payload
+shape. A whole directory of `<view>.md` samples at once: `cc-views check --all <dir>`.
 
 ## A whole view, both halves
 
@@ -116,7 +118,9 @@ markdown, which still reads where the hook does not run:
   A table ends on the first non-pipe line, a quote needs a blank line under it or the end of the message,
   a fence runs to its closing ` ``` `.
 - ONE view, ONE shape: each template accepts a single payload form (the `payload` column below), and any
-  other shape under its decorator fails open, the zone showing exactly as written.
+  other shape under its decorator fails open, the zone showing exactly as written. A template never DECLARES
+  that form: it is scored on the names the BLOCK carries, the fields an `@each` splits its own list into
+  being the author's vocabulary and no evidence. `cc-views check <view>` prints the one it resolved to.
 - A table reaches the template as `rows`, a list of `{ label, content }`. Its header row is dropped, EXCEPT
   in `box`, where the header IS the frame: first cell the title, last cell a badge.
 - A quote's first line may be a kind marker, `[!TOKEN]` alone, one uppercase run. It arrives LOWERCASED in

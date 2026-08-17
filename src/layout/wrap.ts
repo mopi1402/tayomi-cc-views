@@ -202,7 +202,7 @@ export function foldText(text: string, width: number): string[] {
       w = 0;
       continue;
     }
-    if (w + a.w > width && cur.length > 0) {
+    if (w + a.w > width && cur.length) {
       let cut = -1;
       for (let i = cur.length - 1; i >= 0; i--) {
         if (cur[i].space) {
@@ -217,7 +217,7 @@ export function foldText(text: string, width: number): string[] {
     cur.push(a);
     w += a.w;
   }
-  if (cur.length > 0) groups.push(cur);
+  if (cur.length) groups.push(cur);
   const out: string[] = [];
   // The shared notion of what is open (style.ts), never a copy: a boolean could say whether a style was open and never
   // WHICH, and it counted the tag of a COMPLETE engine span as still standing.

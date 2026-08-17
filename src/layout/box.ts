@@ -56,7 +56,7 @@ export function collapseBlanks(lines: string[]): string[] {
     if (blank && (out.length === 0 || printedWidth(out[out.length - 1]) === 0)) continue;
     out.push(blank ? "" : line);
   }
-  while (out.length > 0 && printedWidth(out[out.length - 1]) === 0) out.pop();
+  while (out.length && printedWidth(out[out.length - 1]) === 0) out.pop();
   return out;
 }
 
@@ -157,7 +157,7 @@ export function frameBox(
     out.push(row(line, total, edge));
   }
   // The zone carries the badge's tone on the TEXT and not merely on the border beside it.
-  if (zone.length > 0) {
+  if (zone.length) {
     out.push(fullRule(total, edge));
     for (const line of zone) {
       const text = tone == null ? line : `${tagMark(tone)}${line}${RESET_MARK}`;
@@ -179,7 +179,7 @@ export function flowBody(rawBody: string[], limit: number): string[] {
   // rule for want of neighbours, and a width measured over the body has nothing to measure. So it takes the width it
   // was HANDED. This is what a lone `@rule` in a bare container draws, and it is the whole of views/hr.view.
   const drawn = rawBody.filter((l) => isRule(l) || printedWidth(l) > 0);
-  if (drawn.length > 0 && drawn.every(isRule)) {
+  if (drawn.length && drawn.every(isRule)) {
     return drawn.map((l) => `${rulePrefix(l).text}${dashRun(limit - rulePrefix(l).width)}`);
   }
   const body = collapseBlanks(rawBody).flatMap((l) => (isRule(l) ? [l] : wrapLine(l, limit)));

@@ -5,6 +5,7 @@
 
 import {
   EACH,
+  END,
   FIELDS,
   FROM,
   LABEL,
@@ -50,6 +51,10 @@ const TONE_RE = re(String.raw`^${TONE}[ \t]+(\w+)[ \t]*$`);
 const DIAGRAM_RE = re(String.raw`^${DIAGRAM}[ \t]*$`);
 const LABELS_RE = re(String.raw`^${EACH}[ \t]+\S+[ \t]*${declSource(LABEL)}`, "gm");
 const USE_FIELD_RE = re(String.raw`^${USE}[ \t]+\S+[ \t]+${FROM}[ \t]+\S+[ \t]*$`);
+// The list an @each opens, and the line that closes it. Only the NAME is read: whatever declarations trail it, the
+// region they open is the same one. "@endbox" and "@endaside" are other words, so neither closes this.
+const EACH_LIST_RE = re(String.raw`^${EACH}[ \t]+(\S+)`);
+const END_ALONE_RE = re(String.raw`^${END}\s*$`);
 
 /** A line the template author wrote for themselves: dropped before anything reads it. */
 const COMMENT_RE = /^\s*#/;
@@ -77,11 +82,12 @@ export interface Template {
   // settled here, where the template says it, and never guessed from the view's name.
   diagram: boolean;
   // Every field name the body spends: each substitution's own, each field a directive NAMES, and everything an
-  // @fields declares. What a block has to carry, and what `payload` below is derived from.
+  // @fields declares. What a block has to carry, ITEM fields included, since a block still has to supply them.
   spends: string[];
-  // The ONE payload shape this view accepts from a decorator, or null for a view that expects none. Derived from
-  // `spends` (a view spending `rows` is asking for a table), except the fence, which only @diagram can claim. Settled
-  // here so the render's refusal and the catalogue's word come off the same value and cannot drift.
+  // The ONE payload shape this view accepts from a decorator, or null for a view that expects none. Derived from the
+  // BLOCK-level half of what it spends (a view spending `rows` is asking for a table), except the fence, which only
+  // @diagram can claim. Settled here so the render's refusal and the catalogue's word come off the same value and
+  // cannot drift.
   payload: string | null;
 }
 
@@ -92,22 +98,71 @@ const NAMES_A_FIELD = new Set(
   )
 );
 
-function spentFields(body: string[], objectLists: ObjectLists): string[] {
-  const spent = new Set<string>();
-  for (const [, ref] of body.join("\n").matchAll(SUBST_RE)) {
-    const field = slotField(ref);
-    if (field !== null) spent.add(field);
-  }
+/** Every name some payload yields. A list among them splits into that payload's own parts; any other list is the author's. */
+const PAYLOAD_NAMES = new Set(Object.values(PAYLOAD_FIELDS).flat());
+
+/**
+ * The names splitting `<list>` may NOT be read as payload evidence.
+ *
+ * Splitting a list a payload yields (`@fields rows label mid1 mid2 content`) names that payload's own columns, and
+ * columns.view says it is a table by saying exactly that: those names are evidence, and hiding them would leave every
+ * bundled table view unplaceable. Splitting a list the block carries under a name of its OWN (`@fields concerns
+ * severity type text`) names nothing but the author's vocabulary, over which no payload has a claim.
+ */
+const hiddenBy = (list: string, objectLists: ObjectLists): readonly string[] =>
+  PAYLOAD_NAMES.has(list) ? [] : (objectLists[list] ?? []);
+
+interface Spent {
+  /** Every name the template mentions, both levels pooled: the catalogue's answer to what a block has to carry. */
+  all: string[];
+  /** The subset a payload may be SCORED on, an author's own item vocabulary left out. */
+  block: string[];
+}
+
+/**
+ * The two readings, taken in ONE pass because they part on which list a name splits, not on what it is called.
+ *
+ * The defect that asked for the split: `@fields concerns severity type text` put `type` into the scoring, where it is
+ * the quote payload's own word. A sectioned view was scored into the quote shape on that one coincidence, the render
+ * then refused the table it was handed, and the carrier fell open to raw markdown with nothing said on screen.
+ *
+ * Regions are walked shallowly here: scoring needs to know which list a name belongs to, never what the render will do
+ * with it.
+ */
+function spentFields(body: string[], objectLists: ObjectLists): Spent {
+  const all = new Set<string>();
+  const block = new Set<string>();
+  let hidden: readonly string[] = [];
   for (const line of body) {
+    const opens = line.match(EACH_LIST_RE);
+    if (opens) hidden = hiddenBy(opens[1], objectLists);
+    else if (END_ALONE_RE.test(line)) hidden = [];
+    for (const [, ref] of line.matchAll(SUBST_RE)) {
+      const field = slotField(ref);
+      if (field === null) continue;
+      all.add(field);
+      // Named OUTSIDE that region, the same word is an ordinary block field and counts as one.
+      if (!hidden.includes(field)) block.add(field);
+    }
     // UnTRIMMED: a directive sits at column 0, so an indented line splits on a leading empty token and matches nothing.
     const [word, arg] = line.split(TOKEN_SEP);
-    if (arg !== undefined && NAMES_A_FIELD.has(word)) spent.add(arg);
+    if (arg !== undefined && NAMES_A_FIELD.has(word)) {
+      all.add(arg);
+      block.add(arg);
+    }
   }
+  // The list itself is a block field whatever its items split into, so it always counts; its parts count only where
+  // the list is a payload's own.
   for (const [list, fields] of Object.entries(objectLists)) {
-    spent.add(list);
-    for (const field of fields) spent.add(field);
+    all.add(list);
+    block.add(list);
+    const evidence = PAYLOAD_NAMES.has(list);
+    for (const field of fields) {
+      all.add(field);
+      if (evidence) block.add(field);
+    }
   }
-  return [...spent].sort();
+  return { all: [...all].sort(), block: [...block].sort() };
 }
 
 /**
@@ -193,11 +248,21 @@ export function parseTemplate(text: string): Template {
   const spendsSlots =
     [...body.join("\n").matchAll(SUBST_RE)].some(([, ref]) => !readsBookkeeping(ref)) ||
     body.some((line) => USE_FIELD_RE.test(line));
-  const spends = spentFields(body, objectLists);
+  const spent = spentFields(body, objectLists);
   // A sectioned view spends its OWN names (said, status), which no scoring can place; the table is the one shape that
   // yields arbitrary named fields, so spending slots at all is asking for one. A STATIC template expects none: a
   // health check's optional @foot garnish does not make it a view a message summons.
   const payload =
-    diagram ? PAYLOAD_FENCE : (payloadOf(spends) ?? (spendsSlots ? PAYLOAD_TABLE : null));
-  return { tables, objectLists, body, labelWidth, tone, spendsSlots, diagram, spends, payload };
+    diagram ? PAYLOAD_FENCE : (payloadOf(spent.block) ?? (spendsSlots ? PAYLOAD_TABLE : null));
+  return {
+    tables,
+    objectLists,
+    body,
+    labelWidth,
+    tone,
+    spendsSlots,
+    diagram,
+    spends: spent.all,
+    payload,
+  };
 }

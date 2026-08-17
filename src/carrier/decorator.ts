@@ -394,6 +394,16 @@ interface Zone {
 }
 
 /**
+ * How a zone is DRESSED, in one place: see Payload.type, the unset field IS the precedence rule, and the shape rides
+ * along on a parsed payload alone so a static summon announces none. The reader below hands it back untouched, or a
+ * second render of the same zone could load another file than the one drawn.
+ */
+function dressingOf(zone: Zone): Dressing {
+  const base = zone.payload?.type === undefined ? zone.deco : { ...zone.deco, type: undefined };
+  return zone.payload === null ? base : { ...base, payload: zone.form };
+}
+
+/**
  * The zone anchored on line `at`, or null where that line anchors none. ONE reading for the render and the reader, so
  * a gate and the screen can never disagree about where a zone starts, what it carries, or where it stops.
  */
@@ -410,10 +420,22 @@ function zoneAt(lines: string[], fences: Fence[], starts: number[], at: number):
   return { deco, payload, refused: shape !== undefined && payload === null, end, form: shape?.payload };
 }
 
+/** One zone this pass did NOT draw, and the reason in the engine's own words, never reworded here. */
+export interface ZoneRefusal {
+  view: string;
+  reason: string;
+}
+
 /** What one decorated PASS produced: the text, and the strict view's outcome when a zone here is what decided it. */
 export interface Decorated {
   out: string;
   outcome: Outcome | null;
+  /**
+   * Every zone that did not draw, in order. The SCREEN says nothing about them, deliberately: fail-open is the runtime
+   * rule and nothing may erase what the model sent. But a silence that teaches nothing at AUTHORING time is how a view
+   * broken for every decorated block ever written ships unnoticed, so the reason is recorded for a caller to read.
+   */
+  refusals: ZoneRefusal[];
 }
 
 /** A piece's span read defensively: the walk must always advance, whatever another engine's claim states. */
@@ -433,13 +455,17 @@ export function renderDecorated(
   host?: DisplayHost,
   cwd?: string
 ): Decorated {
-  if (!text.includes(DECORATOR_HINT)) return { out: text, outcome: null };
+  if (!text.includes(DECORATOR_HINT)) return { out: text, outcome: null, refusals: [] };
   const lines = text.split("\n");
   const fences = fenceSpans(text);
   const starts = lineStarts(lines);
   const strict = host?.strict;
   const strictView = strict?.view;
   let outcome: Outcome | null = null;
+  const refusals: ZoneRefusal[] = [];
+  const refused = (view: string, reason: unknown): void => {
+    refusals.push({ view, reason: reason instanceof Error ? reason.message : String(reason) });
+  };
   // Every zone of a view spends its ordinal HERE, whatever branch takes it: the pre-pass counts every anchored zone
   // the same way, and a branch that skipped the count would shift every later key of that view by one.
   const ordinals = new Map<string, number>();
@@ -474,6 +500,7 @@ export function renderDecorated(
     // it, and whoever holds the template answers it. The strict view alone is exempt, its failures owed a line. Won
     // (or unopposed) and declined all the same, so the verdict is published: the assembler must not wait for it.
     if (zone.deco.view !== strictView && !resolvesView(zone.deco.view, dirs, zone.deco.type)) {
+      refused(zone.deco.view, `view ${zone.deco.view}: no template on this search path`);
       publishRaw(key);
       out.push(lines[i]);
       continue;
@@ -482,10 +509,12 @@ export function renderDecorated(
     // is a near-miss the author must see; prose announces nothing, claims no line, and leaves a static view summoned
     // as a line alone would. A view that spends slots throws below on no data, so arity decides, not a table here.
     if (zone.refused) {
+      const reason = `view ${zone.deco.view}: payload refused`;
+      refused(zone.deco.view, reason);
       // Except under the STRICT name: a near-miss is still its zone, and raw markdown is what this view was promised
       // never to show. The whole zone goes with the line, or the payload would follow the host's line raw.
       if (zone.deco.view === strictView && strict !== undefined) {
-        outcome = failedOutcome(`view ${zone.deco.view}: payload refused`);
+        outcome = failedOutcome(reason);
         const shown = strictLine(strict);
         // Only the lines its shape can CLAIM go with the replacement: the run also swallows prose and zones that were
         // never the payload's, and those are rescanned exactly as the non-strict path rescans them.
@@ -502,10 +531,7 @@ export function renderDecorated(
     const { deco, payload, end } = zone;
     try {
       const data: Scope = payload === null ? {} : payload.data;
-      // See Payload.type: the unset field IS the precedence rule. The shape rides along on a PARSED payload alone, so
-      // the template's own refusal (render.ts) judges the form the author actually wrote, and a static summon none.
-      const base = payload?.type === undefined ? deco : { ...deco, type: undefined };
-      const dressing: Dressing = payload === null ? base : { ...base, payload: zone.form };
+      const dressing: Dressing = dressingOf(zone);
       // The host is handed the PARSED zone as WRITTEN (`bare`), in the grammar a block hands over and with lists
       // unsplit: the styled cells and their marks are the render's alone.
       const injected = host?.inject?.(deco.view, namedFields(payload === null ? {} : payload.bare), cwd);
@@ -513,8 +539,10 @@ export function renderDecorated(
       // Raw over hollow, the narrowest of the three readings: render.ts owns the other two, and what is left here is
       // both of them passing while the fields all arrived BLANK (.tayomi/specs/fix/carrier-guards.md).
       if (rendered.trim() === "") {
+        const reason = `view ${deco.view}: rendered hollow`;
+        refused(deco.view, reason);
         if (deco.view === strictView && strict !== undefined) {
-          outcome = failedOutcome(`view ${deco.view}: rendered hollow`);
+          outcome = failedOutcome(reason);
           const shown = strictLine(strict);
           publishPiece(key, end - i, shown);
           out.push(shown);
@@ -532,6 +560,7 @@ export function renderDecorated(
       out.push(...shown.split("\n"));
       i = end - 1;
     } catch (e) {
+      refused(deco.view, e);
       if (deco.view === strictView && strict !== undefined) {
         outcome = failedOutcome(e);
         // The zone goes with the line it replaces, or the raw markdown this view was promised never to show would
@@ -546,13 +575,15 @@ export function renderDecorated(
       out.push(lines[i]); // fail-open: the decorator stays, the table follows raw
     }
   }
-  return { out: out.join("\n"), outcome };
+  return { out: out.join("\n"), outcome, refusals };
 }
 
 /** One decorated zone as a READER sees it: the view it names, what its carrier read, and where the zone begins. */
 export interface DecoratedZone {
   view: string;
   data: Scope;
+  /** What the render was DRESSED with here, so a second pass over this zone reads the view the screen read. */
+  dressing: Dressing;
   /** The character offset of the decorator line, so zones of both carriers can be put back in the order written. */
   at: number;
 }
@@ -571,7 +602,12 @@ export function decoratedZones(text: string): DecoratedZone[] {
     const zone = zoneAt(lines, fences, starts, i);
     if (zone === null) continue;
     // The payload as WRITTEN: a reader compares words an author typed, and the styled cells are the render's alone.
-    zones.push({ view: zone.deco.view, data: zone.payload?.bare ?? {}, at: starts[i] });
+    zones.push({
+      view: zone.deco.view,
+      data: zone.payload?.bare ?? {},
+      dressing: dressingOf(zone),
+      at: starts[i],
+    });
     // A REFUSED run is rescanned line by line, exactly as the render rescans it: the run may have swallowed a
     // decorator of its own, which the screen draws and a reader must therefore report.
     if (!zone.refused) i = zone.end - 1;

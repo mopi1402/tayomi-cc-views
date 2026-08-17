@@ -326,7 +326,7 @@ describe("the columns view the package ships", () => {
   /** Dashes and the bars they run past: a divider carrying the columns through rather than cutting them. */
   const DASH = "─";
   const isRule = (line: string): boolean =>
-    line.length > 0 && [...line].every((g) => g === DASH || g === BAR);
+    line !== "" && [...line].every((g) => g === DASH || g === BAR);
   const DIM = "2";
   const TEAL = "38;5;37"; // what the template's own @tone resolves to, an INDEXED colour and so free of the weight
   const YELLOW = "1;33";

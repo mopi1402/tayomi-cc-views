@@ -147,7 +147,7 @@ export function traceView(
   }
   // Third reading: data ARRIVED and the template read none of it. Decided on what the render actually ASKED the scope
   // for, which is why it runs down here with the output already built and about to be thrown away.
-  if (spendsSlots && got.length > 0 && !got.some((key) => read.has(key))) {
+  if (spendsSlots && got.length && !got.some((key) => read.has(key))) {
     throw new Error(`view ${name}: reads none of the fields it was given`);
   }
   // MOST EXPLICIT FIRST: the carrier's own tone, the block's `tone` field (the fenced form's only way in, carrying no

@@ -104,7 +104,7 @@ for (const file of walk(SRC)) {
   });
 }
 
-if (failures.length > 0) {
+if (failures.length) {
   console.error(
     `\ncheck-vocabulary: a word of the language spelled outside ${VOCABULARY_DIR}/.` +
       `\nDeclare it there and compose the matcher from it, or the sweep that drives` +
