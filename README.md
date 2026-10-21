@@ -56,13 +56,14 @@ column is the name you write, as `@{view:box}`, over ordinary markdown.
 | `lines` | <img src="docs/images/gallery/lines.svg" alt="Three files, each ruled underneath, and what changed in each"/> |
 | `quote` | <img src="docs/images/gallery/quote.svg" alt="A passage set apart behind a coloured bar, its first line bold"/> |
 | `mermaid` | <img src="docs/images/gallery/mermaid.svg" alt="A flowchart from commit through verify, branching to publish on pass and to stop on fail"/> |
+| `markdown` | <img src="docs/images/gallery/markdown.svg" alt="A release note in markdown: a bold heading, a nested bullet list, a numbered list and a quote, each folded under its marker"/> |
 
-A diagram draws in shades, never in a palette you did not ask for. That is what lets YOUR
-colours through: a `classDef` or a `style` in the source is the only hue on screen.
+A diagram draws in mermaid's own `default` palette, in `padless` frames, so it looks here as it
+does on a forge. A `classDef` or a `style` in the source still paints what it names.
 
-The diagram above asked for no theme, which is exactly what those shades are. Name one in
-`CC_VIEWS_MERMAID_THEME` to paint it instead: `default`, `terra`, `nord`, `dracula` and
-`gruvbox` among them.
+Name another theme in `CC_VIEWS_MERMAID_THEME`: `mono` for shades only, `terra`, `nord`,
+`dracula` and `gruvbox` among them. Name another frame in `CC_VIEWS_MERMAID_BORDERS`: `default`
+for box lines, `borderless` for none. An unknown name draws the default.
 
 </details>
 

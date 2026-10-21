@@ -26,6 +26,7 @@ import {
   zoneKey,
 } from "./platform/compose.js";
 import { parseData } from "./template/view-data.js";
+import { holdLeadingBlank } from "./style.js";
 import {
   failedOutcome,
   okOutcome,
@@ -78,9 +79,9 @@ export function transform(
     try {
       // The host is handed the block PARSED, never its text: the same shape a decorated zone hands over, with lists
       // unsplit since @fields is the template's business.
-      const rendered =
-        renderView(name, bodyText, dirs, host?.inject?.(name, parseData(bodyText), cwd), options) +
-        "\n";
+      const rendered = holdLeadingBlank(
+        renderView(name, bodyText, dirs, host?.inject?.(name, parseData(bodyText), cwd), options) + "\n"
+      );
       if (name === strictView) outcome = okOutcome();
       publishPiece(key, span, rendered);
       return rendered;
@@ -105,7 +106,7 @@ export function transform(
     const resolves = (name: string, type?: string): boolean =>
       resolvesView(name, dirs, type) || (composeRole() !== "off" && defersView(name));
     out = cutUnclosedBlock(out, resolves);
-    out = cutStreamingDecorated(out, resolves);
+    out = cutStreamingDecorated(out, resolves, dirs, options);
   }
   // NO tag pass here, and the absence is the rule: only a template resolves a tag.
   const decorated = renderDecorated(out, dirs, options, host, cwd);
@@ -121,7 +122,7 @@ export function transform(
         : fenced
       : (decorated.outcome ?? fenced);
   if (verdict !== null && final === true) host?.onRendered?.(verdict.ok, verdict.error);
-  return decorated.out;
+  return decorated.out === text ? text : decorated.out;
 }
 
 /**

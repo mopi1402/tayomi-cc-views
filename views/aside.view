@@ -1,0 +1,26 @@
+# aside.view: one zone set aside, and what the message writes after it flowing at its right.
+#
+#   @{view:aside}
+#   ```mermaid
+#   flowchart TD
+#       A[source] --> B[render]
+#   ```
+#
+#   A paragraph, drawn in the column beside the diagram.
+#
+#   @{view:banner}
+#   > [!TIP]
+#   > a view too, while it fits
+#
+#   The rest of the message, once the diagram's height is filled, back at the full width.
+#
+# The zone is any side a split takes: a decorated zone, a bare mermaid fence, a markdown fence, a
+# quote. What follows it flows in order, each paragraph, list or view WHOLE or not at all: the first
+# that does not fit under the zone's height ends the column and stays where it was written. A
+# table, a split or another aside ends it too.
+#
+# NO BODY, on purpose, as split.view: the carrier reads the zone and the engine lays it out
+# (layout/aside.ts). Too narrow for a column of text beside the zone, the zone draws alone.
+#
+# Where this hook does not run, the decorator line is one harmless line of prose and the rest
+# reads as written.

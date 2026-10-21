@@ -29,6 +29,9 @@ const view = (name: string, body: string): void =>
 view(NAME, "said: ${said}\n");
 view(OURS, "said: ${said}\n");
 view(STRICT, "said: ${said}\n");
+const INDENTED = "indented";
+const INDENT = "    ";
+view(INDENTED, `${INDENT}said: \${said}\n`);
 
 const options = { viewsPath: [dir], width: WIDTH };
 const render = (msg: string, host?: DisplayHost, final = true): string =>
@@ -528,5 +531,22 @@ describe("a message written with Windows line endings", () => {
         expect(shown, `at ${size} chars per flush`).toContain(line);
       }
     }
+  });
+});
+
+describe("a drawing opening on a blank", () => {
+  it("keeps its first row's indent through a host that trims the head", () => {
+    const trimmed = render(block(INDENTED, "said: ok")).trimStart();
+    expect(plain(trimmed).startsWith(`${INDENT}said: ok`)).toBe(true);
+  });
+
+  it("keeps it below prose too, the host trimming every paragraph's head", () => {
+    const [, drawing] = render(`prose\n\n${block(INDENTED, "said: ok")}`).split("\n\n");
+    expect(plain(drawing.trimStart()).startsWith(`${INDENT}said: ok`)).toBe(true);
+  });
+
+  it("holds nothing in prose the engine did not draw", () => {
+    const prose = `${INDENT}just prose\n`;
+    expect(render(prose)).toBe(prose);
   });
 });

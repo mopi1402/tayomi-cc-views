@@ -7,7 +7,7 @@
 // composed line is built to fit the box already, so the wrapper hands it back whole.
 
 import { ALIGN_BOTTOM, ALIGN_TOP, type Align } from "../data/language.js";
-import { RESET_MARK, tagMark } from "../style.js";
+import { R, RESET_MARK, renderTags, tagMark } from "../style.js";
 import { padCell, printedWidth } from "./measure.js";
 import { wrapLine } from "./wrap.js";
 
@@ -21,6 +21,9 @@ export const ASIDE_GUTTER = 2 * GUTTER_PAD.length + printedWidth(SEPARATOR);
 
 /** The floor, in printed columns of BOX CONTENT, under which the aside is dropped and the flow takes the whole width. */
 export const ASIDE_MIN_MAIN = 40;
+
+/** The widest row of a column, in printed columns. */
+const widest = (rows: string[]): number => rows.reduce((n, l) => Math.max(n, printedWidth(l)), 0);
 
 // An ODD padding row goes BELOW: a block one row high reads as centred, the same block one row low reads as fallen.
 function padColumn(col: string[], height: number, align: AsideAlign, filler: string): string[] {
@@ -41,8 +44,7 @@ function padColumn(col: string[], height: number, align: AsideAlign, filler: str
  * when cut to size afterwards. One function, so the two can never disagree.
  */
 export function asideMainWidth(asideRows: string[], content: number): number {
-  const asideWidth = asideRows.reduce((n, l) => Math.max(n, printedWidth(l)), 0);
-  const main = content - asideWidth - ASIDE_GUTTER;
+  const main = content - widest(asideRows) - ASIDE_GUTTER;
   return asideRows.length === 0 || main < ASIDE_MIN_MAIN ? content : main;
 }
 
@@ -61,16 +63,101 @@ export function composeAside(
   if (mainWidth === content) {
     return mainLines.flatMap((l) => wrapLine(l, content));
   }
-  const asideWidth = asideRows.reduce((n, l) => Math.max(n, printedWidth(l)), 0);
   // Wrapped BEFORE the columns are zipped: a main line taking three rows takes three rows of the region.
-  const flow = mainLines.flatMap((l) => wrapLine(l, mainWidth));
-  // Padded, so a row of art that ends early (a transparent right edge the encoder trimmed) still puts the separator on
-  // the same column as every other row.
-  const art = asideRows.map((r) => padCell(r, asideWidth));
-  const height = Math.max(art.length, flow.length);
-  const left = padColumn(art, height, align, " ".repeat(asideWidth));
-  const right = padColumn(flow, height, align, "");
-  // A blank main line survives, and must: the composed line carries the art and the separator, so the box's blank
-  // collapsing has nothing to take.
-  return left.map((row, i) => `${row}${GUTTER_PAD}${SEPARATOR}${GUTTER_PAD}${right[i]}`);
+  return zip(asideRows, mainLines.flatMap((l) => wrapLine(l, mainWidth)), align, SEPARATOR);
+}
+
+/**
+ * Two columns as one run of lines. Padded, so a row of art that ends early (a transparent right edge the encoder
+ * trimmed) still puts the separator on the same column as every other row. A blank main line survives, and must: the
+ * composed line carries the art and the separator, so the box's blank collapsing has nothing to take.
+ */
+function zip(leftRows: string[], rightRows: string[], align: AsideAlign, separator: string): string[] {
+  const leftWidth = widest(leftRows);
+  const height = Math.max(leftRows.length, rightRows.length);
+  const left = padColumn(leftRows.map((r) => padCell(r, leftWidth)), height, align, " ".repeat(leftWidth));
+  const right = padColumn(rightRows, height, align, "");
+  return left.map((row, i) => `${row}${GUTTER_PAD}${separator}${GUTTER_PAD}${right[i]}`);
+}
+
+/** Under this many columns a split side is no column at all, and the two zones stack instead. */
+export const SPLIT_MIN_SIDE = 20;
+
+/** One side of a split, drawn on demand: the same zone is asked again at another width or under a height ceiling. */
+export type Side = (width: number, height?: number) => string[];
+
+/**
+ * Two drawn zones side by side, in `content` printed columns. A side that wants no more than its half keeps what it
+ * wants and the other takes the rest; two sides wanting more share the room in halves. The taller side is then asked again under the other's
+ * height, which only a diagram answers. Too narrow to hold both, the two STACK, each at the whole width.
+ *
+ * The output is FINISHED text: the carrier puts it on screen with no template pass after it, so the separator is
+ * resolved here and every row is closed before it.
+ */
+/** A side drawn, or undefined where it cannot be drawn at that width: a diagram only fitting folded THROWS there. */
+function attempt(side: Side, width: number, height?: number): string[] | undefined {
+  try {
+    return side(width, height);
+  } catch {
+    return undefined;
+  }
+}
+
+export function composeSplit(left: Side, right: Side, content: number): string[] {
+  const room = content - ASIDE_GUTTER;
+  const half = Math.floor(room / 2);
+  const stacked = (): string[] => [...left(content), "", ...right(content)];
+  if (half < SPLIT_MIN_SIDE) return stacked();
+  // What each side takes given all the room the other could ever leave it: a box wraps narrower than that, a diagram
+  // or a short quote comes back narrower on its own.
+  // A side that cannot be drawn at a width is read as one that wants more than any column holds.
+  const wants = (side: Side): number => {
+    const rows = attempt(side, room - SPLIT_MIN_SIDE);
+    return rows === undefined ? Infinity : widest(rows);
+  };
+  const wantsLeft = wants(left);
+  const wantsRight = wants(right);
+  let leftWidth = half;
+  if (wantsLeft + wantsRight <= room || wantsLeft <= half) leftWidth = wantsLeft;
+  else if (wantsRight <= room - half) leftWidth = room - wantsRight;
+  const rightWidth = room - leftWidth;
+  let l = attempt(left, leftWidth);
+  let r = attempt(right, rightWidth);
+  if (l === undefined || r === undefined || widest(l) > leftWidth || widest(r) > rightWidth) return stacked();
+  const shorter = (side: Side, width: number, rows: string[], height: number): string[] => {
+    const again = attempt(side, width, height);
+    return again !== undefined && again.length < rows.length && widest(again) <= width ? again : rows;
+  };
+  if (l.length > r.length) l = shorter(left, leftWidth, l, r.length);
+  else if (r.length > l.length) r = shorter(right, rightWidth, r, l.length);
+  return zip(l.map((row) => row + R), r, ALIGN_TOP, renderTags(SEPARATOR));
+}
+
+/** What a float drew: its rows, and how many of the units handed to it went into the column beside the figure. */
+export interface Flow {
+  rows: string[];
+  taken: number;
+}
+
+/**
+ * A figure, and the units written after it flowed into the column at its right while they fit under its height, each
+ * WHOLE or not at all, in order: the first that does not fit ends the flow. Undefined where the figure leaves the column
+ * under ASIDE_MIN_MAIN, and the figure then draws alone.
+ */
+export function composeFlow(figure: Side, units: Side[], content: number): Flow | undefined {
+  const room = content - ASIDE_GUTTER;
+  const fig = attempt(figure, room - ASIDE_MIN_MAIN);
+  if (fig === undefined || widest(fig) > room - ASIDE_MIN_MAIN) return undefined;
+  const width = room - widest(fig);
+  const column: string[] = [];
+  let taken = 0;
+  for (const unit of units) {
+    const rows = attempt(unit, width);
+    if (rows === undefined || widest(rows) > width) break;
+    const gap = column.length ? [""] : [];
+    if (column.length + gap.length + rows.length > fig.length) break;
+    column.push(...gap, ...rows);
+    taken++;
+  }
+  return { rows: zip(fig.map((row) => row + R), column, ALIGN_TOP, renderTags(SEPARATOR)), taken };
 }

@@ -11,12 +11,14 @@ import { transform, slice, type DisplayHost } from "../pipeline.js";
 import { handleMessageDisplay } from "../hook/runner.js";
 import {
   cutStreamingDecorated,
+  decoratedZones,
   renderDecorated,
   DECORATOR_HINT,
+  FOLD_SEP,
   type Decorated,
 } from "./decorator.js";
 import { setDeferred } from "../platform/peers.js";
-import { VIEW_EXT } from "../template/load.js";
+import { VIEW_EXT, bundledViewsDir } from "../template/load.js";
 import { ANSI_RE, INERT_STAR, renderTags, tagMark } from "../style.js";
 import { hasControlMark } from "../data/marks.js";
 import {
@@ -30,6 +32,8 @@ import {
   MAX_COLUMNS,
   MIDDLE_FIELDS,
   MIN_COLUMNS,
+  SPLIT_VIEW,
+  ASIDE_VIEW,
   TEXT,
   TONE,
 } from "../data/language.js";
@@ -183,6 +187,10 @@ write(second, viewFile(HOLLOW), "${said}\n");
 const WIDTH = 60;
 // The item.view fixture declares cap="1/3", so this is where a label cell stops.
 const CAP = Math.floor(WIDTH / 3);
+/** The word a row's tail is made of. */
+const TAIL = "tail";
+/** A tail claiming the whole row, so no room is left over for a capped label to take back. */
+const WIDE_TAIL = `${TAIL} `.repeat(WIDTH).trim();
 
 /**
  * The rows one folded label occupies, read from the separator down to the first line leaving the label column empty:
@@ -373,7 +381,7 @@ describe("a decorated payload", () => {
 
   it("caps the label column at a third of the width, and FOLDS what does not fit", () => {
     const long = "an unreasonably long label that would eat the row";
-    const msg = decorated(decorator(ITEM), `| ${long} | x |`);
+    const msg = decorated(decorator(ITEM), `| ${long} | ${WIDE_TAIL} |`);
     const plain = transform(msg, undefined, true, undefined, options).replace(ANSI_RE, "");
     const rows = labelRows(plain);
     expect(rows.length).toBeGreaterThan(1);
@@ -383,11 +391,29 @@ describe("a decorated payload", () => {
     // The whole label, and never a character of it standing in for the rest.
     expect(labelText(rows)).toBe(long.split(" ").join(""));
     expect(plain).not.toContain("…");
-    expect(rows[0]).toContain("x");
+    expect(rows[0]).toContain(TAIL);
+  });
+
+  it("gives a capped label the room its tail never takes", () => {
+    const long = "a label longer than a third of the row";
+    const plain = transform(decorated(decorator(ITEM), `| ${long} | ${TAIL} |`), undefined, true, undefined, options)
+      .replace(ANSI_RE, "");
+    expect(labelRows(plain)).toHaveLength(1);
+    expect(plain).toContain(`${long}${SEP}${TAIL}`);
+  });
+
+  it("gives back no more than the room, so a tail that fills the row still folds the label", () => {
+    const long = "a label longer than a third of the row";
+    const tail = "t".repeat(WIDTH - CAP - SEP.length);
+    const rows = labelRows(
+      transform(decorated(decorator(ITEM), `| ${long} | ${tail} |`), undefined, true, undefined, options).replace(ANSI_RE, "")
+    );
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows[0].indexOf(SEP)).toBe(CAP);
   });
 
   it("folds a capped bold label without leaking markup or leaving the style open", () => {
-    const msg = decorated(decorator(ITEM), "| aaaaaaaaaaaaaaaaa**bold and more** | tail |");
+    const msg = decorated(decorator(ITEM), `| aaaaaaaaaaaaaaaaa**bold and more** | ${WIDE_TAIL} |`);
     const out = transform(msg, undefined, true, undefined, options);
     expect(out).not.toContain("{{");
     expect(out).not.toContain("*");
@@ -396,7 +422,7 @@ describe("a decorated payload", () => {
     expect(rows.length).toBeGreaterThan(1);
     expect(rows[0].indexOf(SEP)).toBe(CAP);
     expect(labelText(rows)).toBe("aaaaaaaaaaaaaaaaaboldandmore");
-    expect(rows[0]).toContain("tail");
+    expect(rows[0]).toContain(TAIL);
     // The fold lands inside the bold span: its style must be CLOSED before the template's own separator, and the
     // LABEL's colour come back with it, or the rest of the row prints plain.
     const cell = out.split("\n").find((l) => l.includes(SEP));
@@ -519,6 +545,83 @@ describe("a table wider than two columns", () => {
       pipeRow(MIN_COLUMNS, () => "---"),
       pipeRow(MIN_COLUMNS + 1, (i) => `c${i + 1}`)
     );
+    expect(transform(msg, undefined, true, undefined, options)).toBe(msg);
+  });
+});
+
+describe("a table wider than four columns", () => {
+  const ARITY = MAX_COLUMNS + 2;
+  const plainly = (...rows: string[]): string[] =>
+    transform(lines(decorator(ITEM), ...rows), undefined, true, undefined, options)
+      .replace(ANSI_RE, "")
+      .split("\n")
+      .map((l) => l.trimEnd());
+  const head = pipeRow(ARITY, (i) => `h${i + 1}`);
+  const delim = pipeRow(ARITY, () => "---");
+  const row = pipeRow(ARITY, (i) => `c${i + 1}`);
+  /** Cell `i` as its folded line reads, named by the header above it. */
+  const folded = (i: number): string => `h${i + 1}${FOLD_SEP}c${i + 1}`;
+  const drawn = (lines: string[]): string[] => lines.filter((l) => l.includes(SEP));
+
+  it("folds each row into an entry, one line per cell past the label, named by its header", () => {
+    const out = drawn(plainly(head, delim, row));
+    expect(out[0]).toBe(`c1${SEP}${folded(1)}`);
+    for (let i = 2; i < ARITY; i++) expect(out[i - 1]).toContain(folded(i));
+    expect(out).toHaveLength(ARITY - 1);
+  });
+
+  /** The same table under a view declaring every column, at the width asked for. */
+  const underWide = (width: number, ...rows: string[]): string[] =>
+    transform(lines(decorator(WIDE), ...rows), undefined, true, undefined, { ...options, width })
+      .replace(ANSI_RE, "")
+      .split("\n")
+      .map((l) => l.trimEnd());
+  const sideBySide = Array.from({ length: ARITY }, (_, i) => `c${i + 1}`).join(SEP);
+
+  it("draws it side by side when the view declares every column and the row fits", () => {
+    expect(underWide(WIDTH, head, delim, row)).toContain(sideBySide);
+  });
+
+  it("folds it when the row does not fit, the view declaring every column all the same", () => {
+    const long = pipeRow(ARITY, (i) => `c${i + 1} ${"mot ".repeat(WIDTH / ARITY)}`.trim());
+    const out = underWide(WIDTH, head, delim, long);
+    expect(out.join("\n")).toContain(`h2${FOLD_SEP}c2`);
+    // The head keeps the label column alone, padded to the widest label.
+    expect(out[0].startsWith("h1")).toBe(true);
+    expect(out[0].endsWith(SEP.trimEnd())).toBe(true);
+  });
+
+  it("folds a table wider than any column the view declares, however much room there is", () => {
+    const past = MIDDLE_FIELDS.length + MIN_COLUMNS + 1;
+    const out = underWide(WIDTH, ...wideTable(past)).join("\n");
+    expect(out).toContain(`h${past}${FOLD_SEP}${past}`);
+  });
+
+  it("starts folding one column past the ceiling, never at it", () => {
+    expect(plainly(...wideTable(MAX_COLUMNS)).join("\n")).not.toContain(FOLD_SEP);
+    expect(plainly(...wideTable(MAX_COLUMNS + 1)).join("\n")).toContain(`h2${FOLD_SEP}2`);
+  });
+
+  it("skips an empty cell rather than drawing a name with nothing beside it", () => {
+    const holed = pipeRow(ARITY, (i) => (i === 2 ? "" : `c${i + 1}`));
+    const out = plainly(head, delim, holed).join("\n");
+    expect(out).not.toContain(`h3${FOLD_SEP}`);
+    expect(out).toContain(folded(3));
+  });
+
+  it("draws the value alone under a blank header, there being no name to give it", () => {
+    const out = plainly(pipeRow(ARITY, () => ""), delim, row).join("\n");
+    expect(out).not.toContain(FOLD_SEP);
+    expect(out).toContain(`c1${SEP}c2`);
+  });
+
+  it("still refuses a RAGGED wide table whole", () => {
+    const msg = lines(decorator(ITEM), head, delim, pipeRow(ARITY - 1, (i) => `c${i + 1}`));
+    expect(transform(msg, undefined, true, undefined, options)).toBe(msg);
+  });
+
+  it("still refuses a delimiter of a different width than its wide header", () => {
+    const msg = lines(decorator(ITEM), head, pipeRow(ARITY - 1, () => "---"), row);
     expect(transform(msg, undefined, true, undefined, options)).toBe(msg);
   });
 });
@@ -1016,7 +1119,7 @@ describe("fail-open, decorator line included", () => {
 
   it("shows the raw zone on a malformed payload", () => {
     for (const msg of [
-      lines(decorator(ITEM), ...TOO_WIDE), // one column past the ceiling
+      lines(decorator(ITEM), pipeRow(1, () => "x"), pipeRow(1, () => "---"), pipeRow(1, () => "y")), // one column
       lines(decorator(ITEM), EMPTY_HEADER, DELIM), // no data row
       lines(decorator(ITEM), "no table at all"), // a payload no parser here claims
     ]) {
@@ -1334,5 +1437,134 @@ describe("why a zone fell open, the two sites no check can reach", () => {
     const { out, refusals } = pass(decorated(decorator(HOLLOW), "|  | v |"));
     expect(refusals).toMatchObject([{ view: HOLLOW }]);
     expect(out).toContain(decorator(HOLLOW)); // fail-open, unchanged
+  });
+});
+
+describe("a split", () => {
+  /** The package's own views behind the fixtures: `split` itself, and the views a bare side takes. */
+  const splitOptions = { viewsPath: [first, second, bundledViewsDir()], width: 80 };
+  const SPLIT = decorator(SPLIT_VIEW);
+  const LEFT = "> left words";
+  const STATIC_TEXT = "the box is the template";
+  const COLUMN = "│";
+  const shown = (msg: string): string => transform(msg, undefined, true, undefined, splitOptions).replace(ANSI_RE, "");
+  /** A quote first, ONE blank line, then a static zone: the two sides at their plainest. */
+  const pair = (...between: string[]): string =>
+    lines(SPLIT, decorator(QUOTING), LEFT, ...between, decorator(STATIC));
+
+  it("draws two decorated zones on the same rows, a column apart", () => {
+    const row = shown(pair("")).split("\n")[0];
+    expect(row).toContain("left words");
+    expect(row).toContain(COLUMN);
+    expect(row).toContain(STATIC_TEXT);
+  });
+
+  it("gives a bare fence and a bare quote the views their shapes name", () => {
+    const out = shown(lines(SPLIT, FENCE + "mermaid", "flowchart TD", "    A[alpha] --> B[beta]", FENCE, LEFT));
+    expect(out).not.toContain(FENCE);
+    expect(out.split("\n").find((r) => r.includes("alpha"))).toContain(COLUMN);
+    expect(out).toContain("left words");
+  });
+
+  it("is REFUSED short of its second side: its line shows raw and the side draws on its own", () => {
+    const out = shown(lines(SPLIT, decorator(STATIC), "", "prose, no side"));
+    expect(out).toContain(SPLIT);
+    expect(out).toContain(STATIC_TEXT);
+    expect(out).not.toContain(COLUMN);
+  });
+
+  it("lets ONE blank line part its sides, never two", () => {
+    expect(shown(pair(""))).not.toContain(SPLIT);
+    expect(shown(pair("", ""))).toContain(SPLIT);
+  });
+
+  it("never takes a split as a side, so one cannot nest in another", () => {
+    const out = shown(lines(SPLIT, SPLIT, decorator(STATIC), decorator(STATIC)));
+    expect(out.split("\n")[0]).toBe(SPLIT);
+  });
+
+  it("shows the WHOLE zone raw when a side fails to draw, never one side drawn and one raw", () => {
+    const msg = lines(SPLIT, decorator(REFUSES), EMPTY_HEADER, DELIM, KV_ROW, decorator(STATIC));
+    expect(transform(msg, undefined, true, undefined, splitOptions)).toBe(msg);
+  });
+
+  it("reaches a reader as the two zones it lays out, never as a zone of its own", () => {
+    expect(decoratedZones(pair("")).map((zone) => zone.view)).toEqual([QUOTING, STATIC]);
+  });
+
+  it("is withheld from ITS line while the second side may still grow, and released once a line closes it", () => {
+    const streaming = lines("prose", SPLIT, decorator(QUOTING), LEFT, "", decorator(STATIC));
+    expect(cutStreamingDecorated(streaming)).toBe(lines("prose"));
+    const closed = lines("prose", SPLIT, decorator(QUOTING), LEFT, "", decorator(STATIC), "", "after");
+    expect(cutStreamingDecorated(closed)).toBe(closed);
+  });
+});
+
+describe("an aside", () => {
+  const asideOptions = { viewsPath: [first, second, bundledViewsDir()], width: 80 };
+  const ASIDE = decorator(ASIDE_VIEW);
+  /** A static zone of a fixed height, so what is measured is the flow and never a diagram's own layout. */
+  const PILLAR = "pillar";
+  const PILLAR_ROW = "▌pillar▐";
+  const PILLAR_ROWS = 6;
+  write(second, viewFile(PILLAR), lines(...new Array<string>(PILLAR_ROWS).fill(PILLAR_ROW)));
+  const COLUMN = "│";
+  const shown = (msg: string): string => transform(msg, undefined, true, undefined, asideOptions).replace(ANSI_RE, "");
+  const rowOf = (out: string, text: string): string | undefined => out.split("\n").find((r) => r.includes(text));
+  /** Paragraphs one row each, a blank between them: under PILLAR_ROWS, three fit and the fourth does not. */
+  const paragraphs = (...words: string[]): string[] => words.flatMap((w, n) => (n ? ["", w] : [w]));
+
+  it("flows the prose written after its zone into the column beside it", () => {
+    const out = shown(lines(ASIDE, decorator(PILLAR), "", "beside words"));
+    expect(out).not.toContain(ASIDE);
+    expect(rowOf(out, "beside words")).toContain(PILLAR_ROW);
+    expect(rowOf(out, "beside words")).toContain(COLUMN);
+  });
+
+  it("flows a decorated zone too, drawn by its own view", () => {
+    const out = shown(lines(ASIDE, decorator(PILLAR), "", decorator(QUOTING), "> quoted words"));
+    expect(out).not.toContain(decorator(QUOTING));
+    expect(rowOf(out, "quoted words")).toContain(PILLAR_ROW);
+  });
+
+  it("leaves the first unit that does not fit where it was written, and everything after it", () => {
+    const out = shown(lines(ASIDE, decorator(PILLAR), "", ...paragraphs("one", "two", "three", "four", "five")));
+    expect(rowOf(out, "three")).toContain(PILLAR_ROW);
+    expect(rowOf(out, "four")).toBe("four");
+    expect(rowOf(out, "five")).toBe("five");
+  });
+
+  it("ends the flow at a table, which is the host's to draw", () => {
+    const out = shown(lines(ASIDE, decorator(PILLAR), "", "words", "", "| a | b |", "| --- | --- |"));
+    expect(rowOf(out, "words")).toContain(PILLAR_ROW);
+    expect(rowOf(out, "| a | b |")).toBe("| a | b |");
+  });
+
+  it("draws its zone ALONE when the first unit does not fit, never a column holding nothing", () => {
+    const long = "word ".repeat(200).trim();
+    const out = shown(lines(ASIDE, decorator(PILLAR), "", long));
+    expect(rowOf(out, PILLAR_ROW)).toBe(PILLAR_ROW);
+    expect(out).toContain(long);
+  });
+
+  it("is REFUSED with no zone under it, its line shown raw", () => {
+    expect(shown(lines(ASIDE, "", "prose"))).toContain(ASIDE);
+  });
+
+  it("never takes a layout as its zone", () => {
+    const out = shown(lines(ASIDE, decorator(SPLIT_VIEW), decorator(PILLAR), decorator(PILLAR)));
+    expect(out.split("\n")[0]).toBe(ASIDE);
+  });
+
+  it("reaches a reader as its zone and the zones written after it, never as a zone of its own", () => {
+    const msg = lines(ASIDE, decorator(PILLAR), "", decorator(QUOTING), "> quoted words");
+    expect(decoratedZones(msg).map((zone) => zone.view)).toEqual([PILLAR, QUOTING]);
+  });
+
+  it("is withheld while its column can still take what arrives, and released once a unit does not fit", () => {
+    const cut = (text: string): string => cutStreamingDecorated(text, undefined, asideOptions.viewsPath, asideOptions);
+    expect(cut(lines("prose", ASIDE, decorator(PILLAR), "", "one"))).toBe(lines("prose"));
+    const closed = lines("prose", ASIDE, decorator(PILLAR), "", ...paragraphs("one", "two", "three", "four"));
+    expect(cut(closed)).toBe(closed);
   });
 });

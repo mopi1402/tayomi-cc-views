@@ -7,20 +7,21 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CONSOLE_WIDTH } from "@tayomi/termaid-ts";
+import { CONSOLE_WIDTH } from "@tayomi/mermaid2term";
 import {
   DARK_BACKGROUND,
   diagramCachePath,
   LIGHT_BACKGROUND,
   measureDiagram,
-  NEUTRAL_THEME,
+  UNASKED_BORDERS,
+  UNASKED_THEME,
   renderDiagram,
   requestedPaint,
   TALL,
   WIDE,
 } from "./diagram.js";
 import { ENGINE_VERSION } from "./data/engine.js";
-import { MERMAID_THEME_ENV, THEME_ENV } from "./data/markup.js";
+import { MERMAID_BORDERS_ENV, MERMAID_THEME_ENV, THEME_ENV } from "./data/markup.js";
 import { printedText, printedWidth } from "./layout/measure.js";
 import { ANSI_RE } from "./style.js";
 
@@ -80,7 +81,7 @@ describe("how the renderer is reached", () => {
   /** This module's own source, which is where a load-time property is readable and nowhere else. */
   const OWN_SOURCE = fs.readFileSync(fileURLToPath(new URL("./diagram.ts", import.meta.url)), "utf8");
   /** A VALUE import of the renderer, anywhere in the file. `import type` is erased and costs nothing, so it passes. */
-  const STATIC_VALUE_IMPORT = /^import\s+(?!type\b)[^;]*from\s+"@tayomi\/termaid-ts"/m;
+  const STATIC_VALUE_IMPORT = /^import\s+(?!type\b)[^;]*from\s+"@tayomi\/mermaid2term"/m;
 
   it("never STATICALLY imports the renderer, the forty milliseconds being what the cache exists to skip", () => {
     // The one invariant of this module a running test cannot see. diagram.ts is on the path of EVERY flush, cache hit
@@ -119,15 +120,15 @@ describe("the diagram cache", () => {
 });
 
 describe("the drawing itself", () => {
-  it("draws a flowchart in the NEUTRAL theme when nothing asks for one, spending no hue of ours", () => {
+  it("draws a flowchart in mermaid's DEFAULT theme and padless borders when nothing asks for either", () => {
     const out = renderDiagram(SOURCE, WIDTH, stateDir, undefined, NO_PAINT_ENV);
     expect(printedText(out)).toContain("un");
     expect(printedText(out)).toContain("deux");
-    // It draws, so escapes there are, and every one is a SHADE: not one names a hue.
-    // eslint-disable-next-line no-control-regex
-    expect(out).toMatch(/\x1b\[/);
-    // eslint-disable-next-line no-control-regex
-    expect(out).not.toMatch(/\x1b\[[0-9;]*(3[1-6]|9[1-6]|38;5;|38;2;)/);
+    const named = renderDiagram(SOURCE, WIDTH, stateDir, undefined, {
+      [MERMAID_THEME_ENV]: UNASKED_THEME,
+      [MERMAID_BORDERS_ENV]: UNASKED_BORDERS,
+    });
+    expect(out).toBe(named);
   });
 
   it("paints with the theme the env var names, the operator's word being the one door to colour", () => {
@@ -138,7 +139,7 @@ describe("the drawing itself", () => {
     expect(printedText(out)).toContain("deux");
   });
 
-  it("falls to the NEUTRAL theme for a name the renderer does not hold: a typo does exactly what unset does", () => {
+  it("falls to the UNASKED theme for a name the renderer does not hold: a typo does exactly what unset does", () => {
     // The near-miss the renderer itself would hide: its own lookup falls to the DEFAULT PALETTE silently.
     const out = renderDiagram(SOURCE, WIDTH, stateDir, undefined, {
       [MERMAID_THEME_ENV]: NEAR_MISS_THEME,
@@ -177,8 +178,35 @@ describe("the drawing itself", () => {
     );
     expect(requestedPaint(PAINTED_ENV).background).toBe(DARK_BACKGROUND);
     expect(requestedPaint({ [THEME_ENV]: LIGHT_BACKGROUND })).toEqual({
-      theme: NEUTRAL_THEME,
+      theme: UNASKED_THEME,
       background: LIGHT_BACKGROUND,
+      borders: UNASKED_BORDERS,
+    });
+  });
+
+  describe("borders", () => {
+    const OTHER_BORDERS = "default";
+    const NEAR_MISS_BORDERS = "padles";
+    const drawn = (borders?: string): string =>
+      renderDiagram(SOURCE, WIDTH, stateDir, undefined, {
+        [THEME_ENV]: DARK_BACKGROUND,
+        ...(borders === undefined ? {} : { [MERMAID_BORDERS_ENV]: borders }),
+      });
+
+    it("draws the mode asked for, which is another drawing than the unasked one", () => {
+      expect(requestedPaint({ [MERMAID_BORDERS_ENV]: OTHER_BORDERS }).borders).toBe(OTHER_BORDERS);
+      expect(drawn(OTHER_BORDERS)).not.toBe(drawn());
+    });
+
+    it("draws the unasked mode for one the renderer does not hold: a typo does exactly what unset does", () => {
+      expect(drawn(NEAR_MISS_BORDERS)).toBe(drawn());
+    });
+
+    it("keys the cache on the mode, so one mode is never handed another's drawing", () => {
+      const paint = requestedPaint(NO_PAINT_ENV);
+      expect(diagramCachePath(SOURCE, WIDTH, stateDir, { ...paint, borders: OTHER_BORDERS })).not.toBe(
+        diagramCachePath(SOURCE, WIDTH, stateDir, paint)
+      );
     });
   });
 
@@ -298,5 +326,44 @@ describe("the drawing itself", () => {
     // case is what would turn red when one lands.
     const drawn = renderDiagram("flowchart TD\n    A[ --> B]]] {{{\n", WIDTH, stateDir);
     expect(drawn.trim()).not.toBe("");
+  });
+});
+
+describe("a drawing inside a column", () => {
+  /** Under the narrowest CHAIN gets, measured at 22 columns, so it can only come back folded. */
+  const STARVED = 14;
+  /** Under the eight lines SOURCE tightens to read down, and over the five it takes read across. */
+  const CEILING = 5;
+  /** Under the width SOURCE takes read across, so turning it could only fold it. */
+  const SLIM = 10;
+  const DOWN_LABELS: [string, string] = ["un", "deux"];
+
+  it("keys on the HEIGHT too, so a column's tightened drawing is never served to the full view", () => {
+    const paint = requestedPaint(NO_PAINT_ENV);
+    expect(diagramCachePath(SOURCE, WIDTH, stateDir, paint, CEILING)).not.toBe(
+      diagramCachePath(SOURCE, WIDTH, stateDir, paint)
+    );
+  });
+
+  it("THROWS, asked whole, where the drawing only fits folded, and folds as ever otherwise", () => {
+    expect(renderDiagram(CHAIN, STARVED, stateDir, undefined, NO_PAINT_ENV).trim()).not.toBe("");
+    expect(() => renderDiagram(CHAIN, STARVED, stateDir, undefined, NO_PAINT_ENV, undefined, true)).toThrow();
+  });
+
+  it("remembers a fold across the cache, so a hit asked whole still throws", () => {
+    renderDiagram(CHAIN, STARVED, stateDir, undefined, NO_PAINT_ENV);
+    expect(cacheFiles()).toHaveLength(1);
+    expect(() => renderDiagram(CHAIN, STARVED, stateDir, undefined, NO_PAINT_ENV, undefined, true)).toThrow();
+  });
+
+  it("turns the author's direction under a ceiling it misses, when the turn fits and is shorter", () => {
+    expect(onOneLine(renderDiagram(SOURCE, WIDTH, stateDir, undefined, NO_PAINT_ENV), ...DOWN_LABELS)).toBe(false);
+    const turned = renderDiagram(SOURCE, WIDTH, stateDir, undefined, NO_PAINT_ENV, CEILING);
+    expect(onOneLine(turned, ...DOWN_LABELS)).toBe(true);
+  });
+
+  it("keeps the author's direction where the turn would only fit folded", () => {
+    const kept = renderDiagram(SOURCE, SLIM, stateDir, undefined, NO_PAINT_ENV, CEILING);
+    expect(onOneLine(kept, ...DOWN_LABELS)).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "@tayomi/cc-views",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "type": "module",
   "description": "Template-driven terminal rendering for Claude Code's MessageDisplay hook: data blocks in, coloured views on screen, zero tokens spent on presentation.",
   "keywords": [
@@ -80,7 +80,7 @@
     "version": "node scripts/sync-version.mjs && node scripts/assemble-plugin.mjs && git add .claude-plugin src/data/engine.ts plugin"
   },
   "dependencies": {
-    "@tayomi/termaid-ts": "^0.8.2",
+    "@tayomi/mermaid2term": "^1.0.1",
     "@tayomi/utils": "^0.2.0"
   },
   "devDependencies": {

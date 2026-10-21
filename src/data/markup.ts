@@ -57,6 +57,9 @@ export const BLOCK_HINT = `${FENCE}${BLOCK_INFO}`;
  */
 export const DIAGRAM_INFO = "mermaid";
 
+/** The info string of a fence whose body is markdown the ENGINE draws to its column, a split's prose side above all. */
+export const MARKDOWN_INFO = "markdown";
+
 /**
  * Nothing shorter than `@{view:`: PowerShell writes `@{Name='x'}` and Perl writes `@{$ref}`, so a bare `@{` would
  * capture them.
@@ -76,6 +79,8 @@ export const WIDTH_ENV = `${ENV_PREFIX}WIDTH`;
 export const THEME_ENV = `${ENV_PREFIX}THEME`;
 /** Names one of the renderer's palettes; empty or absent draws in the neutral theme (`diagram.ts`), shades only. */
 export const MERMAID_THEME_ENV = `${ENV_PREFIX}MERMAID_THEME`;
+/** The renderer's border mode for a diagram's nodes, one of the modes it exports (`BORDER_MODES`). */
+export const MERMAID_BORDERS_ENV = `${ENV_PREFIX}MERMAID_BORDERS`;
 /** Set to anything and this engine draws whatever else is registered. Off means DRAW, so the hatch cannot cause a silence. */
 export const NO_YIELD_ENV = `${ENV_PREFIX}NO_YIELD`;
 /** Where the election register lives, instead of the machine-wide directory: a harness's engines elect among themselves. */

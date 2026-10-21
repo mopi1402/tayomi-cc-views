@@ -17,6 +17,13 @@ export { CODE_TICK, RESUME_MARK, SPAN_MARK };
 const ESC = "\x1b";
 export const R = `${ESC}[0m`;
 
+const LEADING_BLANK_RE = /^[ \t]/;
+/**
+ * A drawing opening on a blank, held there. The host trims the head of every paragraph, so a first row centred in its
+ * column lost its indent (measured 2026-10-21); a reset is no blank and costs no column.
+ */
+export const holdLeadingBlank = (s: string): string => (LEADING_BLANK_RE.test(s) ? R + s : s);
+
 /** The one tag name that is not a word, and the only one that CLOSES. */
 const RESET_NAME = "/";
 const CODE = "code";
@@ -222,6 +229,11 @@ const TAGS: Record<string, string> = {
   error: BASE.red,
   success: BASE.green,
   info: NEUTRAL,
+  // the four other alert markers, in the hue markdown draws them in (WARNING is above)
+  note: BASE.blue,
+  tip: BASE.green,
+  important: BASE.purple,
+  caution: BASE.red,
   // The value for a span sitting on the TERMINAL, which is the only fill this table can know about. A span inside a
   // band is resolved by renderTags, the one storey that holds the stack of what is open under it.
   [CODE]: TERMINAL_IS_LIGHT ? CODE_ON_LIGHT : CODE_ON_DARK,
@@ -240,6 +252,9 @@ const TAGS: Record<string, string> = {
   error_bg: RED_CHIP,
   success_bg: GREEN_CHIP,
   info_bg: CYAN_CHIP,
+  note_bg: BLUE_CHIP,
+  tip_bg: GREEN_CHIP,
+  caution_bg: RED_CHIP,
   // The base-sixteen chips, the only ones declared by hand: the ink cannot be measured against a slot the theme owns.
   // Every other chip derives (chipOf).
   red_bg: RED_CHIP,
@@ -315,6 +330,21 @@ export function spanOpen(tag: string): string {
  */
 export function spanClose(tag: string): string {
   return isTag(tag) ? RESUME_MARK : RESET_MARK;
+}
+
+// PER SPAN, so the emphasis survives every re-render from the transcript and nothing is added the message did not
+// carry. Whole-cell bolding is what buried the POC.
+const STAR = `\\${EMPHASIS_STAR}`;
+// eslint-disable-next-line security/detect-non-literal-regexp
+const BOLD_SPAN_RE = new RegExp(`${STAR}${STAR}([^${EMPHASIS_STAR}\\n]+)${STAR}${STAR}`, "g");
+const BOLD_TAG = "b";
+
+/**
+ * Message text becoming a SCOPE VALUE, one of the two neutralising seams (docs/architecture/architecture.md).
+ * Neutralised FIRST, styled second: both end up in one string, so the ORDER is the whole guarantee.
+ */
+export function inertText(raw: string): string {
+  return inert(raw.trim()).replace(BOLD_SPAN_RE, `${spanOpen(BOLD_TAG)}$1${spanClose(BOLD_TAG)}`);
 }
 
 // Every brace and not the pair, so an overlap (`{{{warn}}`) has no unmarked shape left in it. The reserved codes come

@@ -1,0 +1,24 @@
+# markdown.view: markdown drawn to the width it is given, a split's prose side first of all.
+#
+#   @{view:split}
+#   ```mermaid
+#   flowchart TD
+#       A[source] --> B[render]
+#   ```
+#   ```markdown
+#   ## What it shows
+#   - the message leaves **raw**
+#   - the hook draws it again
+#   ```
+#
+# A bare ```markdown fence under a split takes this view, as a bare quote takes quote.view.
+# @{view:markdown} over the same fence draws it alone, at the terminal's width.
+#
+# @markdown hands the body its source DRAWN (src/markdown.ts): headings bold, lists and
+# quotes hanging from their marker, rules across the width, code indented, paragraphs
+# folded. A body holding a code fence of its own opens under a longer run, ````markdown.
+#
+# Where this hook does not run, the fence shows as the code block it is: the source, legible
+# as written.
+@markdown
+${content}

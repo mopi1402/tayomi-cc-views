@@ -5,7 +5,7 @@
 // judging the same block), so a shape that changes meaning here changes a verdict somewhere else.
 
 import { describe, it, expect } from "vitest";
-import { inertData, namedFields, parseData } from "./view-data.js";
+import { inertData, namedFields, parseData, readData } from "./view-data.js";
 import {
   FIELD_CONTENT,
   FIELD_HEAD,
@@ -112,11 +112,15 @@ describe("an @fields list", () => {
 });
 
 describe("the parser's totality", () => {
-  it("ignores a line matching nothing, so a render never blanks on stray prose", () => {
-    expect(parseData("said: x\njust prose\n\n   \nnote: y")).toEqual({
-      said: "x",
-      note: "y",
+  it("parses past a line matching nothing, and names it as STRAY for the render to refuse", () => {
+    expect(readData("said: x\njust prose\n\n   \nnote: y")).toEqual({
+      data: { said: "x", note: "y" },
+      stray: ["just prose"],
     });
+  });
+
+  it("names nothing stray in a block every line of which a rule claims", () => {
+    expect(readData("said: x\nrows:\n- one\nalert:\n  kind: fail").stray).toEqual([]);
   });
 
   it("never throws, whatever the block holds", () => {
@@ -321,7 +325,38 @@ describe("an indented pair", () => {
     });
   });
 
-  it("stays out of a list that already has items", () => {
-    expect(parseData("rows:\n- one\n  k: v\n")).toEqual({ rows: ["one"] });
+  it("stays out of a list that already has items, continuing the item as text", () => {
+    expect(parseData("rows:\n- one\n  k: v\n")).toEqual({ rows: ["one\nk: v"] });
+  });
+});
+
+describe("an indented line", () => {
+  it("continues the scalar above on a line of its own, its indent dropped", () => {
+    expect(readData("content: first\n  second\n\tthird")).toEqual({
+      data: { content: "first\nsecond\nthird" },
+      stray: [],
+    });
+  });
+
+  it("continues the list item above", () => {
+    expect(parseData("note:\n- one\n  more\n- two")).toEqual({ note: ["one\nmore", "two"] });
+  });
+
+  it("is STRAY with nothing above it to continue", () => {
+    expect(readData("  orphan\nsaid: x").stray).toEqual(["  orphan"]);
+    // An opened list with no item yet: there is no value to continue.
+    expect(readData("note:\n  more").stray).toEqual(["  more"]);
+  });
+
+  it("is STRAY under an item an @fields list split, whose last field is not the item", () => {
+    expect(readData("rows:\n- ok shipped\n  more", { rows: ["state", "text"] }).stray).toEqual(["  more"]);
+  });
+
+  it("is STRAY under a mapping, which takes pairs and nothing else", () => {
+    expect(readData("alert:\n  kind: fail\n  prose").stray).toEqual(["  prose"]);
+  });
+
+  it("never continues across an UNINDENTED line, which is stray instead", () => {
+    expect(readData("content: first\nsecond")).toEqual({ data: { content: "first" }, stray: ["second"] });
   });
 });

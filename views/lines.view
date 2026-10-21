@@ -50,7 +50,7 @@
 # An empty label CONTINUES the element above, as in columns.view and box.view: an item
 # opening no entry is not one a divider may part, so the loop draws no rule before it.
 #
-# Two to four columns, like columns.view and for the same reason: the carrier hands this
+# Two to eight columns, like columns.view and for the same reason: the carrier hands this
 # view whatever the table had, and a middle column it did not declare would be dropped in
 # silence. They are separated by BLANKS and not by a bar, which is this view's whole
 # contract, and a column no row carries takes the blanks written AFTER it down with it (the
@@ -66,12 +66,12 @@
 # the message wrote. A quote handed to this view resolves nothing, and the raw markdown
 # shows instead.
 @tone teal
-@fields rows label mid1 mid2 content
+@fields rows label mid1 mid2 mid3 mid4 mid5 mid6 content
 @box bare
 @each rows cap="1/3" bullet=""
-@head {{b}}${label}{{/}}  {{b}}${mid1}{{/}}  {{b}}${mid2}{{/}}  ${#bullet}{{b}}${content}{{/}}
+@head {{b}}${label}{{/}}  {{b}}${mid1}{{/}}  {{b}}${mid2}{{/}}  {{b}}${mid3}{{/}}  {{b}}${mid4}{{/}}  {{b}}${mid5}{{/}}  {{b}}${mid6}{{/}}  ${#bullet}{{b}}${content}{{/}}
 @head @rule
-{{b}}{{tone}}${label}{{/}}  ${mid1}  ${mid2}  ${#bullet}${content}
+{{b}}{{tone}}${label}{{/}}  ${mid1}  ${mid2}  ${mid3}  ${mid4}  ${mid5}  ${mid6}  ${#bullet}${content}
 @rule
 @end
 @endbox

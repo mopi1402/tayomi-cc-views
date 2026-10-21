@@ -114,9 +114,11 @@ markdown, which still reads where the hook does not run:
 - `@{view:<name>}` sits alone on its line, directly above its payload. Attributes: `type:` (the KIND of
   content, may select a typed file `demo.warning.view`) and `tone:` (the LOOK only, and it outranks the kind).
 - The FIRST line decides the shape: a leading pipe is a table, a leading `>` a blockquote (reaching the
-  template as `content` and `flow`), an exact ` ```mermaid ` a diagram source (drawn, then as `content`).
+  template as `content` and `flow`), an exact ` ```mermaid ` a diagram source (drawn, then as `content`),
+  a ` ```markdown ` markdown the engine draws to its width (then as `content`).
   A table ends on the first non-pipe line, a quote needs a blank line under it or the end of the message,
-  a fence runs to its closing ` ``` `.
+  a fence runs to its closing ` ``` `. A markdown fence holding a code fence opens on a longer run,
+  ` ````markdown `, and closes on a bare run as long.
 - ONE view, ONE shape: each template accepts a single payload form (the `payload` column below), and any
   other shape under its decorator fails open, the zone showing exactly as written. A template never DECLARES
   that form: it is scored on the names the BLOCK carries, the fields an `@each` splits its own list into
@@ -137,12 +139,15 @@ file of the same name in an earlier directory shadows any of these.
 
 | View | Payload | Draws |
 | --- | --- | --- |
-| `columns` | table | each row split into two to four columns |
+| `columns` | table | each row split into two to eight columns, one line per cell when the row does not fit |
 | `lines` | table | each row ruled under the one above |
 | `box` | table | a framed block, the header row carrying its title and badge |
 | `banner` | quote | one alert band, its kind taken from a `[!KIND]` first line |
 | `quote` | quote | one sentence set apart, colour only |
 | `mermaid` | fence | the diagram a ` ```mermaid ` fence holds, drawn in the terminal |
+| `markdown` | markdown fence | headings, lists, quotes, rules, code and bold, drawn to the width given |
+| `split` | two zones | the two zones written under it side by side, stacked when too narrow |
+| `aside` | one zone | the zone in a column, the paragraphs after it flowing at its right until its height is filled |
 | `hr` | none | a rule on its own |
 
 `@{view:welcome}` takes no payload and checks your wiring. `mermaid` takes the fence and NOTHING else:

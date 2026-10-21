@@ -25,6 +25,7 @@ import {
   FIELD_TYPE,
   MARKER_FORM,
   PAYLOAD_FENCE,
+  PAYLOAD_MARKDOWN,
   PAYLOAD_FIELDS,
   PAYLOAD_QUOTE,
   PAYLOAD_TABLE,
@@ -34,6 +35,7 @@ import {
   DECORATOR_CLOSE,
   DECORATOR_HINT,
   DIAGRAM_INFO,
+  MARKDOWN_INFO,
   FENCE,
   ITEM_MARK,
   NAME_MARK,
@@ -217,7 +219,11 @@ function block(): BlockDoc {
         form: `${NEST_INDENT}${ARG_FIELD}${NAME_MARK} ${ARG_VALUE}`,
         does: "a pair of the mapping that key holds, ONE level and no deeper",
       },
-      { form: "anything else", does: "ignored: no line of a block is ever refused" },
+      {
+        form: `${NEST_INDENT}${ARG_VALUE}`,
+        does: "any other indented line continues the value or the item above, on a line of its own",
+      },
+      { form: "anything else", does: "refuses the block, which then shows raw where its author can see it" },
     ],
   };
 }
@@ -243,6 +249,12 @@ function payloads(): Record<string, PayloadDoc> {
     [PAYLOAD_FENCE]: {
       fields: [FIELD_CONTENT],
       selectedBy: `a first line of exactly ${FENCE}${DIAGRAM_INFO}, the source running to the closing ${FENCE}`,
+      marker: null,
+    },
+    // The same for markdown, claimed by @markdown, and opened by a longer run when the body holds a fence of its own.
+    [PAYLOAD_MARKDOWN]: {
+      fields: [FIELD_CONTENT],
+      selectedBy: `a first line of ${FENCE}${MARKDOWN_INFO} (or a longer run), the source running to a bare run as long`,
       marker: null,
     },
   };

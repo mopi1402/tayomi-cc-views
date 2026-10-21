@@ -41,6 +41,14 @@
       "readIn": []
     },
     {
+      "word": "@markdown",
+      "kind": "declaration",
+      "takes": "",
+      "opens": [],
+      "closedBy": null,
+      "readIn": []
+    },
+    {
       "word": "@box",
       "kind": "opener",
       "takes": "[bare]",
@@ -233,8 +241,12 @@
         "does": "a pair of the mapping that key holds, ONE level and no deeper"
       },
       {
+        "form": "  <value>",
+        "does": "any other indented line continues the value or the item above, on a line of its own"
+      },
+      {
         "form": "anything else",
-        "does": "ignored: no line of a block is ever refused"
+        "does": "refuses the block, which then shows raw where its author can see it"
       }
     ]
   },
@@ -246,6 +258,10 @@
         "label",
         "mid1",
         "mid2",
+        "mid3",
+        "mid4",
+        "mid5",
+        "mid6",
         "content"
       ],
       "selectedBy": "a first line starting with |",
@@ -266,6 +282,13 @@
       ],
       "selectedBy": "a first line of exactly ```mermaid, the source running to the closing ```",
       "marker": null
+    },
+    "markdown": {
+      "fields": [
+        "content"
+      ],
+      "selectedBy": "a first line of ```markdown (or a longer run), the source running to a bare run as long",
+      "marker": null
     }
   },
   "tags": {
@@ -278,6 +301,8 @@
       "box_rule",
       "box_title",
       "brown",
+      "caution",
+      "caution_bg",
       "chip",
       "chip_bg",
       "code",
@@ -294,6 +319,7 @@
       "green_bg",
       "high",
       "high_bg",
+      "important",
       "info",
       "info_bg",
       "key",
@@ -306,6 +332,8 @@
       "med",
       "mint",
       "navy",
+      "note",
+      "note_bg",
       "orange",
       "pass",
       "pass_bg",
@@ -317,6 +345,8 @@
       "success",
       "success_bg",
       "teal",
+      "tip",
+      "tip_bg",
       "title",
       "title_bg",
       "tone",
@@ -335,6 +365,16 @@
     ]
   },
   "views": [
+    {
+      "name": "aside",
+      "file": "views/aside.view",
+      "static": true,
+      "payload": null,
+      "spends": [],
+      "tone": null,
+      "tables": {},
+      "lists": {}
+    },
     {
       "name": "banner",
       "file": "views/banner.view",
@@ -384,6 +424,10 @@
         "label",
         "mid1",
         "mid2",
+        "mid3",
+        "mid4",
+        "mid5",
+        "mid6",
         "rows"
       ],
       "tone": "teal",
@@ -393,6 +437,10 @@
           "label",
           "mid1",
           "mid2",
+          "mid3",
+          "mid4",
+          "mid5",
+          "mid6",
           "content"
         ]
       }
@@ -417,6 +465,10 @@
         "label",
         "mid1",
         "mid2",
+        "mid3",
+        "mid4",
+        "mid5",
+        "mid6",
         "rows"
       ],
       "tone": "teal",
@@ -426,9 +478,25 @@
           "label",
           "mid1",
           "mid2",
+          "mid3",
+          "mid4",
+          "mid5",
+          "mid6",
           "content"
         ]
       }
+    },
+    {
+      "name": "markdown",
+      "file": "views/markdown.view",
+      "static": false,
+      "payload": "markdown",
+      "spends": [
+        "content"
+      ],
+      "tone": null,
+      "tables": {},
+      "lists": {}
     },
     {
       "name": "mermaid",
@@ -451,6 +519,16 @@
         "content"
       ],
       "tone": "dim",
+      "tables": {},
+      "lists": {}
+    },
+    {
+      "name": "split",
+      "file": "views/split.view",
+      "static": true,
+      "payload": null,
+      "spends": [],
+      "tone": null,
       "tables": {},
       "lists": {}
     },

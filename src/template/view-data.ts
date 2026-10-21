@@ -4,7 +4,8 @@
 //   "key:"        -> opens a list field named key
 //   "- item"      -> appends an item to the current list
 //   "  k: v"      -> a pair of the mapping that key opened, ONE level and no deeper
-//   anything else -> ignored (keeps the parser total)
+//   "  more"      -> any other indented line continues the scalar or the item above, on a line of its own
+//   anything else -> STRAY: never a throw here, the render refuses the block and the author sees it raw
 //
 // Not YAML: the blocks carry prose it chokes on, so a value stays OPAQUE to end of line and the parser never throws.
 //
@@ -47,6 +48,8 @@ const ITEM_RE = re(String.raw`^[ \t]*${ITEM_MARK}[ \t]+(.*)$`);
 const NESTED_KV_RE = re(`^[ \t]+${PAIR_SOURCE}`);
 /** A leading @fields field takes ONE token; whatever follows is the next field's. */
 const LEADING_FIELD_RE = /^(\S+)[ \t]+([\s\S]*)$/;
+/** A line opening on an indent, which is what lets it continue the value above. */
+const INDENTED_RE = /^[ \t]/;
 /** Trailing blanks, dropped so an invisible tail never lands inside a value. */
 const TRAILING_WS_RE = /\s+$/;
 
@@ -85,7 +88,16 @@ export function parseData(
   text: string,
   objectLists: ObjectLists = {}
 ): Record<string, unknown> {
+  return readData(text, objectLists).data;
+}
+
+/** The fields, and the lines no rule claimed, which is what a render refuses a block on. */
+export function readData(
+  text: string,
+  objectLists: ObjectLists = {}
+): { data: Record<string, unknown>; stray: string[] } {
   const data: Record<string, unknown> = {};
+  const stray: string[] = [];
   let list: unknown[] | null = null;
   let map: Record<string, unknown> | null = null;
   let open = "";
@@ -125,10 +137,23 @@ export function parseData(
         list = null;
         listFields = null;
       }
+      continue;
     }
-    // an unrecognised line is ignored: the parser must never throw
+    if (INDENTED_RE.test(line)) {
+      const more = line.trimStart();
+      if (list === null && map === null && typeof data[open] === "string") {
+        data[open] = `${data[open] as string}\n${more}`;
+        continue;
+      }
+      const last = list?.length ? list.length - 1 : -1;
+      if (list !== null && last >= 0 && typeof list[last] === "string") {
+        list[last] = `${list[last] as string}\n${more}`;
+        continue;
+      }
+    }
+    stray.push(line);
   }
-  return data;
+  return { data, stray };
 }
 
 /** The two cells a table of TWO columns lands in. A row carrying these and nothing else is what the arity test IS. */

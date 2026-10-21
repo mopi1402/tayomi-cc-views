@@ -13,12 +13,13 @@ A view named `demo` is the file `demo.view`, searched through an ORDERED list of
 
 ## The data a block carries
 
-Flat and line-oriented; values are OPAQUE to end of line, so colons, backticks and brackets inside a value are just text. The parser is TOTAL: it never throws, and an unrecognised line is ignored.
+Flat and line-oriented; values are OPAQUE to end of line, so colons, backticks and brackets inside a value are just text. The parser is TOTAL: it never throws. An indented line continues the value or the item above it; any other unrecognised line refuses the block, which then shows raw.
 
 ```
 key: value        -> scalar field, the rest of the line verbatim
 key:              -> opens a list field named key
 - item            -> appends an item to the currently open list
+  more            -> continues the value or the item above, on a line of its own
 ```
 
 Keys match `[A-Za-z_][\w-]*`. Under a view's `@fields`, each `- item` splits: every LEADING field takes one whitespace-delimited token, the LAST takes the remaining text verbatim.
@@ -202,6 +203,27 @@ Alone on its line (surrounding whitespace allowed), directly above its payload. 
 
 **The fallback gradient.** Re-rendered as plain markdown, exactly five tokens become native alert boxes: `NOTE`, `TIP`, `IMPORTANT`, `WARNING` and `CAUTION` (verified against GitHub's writing-and-formatting docs, 2026-08-02). Any other token falls back to an ordinary quote whose first line reads `[!VERSION]` literally, which is still visible and still self-describing. Read raw in a transcript, it is still a quote. An alert cannot be NESTED, so a banner written inside a list item or another quote keeps rendering here and loses its native fallback there.
 
+### Two zones side by side: `split`
+
+```
+@{view:split}
+```mermaid
+flowchart TD
+    A[source] --> B[render]
+```
+> what the diagram shows, folded into the column beside it
+```
+
+`split` carries no payload of its own: the carrier reads the TWO zones written under it, by name and before any template loads, and lays them out in two columns.
+
+- A side is a decorated zone, or a bare payload taking the view its shape names: a mermaid fence draws as `mermaid`, a markdown fence as `markdown`, a quote as `quote`. A bare table is no side.
+- A `markdown` side is drawn by the engine to its column (src/markdown.ts): headings bold, list items and quotes hanging from their marker, rules across the width, code indented, paragraphs folded, bold and code spans inline. Any other line is paragraph text, shown as written. Where the hook does not run, the fence is the code block it is.
+- ONE blank line may part the sides, and a quote written first needs it, a quote ending on nothing else. Two blank lines, a missing side, a refused side or a split written as a side, and the split is REFUSED: its decorator line shows raw and what follows is read as ordinary zones.
+- Widths: a side that wants no more than half the room keeps what it wants and the other takes the rest; two sides wanting more share it in halves. The taller side is then drawn again under the other's height, which only a diagram answers, turning its declared direction if the turn fits unfolded and is shorter. Under twenty columns a side, or with a diagram that would only fit folded, the sides STACK at the whole width.
+- A side that fails to draw shows the WHOLE zone raw, decorator lines included, never one side drawn beside the other's markdown.
+- A reader (`viewZones`, `cc-views check`) sees the two sides as the zones they are, never the split.
+- Streaming withholds from the split's own line until a line past its second side exists.
+
 ### What reaches the template, and what fails open
 
 A decorator has NO payload when the line under it is blank or absent, and only then: `@{view:welcome}` alone, ending the message or with a blank line under it, is the whole health check. Prose on the very next line IS a payload, no parser claims it, and the zone fails open.
@@ -212,7 +234,7 @@ A payload that exists but is not a shape a parser here claims fails open, and so
 
 - WHICH shape a view takes is never declared, it is SCORED on the names the template spends: `content` alone asks for the quote, `rows` and its columns for the table, and a tie asks for neither. Only the names the BLOCK carries are read: the fields an `@each` splits its OWN list into are the author's vocabulary, so a list of concerns whose column is named `type` is not a quote for it. The one exception is a list the payload itself yields, `rows`, whose parts are that payload's own columns. `cc-views check <view>` prints the shape a template resolved to.
 - The table's HEADER row reaches the template as `head`, a row carrying the same field names as any other, drawn by `@head` inside the loop. It is present the moment ONE of its cells holds a word, and absent when they are all blank, which is the empty header (`| | |`) markdown forces on a table that wants none.
-- A table of TWO TO FOUR columns reaches the template as `rows`. The two ENDS are anchored, first cell to `label` and last to `content` whatever the width, and whatever sits between them takes the numbered middle names `mid1` then `mid2`. The header row fixes the width and every row below must hold it; a ragged table, or one column past four, fails open as the markdown it already is. An empty label cell continues the label above. A quote reaches the template as `content`, plus the `type` field its marker named.
+- A table of TWO TO FOUR columns reaches the template as `rows`, and a wider one reaches it whole while the template declares its every middle column and the render FITS (no cell wrapped, no line past the width). Otherwise it reaches it FOLDED: each row an entry of two columns, its first cell the label, then one `Header: value` line per non-empty cell, the header row reduced to its first cell. The two ENDS are anchored, first cell to `label` and last to `content` whatever the width, and whatever sits between them takes the numbered middle names `mid1` then `mid2`. The header row fixes the width and every row below must hold it; a ragged table, or one column past four, fails open as the markdown it already is. An empty label cell continues the label above. A quote reaches the template as `content`, plus the `type` field its marker named.
 - A column NO row carries is dropped from the loop line together with the text that FOLLOWS it, up to the next substitution, which is where a template writes its separator. That is what lets ONE file draw two, three or four columns with no conditional in the language. That side and not the other, so the FIRST separator of a line is the one always left standing and a template can give it a shape of its own (box.view's frange, thin bars past it). A run of hollow columns ending a line takes the separator that would have introduced it too, having nothing left to separate. The rule is measured over the WHOLE list, never per item, so a field one row happens to omit still holds its cell on every row. A separator must therefore be written as a CLOSED span (`{{dim}}  │  {{/}}`): the dropped run is sifted, a closer it does not open being kept (it belongs to a span opened further back) and an opener it does not close going down with the column it dressed.
 - Message text becomes a scope value under ONE treatment, whichever shape carried it: neutralised first (a `{{tag}}` the model wrote prints as those characters and opens no colour), then authored `**bold**` spans rendered per span. A table cell may additionally carry an escaped pipe (`\|`), the one escape a cell needs and a quote does not.
 - `type:` names the KIND of content (`warning`, `error`, `success`; think markdown admonitions). It selects a typed form when one exists, reaches the template as the `type` field, and fills the tone slot when the palette knows the name.

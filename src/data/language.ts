@@ -27,6 +27,8 @@ export const END = keyword("end");
  * `content`, having been parsed by nobody here.
  */
 export const DIAGRAM = keyword("diagram");
+/** The same change for markdown: the body reaches the template DRAWN to its width, in `content` (src/markdown.ts). */
+export const MARKDOWN = keyword("markdown");
 
 /** The token that turns @box into a container with NO outline: the body machinery, none of the chrome. */
 export const BARE = "bare";
@@ -70,11 +72,13 @@ export const FIELD_FLOW = "flow";
 export const FIELD_HEAD = HEAD_WORD;
 
 /**
- * Two is markdown's smallest real table; four is where a terminal line stops being readable, and a wider table fails
- * open as the markdown it already is.
+ * Two is markdown's smallest real table. Past four a table draws side by side only while it FITS and its view declares
+ * every column, and otherwise folds each row into an entry, one `Header: value` line per cell (carrier/decorator.ts).
  */
 export const MIN_COLUMNS = 2;
 export const MAX_COLUMNS = 4;
+/** The widest row a bundled template declares, side by side when it fits; any wider one always folds. */
+export const WIDEST_COLUMNS = 8;
 
 /**
  * The cells BETWEEN the first and the last, which keep their own names because the two ends are anchored: the first
@@ -85,7 +89,7 @@ const MIDDLE_STEM = "mid";
 export const middleField = (n: number): string => MIDDLE_STEM + String(n);
 
 export const MIDDLE_FIELDS: readonly string[] = Array.from(
-  { length: MAX_COLUMNS - MIN_COLUMNS },
+  { length: WIDEST_COLUMNS - MIN_COLUMNS },
   (_, i) => middleField(i + 1)
 );
 
@@ -99,6 +103,27 @@ export const PAYLOAD_QUOTE = "quote";
  * stays out of PAYLOAD_FIELDS below and no view can score its way into one.
  */
 export const PAYLOAD_FENCE = "fence";
+/** A ```markdown fence: claimed by a template declaring @markdown, and like the diagram's never derived. */
+export const PAYLOAD_MARKDOWN = "markdown";
+
+/**
+ * The view that draws no payload of its own: the two zones written under its decorator, side by side. The CARRIER reads
+ * it by name, before any template loads, so the word lives here and nowhere else.
+ */
+export const SPLIT_VIEW = "split";
+/**
+ * The view that floats ONE zone and flows what the message writes after it into the column at its right, while it fits
+ * under the zone's height. Read by name in the carrier, as the split is.
+ */
+export const ASIDE_VIEW = "aside";
+/** How many zones a split lays side by side. */
+export const SPLIT_SIDES = 2;
+/** The view a split side takes when it carries no decorator of its own, by the shape it was written in. */
+export const BARE_SIDE_VIEWS: Readonly<Record<string, string>> = {
+  [PAYLOAD_FENCE]: "mermaid",
+  [PAYLOAD_QUOTE]: "quote",
+  [PAYLOAD_MARKDOWN]: "markdown",
+};
 
 /** Which shape yields which fields. Spending one of them is what says a view expects that payload. */
 export const PAYLOAD_FIELDS: Record<string, readonly string[]> = {

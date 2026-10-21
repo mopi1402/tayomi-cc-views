@@ -17,6 +17,7 @@
 // runs where the template is known (view-data.ts): this carrier hands over rows, the derived fields land UNDER them.
 
 import {
+  BARE_SIDE_VIEWS,
   FIELD_CONTENT,
   FIELD_HEAD,
   FIELD_LABEL,
@@ -27,27 +28,34 @@ import {
   MAX_COLUMNS,
   MIN_COLUMNS,
   PAYLOAD_FENCE,
+  PAYLOAD_MARKDOWN,
   PAYLOAD_QUOTE,
   PAYLOAD_TABLE,
+  SPLIT_SIDES,
+  SPLIT_VIEW,
+  ASIDE_VIEW,
   middleField,
 } from "../data/language.js";
 import {
   DECORATOR_CLOSE,
   DECORATOR_HINT,
   DIAGRAM_INFO,
-  EMPHASIS_STAR,
+  MARKDOWN_INFO,
   FENCE,
   NAME_MARK,
   NL,
   QUOTE_MARK,
   TABLE_MARK,
 } from "../data/markup.js";
-import { renderView, type Dressing } from "../template/render.js";
-import { resolvesView } from "../template/load.js";
+import { renderColumn, renderView, type Dressing } from "../template/render.js";
+import { composeFlow, composeSplit, type Side } from "../layout/aside.js";
+import { maxBoxWidth } from "../platform/tty-width.js";
+import { printedWidth } from "../layout/measure.js";
+import { loadTemplate, resolvesView } from "../template/load.js";
 import { defersView } from "../platform/peers.js";
 import { DECORATED_ZONE, pieceFor, publishPiece, publishRaw, zoneKey } from "../platform/compose.js";
 import { namedFields } from "../template/view-data.js";
-import { inert, spanClose, spanOpen } from "../style.js";
+import { ANSI_RE, holdLeadingBlank, inertText } from "../style.js";
 import { fenceAt, fenceSpans, type Fence } from "./fences.js";
 import {
   failedOutcome,
@@ -109,6 +117,15 @@ const QUOTE_LINE_RE = re(String.raw`^[ \t]*${QUOTE_MARK}`);
 const FENCE_OPEN_RE = re(String.raw`^[ \t]*${FENCE}${DIAGRAM_INFO}[ \t]*$`);
 /** What closes it: a bare run of at least the fence's own ticks, as fences.ts reads one. An info'd run stays body. */
 const FENCE_CLOSE_RE = re(String.raw`^[ \t]*${FENCE}` + FENCE[0] + String.raw`*[ \t]*$`);
+/**
+ * A markdown fence opens on ANY run of three ticks or more, so a body holding a code fence of its own can be written
+ * under a longer one, markdown's own rule. Only a bare run at least as long closes it.
+ */
+const MARKDOWN_OPEN_RE = re(String.raw`^[ \t]*(${FENCE}${FENCE[0]}*)${MARKDOWN_INFO}[ \t]*$`);
+const closesRun = (line: string, run: string): boolean => {
+  const t = line.trim();
+  return t.startsWith(run) && t.split(FENCE[0]).join("") === "";
+};
 /** The marker off a body line, and the one optional space markdown allows after `>`. */
 const QUOTE_PREFIX_RE = re(String.raw`^[ \t]*${QUOTE_MARK}[ \t]?`);
 // eslint-disable-next-line security/detect-non-literal-regexp
@@ -134,21 +151,55 @@ const DELIM_CELL = String.raw`[ \t]*:?-+:?[ \t]*`;
 const rowSource = (n: number, cell: string): string =>
   `^[ \t]*${TABLE_SOURCE}${Array.from({ length: n }, () => cell).join(TABLE_SOURCE)}${TABLE_SOURCE}[ \t]*$`;
 
-/** Narrowest first: the order is what makes the search below deterministic. */
-const ARITIES: readonly number[] = Array.from(
-  { length: MAX_COLUMNS - MIN_COLUMNS + 1 },
-  (_, i) => MIN_COLUMNS + i
-);
-const ROW_RES = new Map(ARITIES.map((n) => [n, re(rowSource(n, CELL))]));
-const DELIM_RES = new Map(ARITIES.map((n) => [n, re(rowSource(n, DELIM_CELL))]));
-
 /** The LAST cell of a data row, greedy to the closing delimiter, so the bare pipes of a surplus stay in it as content. */
 const TAIL_CELL = String.raw`(.*)`;
 
 /** The same row with that tail in last position. A cell short still matches nothing here: too few pipes to reach it. */
 const tailSource = (n: number): string =>
   `^[ \t]*${TABLE_SOURCE}${[...Array.from({ length: n - 1 }, () => CELL), TAIL_CELL].join(TABLE_SOURCE)}${TABLE_SOURCE}[ \t]*$`;
-const TAIL_RES = new Map(ARITIES.map((n) => [n, re(tailSource(n))]));
+
+/** The three patterns of one arity, built the first time a header asks for it: the width has no ceiling. */
+interface ArityRes {
+  row: RegExp;
+  delim: RegExp;
+  tail: RegExp;
+}
+const ARITY_RES = new Map<number, ArityRes>();
+function arityRes(n: number): ArityRes {
+  let res = ARITY_RES.get(n);
+  if (res === undefined) {
+    res = { row: re(rowSource(n, CELL)), delim: re(rowSource(n, DELIM_CELL)), tail: re(tailSource(n)) };
+    ARITY_RES.set(n, res);
+  }
+  return res;
+}
+
+const ESCAPED_PIPE_SOURCE_RE = re(String.raw`\\${TABLE_SOURCE}`);
+const BARE_PIPE_RE = re(TABLE_SOURCE);
+
+/** The header's cell count, read off its bare pipes and confirmed by the row pattern, or undefined below two. */
+function arityOf(header: string): number | undefined {
+  const pipes = header.split(ESCAPED_PIPE_SOURCE_RE).join("").split(BARE_PIPE_RE).length - 1;
+  const n = pipes - 1;
+  return n >= MIN_COLUMNS && arityRes(n).row.test(header) ? n : undefined;
+}
+
+/**
+ * Past MAX_COLUMNS a row no longer fits a terminal line, so it folds into a two-column entry: the first cell keeps the
+ * label, every other cell becomes a line of its own under it, named by its header. Done on the RAW cells, so the
+ * template sees an ordinary two-column table and no view has to know.
+ */
+export const FOLD_SEP = ": ";
+
+function foldCells(head: string[], cells: string[]): string[][] {
+  const lines = cells
+    .slice(1)
+    .map((raw, i) => ({ name: head[i + 1].trim(), value: raw.trim() }))
+    .filter((c) => c.value !== "")
+    .map((c) => (c.name === "" ? c.value : c.name + FOLD_SEP + c.value));
+  if (lines.length === 0) return [[cells[0], ""]];
+  return lines.map((line, i) => [i === 0 ? cells[0] : "", line]);
+}
 
 /** That escape, unwritten: inside a cell the pipe is content, not a column boundary. */
 const ESCAPED_PIPE_RE = /\\\|/g;
@@ -170,25 +221,8 @@ function rowFields(cells: string[], read: (raw: string) => string): DecoratedRow
   return row;
 }
 
-// PER SPAN, so the emphasis survives every re-render from the transcript and nothing is added the message did not
-// carry. Whole-cell bolding is what buried the POC.
-/** The star, escaped for a pattern: it is regex punctuation. */
-const STAR = `\\${EMPHASIS_STAR}`;
-// eslint-disable-next-line security/detect-non-literal-regexp
-const BOLD_SPAN_RE = new RegExp(`${STAR}${STAR}([^${EMPHASIS_STAR}\\n]+)${STAR}${STAR}`, "g");
-const BOLD_TAG = "b";
-const BOLD_SPAN = `${spanOpen(BOLD_TAG)}$1${spanClose(BOLD_TAG)}`;
-
 /** A template file ends on a newline, and that blank is not part of the zone it fills. */
 const TRAILING_BLANKS_RE = /\n+$/;
-
-/**
- * Message text becoming a SCOPE VALUE, one of the two neutralising seams (docs/architecture/architecture.md).
- * Neutralised FIRST, styled second: both end up in one string, so the ORDER is the whole guarantee.
- */
-function inertText(raw: string): string {
-  return inert(raw.trim()).replace(BOLD_SPAN_RE, BOLD_SPAN);
-}
 
 /** One table cell: the shared treatment, plus the escape only a cell has. */
 function cell(raw: string): string {
@@ -204,7 +238,7 @@ function bareCell(raw: string): string {
 }
 
 /**
- * The payload parsed as rows, or null when it is not a shape this supports: a pipe table of two to four columns, header
+ * The payload parsed as rows, or null when it is not a shape this supports: a pipe table of at least two columns, header
  * row MANDATORY (its cells may be empty), delimiter row, at least one data row.
  *
  * The HEADER fixes the arity and every line below must hold it, markdown's own rule. A row a cell SHORT is refused whole
@@ -219,13 +253,21 @@ interface ParsedTable {
   head?: DecoratedRow;
 }
 
-function parseRows(lines: string[]): { styled: ParsedTable; bare: ParsedTable } | null {
+interface ParsedRows {
+  styled: ParsedTable;
+  bare: ParsedTable;
+  arity: number;
+  /** Past MAX_COLUMNS, the same table folded: what the render falls back to when the full one does not fit. */
+  folded?: { styled: ParsedTable; bare: ParsedTable };
+}
+
+function parseRows(lines: string[]): ParsedRows | null {
   if (lines.length < 3) return null;
-  const arity = ARITIES.find((n) => ROW_RES.get(n)!.test(lines[0]));
+  const arity = arityOf(lines[0]);
   if (arity === undefined) return null;
-  if (!DELIM_RES.get(arity)!.test(lines[1])) return null;
-  const rowRe = ROW_RES.get(arity)!;
-  const tailRe = TAIL_RES.get(arity)!;
+  const { row: rowRe, delim: delimRe, tail: tailRe } = arityRes(arity);
+  if (!delimRe.test(lines[1])) return null;
+  const header = lines[0].match(rowRe)!.slice(1, arity + 1);
   const cellsOf: string[][] = [];
   for (const line of lines.slice(2)) {
     // Strict first, so a well-formed row never reaches the greedy tail and a bare pipe stays a column boundary.
@@ -235,14 +277,21 @@ function parseRows(lines: string[]): { styled: ParsedTable; bare: ParsedTable } 
   }
   // Kept the moment ONE cell holds a word: `| | |` is what markdown forces on a table that wants no header, so an
   // all-blank one yields nothing. Judged on the RAW cells, before neutralising, since a control mark is not a word.
-  const headCells = lines[0].match(rowRe)!.slice(1, arity + 1);
   // ONE walk of the cells, read twice: styled for the render, bare for whoever the engine hands the payload to.
-  const table = (read: (raw: string) => string): ParsedTable => {
-    const rows = cellsOf.map((cells) => rowFields(cells, read));
-    const head = headCells.some((c) => c.trim() !== "") ? rowFields(headCells, read) : undefined;
-    return head === undefined ? { rows } : { rows, head };
+  const both = (rowCells: string[][], headCells: string[]) => {
+    const table = (read: (raw: string) => string): ParsedTable => {
+      const rows = rowCells.map((cells) => rowFields(cells, read));
+      const head = headCells.some((c) => c.trim() !== "") ? rowFields(headCells, read) : undefined;
+      return head === undefined ? { rows } : { rows, head };
+    };
+    return { styled: table(cell), bare: table(bareCell) };
   };
-  return { styled: table(cell), bare: table(bareCell) };
+  const parsed: ParsedRows = { ...both(cellsOf, header), arity };
+  // A folded table's header names its columns in every entry already, so only its label column is left to head.
+  if (arity > MAX_COLUMNS) {
+    parsed.folded = both(cellsOf.flatMap((cells) => foldCells(header, cells)), [header[0], ""]);
+  }
+  return parsed;
 }
 
 interface Payload {
@@ -258,6 +307,8 @@ interface Payload {
    * one, so the marker wins by construction and can never select a typed FILE.
    */
   type?: string;
+  /** A table past MAX_COLUMNS: its width, and the folded reading the render takes when the full one does not fit. */
+  wide?: { arity: number; folded: { data: Scope; bare: Scope } };
 }
 
 /** The same lines, less the blank ones at either end. */
@@ -327,7 +378,14 @@ const SHAPES: Shape[] = [
         if (t.head !== undefined) data[FIELD_HEAD] = t.head;
         return data;
       };
-      return { data: pack(table.styled), bare: pack(table.bare) };
+      const payload: Payload = { data: pack(table.styled), bare: pack(table.bare) };
+      if (table.folded !== undefined) {
+        payload.wide = {
+          arity: table.arity,
+          folded: { data: pack(table.folded.styled), bare: pack(table.folded.bare) },
+        };
+      }
+      return payload;
     },
   },
   {
@@ -355,6 +413,23 @@ const SHAPES: Shape[] = [
       return { data: { [FIELD_CONTENT]: source }, bare: { [FIELD_CONTENT]: source } };
     },
   },
+  {
+    payload: PAYLOAD_MARKDOWN,
+    opens: (l) => MARKDOWN_OPEN_RE.test(l),
+    holds: () => false,
+    run: (lines, from, stop) => {
+      const run = lines[from].match(MARKDOWN_OPEN_RE)![1];
+      for (let i = from + 1; i < stop; i++) if (closesRun(lines[i], run)) return i + 1;
+      return stop;
+    },
+    parse: (zone) => {
+      const run = zone[0].match(MARKDOWN_OPEN_RE)![1];
+      if (zone.length < 3 || !closesRun(zone[zone.length - 1], run)) return null;
+      // RAW, as the diagram's: the engine draws it to a width and neutralises the drawing (src/markdown.ts).
+      const source = zone.slice(1, -1).join("\n");
+      return { data: { [FIELD_CONTENT]: source }, bare: { [FIELD_CONTENT]: source } };
+    },
+  },
 ];
 
 /** Which shape a zone is, decided on its FIRST line and nowhere else. */
@@ -374,7 +449,9 @@ function runEnd(shape: Shape | undefined, lines: string[], from: number, stop: n
  * `end` is wider, since a quote run swallows prose and zones that must stay on screen to be rescanned.
  */
 function claimedEnd(lines: string[], at: number): number {
-  const shape = shapeOf(lines[at + 1])!; // a refusal means a payload announced its shape on this line
+  const shape = shapeOf(lines[at + 1]);
+  // A split refuses on its SIDES, with no payload of its own to announce a shape: its decorator line is all it claims.
+  if (shape === undefined) return at + 1;
   let end = at + 1;
   while (end < lines.length && shape.opens(lines[end])) end++;
   return end;
@@ -387,10 +464,14 @@ interface Zone {
   payload: Payload | null;
   /** A payload that ANNOUNCED a shape and then refused to parse: a near-miss, so the zone shows exactly as written. */
   refused: boolean;
+  /** The line the zone begins on. */
+  at: number;
   /** The first line PAST the zone. */
   end: number;
   /** The name of the shape that anchored, for Dressing.payload. Absent when no payload announced one. */
   form?: string;
+  /** A split's two zones, in the order written. Set on a split that read both, and on nothing else. */
+  sides?: Zone[];
 }
 
 /**
@@ -398,9 +479,193 @@ interface Zone {
  * along on a parsed payload alone so a static summon announces none. The reader below hands it back untouched, or a
  * second render of the same zone could load another file than the one drawn.
  */
+/** Wider than any terminal: a render there wraps no cell, which is what "it fits" is measured against. */
+const UNBOUNDED_WIDTH = 1000;
+
+/**
+ * The reading of a wide table this view draws: the full one when the template declares its every column AND its render
+ * at `limit` neither wraps a cell nor runs past it, the folded one otherwise. `draw` renders at a width, or at `limit`.
+ */
+function readingOf(
+  payload: Payload,
+  view: string,
+  dirs: string | string[],
+  type: string | undefined,
+  limit: number,
+  draw: (data: Scope, width?: number) => string
+): { data: Scope; bare: Scope } {
+  const wide = payload.wide;
+  if (wide === undefined) return payload;
+  const declared = loadTemplate(view, dirs, type).objectLists[FIELD_ROWS] ?? [];
+  if (!declared.includes(middleField(wide.arity - MIN_COLUMNS))) return wide.folded;
+  const drawn = draw(payload.data).split("\n");
+  const fits =
+    drawn.every((line) => printedWidth(line) <= limit) &&
+    drawn.length === draw(payload.data, UNBOUNDED_WIDTH).split("\n").length;
+  return fits ? payload : wide.folded;
+}
+
 function dressingOf(zone: Zone): Dressing {
   const base = zone.payload?.type === undefined ? zone.deco : { ...zone.deco, type: undefined };
   return zone.payload === null ? base : { ...base, payload: zone.form };
+}
+
+/** The views that lay out zones of their own, so neither can be one of them. */
+const LAYOUTS = [SPLIT_VIEW, ASIDE_VIEW];
+
+/**
+ * One side of a split, anchored on line `at`: a decorated zone, or a bare payload taking the view its shape names. A
+ * split is never a side, so one cannot nest in another.
+ */
+function sideAt(lines: string[], fences: Fence[], starts: number[], at: number): Zone | null {
+  const deco = parseDecorator(lines[at]);
+  if (deco !== null) return LAYOUTS.includes(deco.view) ? null : zoneAt(lines, fences, starts, at);
+  const shape = shapeOf(lines[at]);
+  const view = shape === undefined ? undefined : BARE_SIDE_VIEWS[shape.payload];
+  if (shape === undefined || view === undefined) return null;
+  const end = runEnd(shape, lines, at, lines.length);
+  const payload = shape.parse(lines.slice(at, end));
+  return { deco: { view }, payload, refused: payload === null, at, end, form: shape.payload };
+}
+
+/** A split's sides as far as they read, where they stop, and whether the text ran out before `stop` settled them. */
+interface SplitRead {
+  sides: Zone[];
+  end: number;
+  open: boolean;
+}
+
+function splitAt(lines: string[], fences: Fence[], starts: number[], at: number, stop: number): SplitRead {
+  const sides: Zone[] = [];
+  let next = at + 1;
+  while (sides.length < SPLIT_SIDES) {
+    // ONE blank line may part two sides: a quote ends on nothing else, so a quote written first needs it.
+    if (sides.length && next < stop && lines[next].trim() === "") next++;
+    if (next >= stop) return { sides, end: next, open: true };
+    const side = sideAt(lines, fences, starts, next);
+    if (side === null || side.refused) return { sides, end: next, open: side !== null && side.end >= stop };
+    sides.push(side);
+    next = side.end;
+  }
+  return { sides, end: next, open: next >= stop };
+}
+
+/** A zone drawn as a column: asked again at another width, or under a height ceiling. */
+function sideOf(
+  side: Zone,
+  dirs: string | string[],
+  options?: RenderOptions,
+  host?: DisplayHost,
+  cwd?: string
+): Side {
+  const dressing = dressingOf(side);
+  return (width, height) => {
+    const drawIn = (data: Scope, w?: number): string =>
+      renderColumn(side.deco.view, data, dirs, undefined, options, dressing, { width: w ?? width, height });
+    const read =
+      side.payload === null
+        ? { data: {}, bare: {} }
+        : readingOf(side.payload, side.deco.view, dirs, dressing.type, width, drawIn);
+    const injected = host?.inject?.(side.deco.view, namedFields(read.bare), cwd);
+    const rendered = renderColumn(side.deco.view, read.data, dirs, injected, options, dressing, { width, height });
+    const shown = rendered.replace(TRAILING_BLANKS_RE, "");
+    if (shown.trim() === "") throw new Error(`view ${side.deco.view}: rendered hollow`);
+    return shown.split("\n");
+  };
+}
+
+/** One unit written after an aside's zone: a decorated zone, or a run of prose with the code fences inside it. */
+interface Unit {
+  zone?: Zone;
+  prose?: string;
+  /** The first line PAST the unit. */
+  end: number;
+}
+
+/**
+ * The units after an aside's zone, from line `from`, up to the first that cannot flow: a table, a layout, a view this
+ * engine does not draw, a block the fenced pass already drew. `open` when the text ran out first, so more may come.
+ */
+function flowAt(
+  lines: string[],
+  fences: Fence[],
+  starts: number[],
+  from: number,
+  stop: number,
+  dirs: string | string[]
+): { units: Unit[]; open: boolean } {
+  const units: Unit[] = [];
+  const ends = (line: string): boolean =>
+    PIPE_LINE_RE.test(line) || line.search(ANSI_RE) !== -1 || parseDecorator(line) !== null;
+  let i = from;
+  for (;;) {
+    while (i < stop && lines[i].trim() === "") i++;
+    if (i >= stop) return { units, open: true };
+    const deco = fenceAt(fences, starts[i]) === undefined ? parseDecorator(lines[i]) : null;
+    if (deco !== null) {
+      if (LAYOUTS.includes(deco.view) || defersView(deco.view) || !resolvesView(deco.view, dirs, deco.type)) break;
+      const zone = zoneAt(lines, fences, starts, i);
+      if (zone === null || zone.refused) return { units, open: zone !== null && zone.end >= stop };
+      units.push({ zone, end: zone.end });
+      i = zone.end;
+      continue;
+    }
+    if (ends(lines[i])) break;
+    let end = i;
+    while (end < stop && lines[end].trim() !== "") {
+      const fence = fenceAt(fences, starts[end]);
+      if (fence !== undefined) {
+        while (end < stop && starts[end] < fence.end) end++;
+        continue;
+      }
+      if (ends(lines[end])) break;
+      end++;
+    }
+    units.push({ prose: lines.slice(i, end).join(NL), end });
+    i = end;
+  }
+  return { units, open: false };
+}
+
+/** An aside as drawn: its rows, the first line past what it took, and whether the column can still take more. */
+interface Float {
+  rows: string[];
+  end: number;
+  open: boolean;
+}
+
+function floatAt(
+  lines: string[],
+  fences: Fence[],
+  starts: number[],
+  zone: Zone,
+  stop: number,
+  dirs: string | string[],
+  options?: RenderOptions,
+  host?: DisplayHost,
+  cwd?: string
+): Float {
+  const [figure] = zone.sides!;
+  const flow = flowAt(lines, fences, starts, figure.end, stop, dirs);
+  // Prose is drawn by the view a bare markdown fence takes, so the column reads as that view does in a split.
+  const prose = (source: string): Zone => {
+    const payload = { data: { [FIELD_CONTENT]: source }, bare: { [FIELD_CONTENT]: source } };
+    const view = BARE_SIDE_VIEWS[PAYLOAD_MARKDOWN];
+    return { deco: { view }, payload, refused: false, at: zone.at, end: zone.at, form: PAYLOAD_MARKDOWN };
+  };
+  const units = flow.units.map((unit) => sideOf(unit.zone ?? prose(unit.prose!), dirs, options, host, cwd));
+  const figureSide = sideOf(figure, dirs, options, host, cwd);
+  const content = maxBoxWidth(options);
+  const drawn = composeFlow(figureSide, units, content);
+  // Nothing beside it, the zone draws alone at the full width: a column holding nothing is a bar and a hole.
+  if (drawn === undefined || drawn.taken === 0) {
+    return { rows: figureSide(content), end: figure.end, open: drawn !== undefined && flow.open && !units.length };
+  }
+  return {
+    rows: drawn.rows,
+    end: flow.units[drawn.taken - 1].end,
+    open: flow.open && drawn.taken === units.length,
+  };
 }
 
 /**
@@ -411,13 +676,28 @@ function zoneAt(lines: string[], fences: Fence[], starts: number[], at: number):
   const deco = parseDecorator(lines[at]);
   // A decorator inside a code fence is being SHOWN, not written. Nothing here has an escape of its own.
   if (deco === null || fenceAt(fences, starts[at]) !== undefined) return null;
+  // Short of both sides it is REFUSED, its line alone shown raw: what it failed to read is rescanned as ordinary zones.
+  if (deco.view === SPLIT_VIEW) {
+    const split = splitAt(lines, fences, starts, at, lines.length);
+    const whole = split.sides.length === SPLIT_SIDES;
+    return whole
+      ? { deco, payload: null, refused: false, at, end: split.end, sides: split.sides }
+      : { deco, payload: null, refused: true, at, end: at + 1 };
+  }
+  // The zone set aside is read as a split side is; what flows beside it is the render's to measure (floatAt).
+  if (deco.view === ASIDE_VIEW) {
+    const figure = sideAt(lines, fences, starts, at + 1);
+    return figure === null || figure.refused
+      ? { deco, payload: null, refused: true, at, end: at + 1 }
+      : { deco, payload: null, refused: false, at, end: figure.end, sides: [figure] };
+  }
   const below = at + 1;
   // NO payload engages with no data at all: a static view (welcome, the health check) is summoned by its line alone.
   const has = hasPayload(lines, below, lines.length);
   const shape = has ? shapeOf(lines[below]) : undefined;
   const end = runEnd(shape, lines, below, lines.length);
   const payload = shape === undefined ? null : shape.parse(lines.slice(below, end));
-  return { deco, payload, refused: shape !== undefined && payload === null, end, form: shape?.payload };
+  return { deco, payload, refused: shape !== undefined && payload === null, at, end, form: shape?.payload };
 }
 
 /** One zone this pass did NOT draw, and the reason in the engine's own words, never reworded here. */
@@ -528,13 +808,56 @@ export function renderDecorated(
       out.push(lines[i]);
       continue; // a refused payload's lines follow untouched: raw markdown, valid anyway
     }
+    if (zone.deco.view === ASIDE_VIEW) {
+      try {
+        const float = floatAt(lines, fences, starts, zone, lines.length, dirs, options, host, cwd);
+        // A zone the column took spends its ordinal and is declared, never drawn alone: the piece below covers it.
+        for (let at = zone.end; at < float.end; at++) {
+          const flowed = zoneAt(lines, fences, starts, at);
+          if (flowed === null) continue;
+          publishRaw(zoneKey(DECORATED_ZONE, flowed.deco.view, nth(flowed.deco.view)));
+          at = flowed.end - 1;
+        }
+        const shown = holdLeadingBlank(float.rows.join("\n"));
+        publishPiece(key, float.end - i, shown);
+        out.push(...shown.split("\n"));
+        i = float.end - 1;
+      } catch (e) {
+        refused(zone.deco.view, e);
+        publishRaw(key);
+        out.push(lines[i]);
+      }
+      continue;
+    }
+    if (zone.sides !== undefined) {
+      const sides = zone.sides;
+      try {
+        const drawn = sides.map((side) => sideOf(side, dirs, options, host, cwd));
+        const shown = holdLeadingBlank(composeSplit(drawn[0], drawn[1], maxBoxWidth(options)).join("\n"));
+        publishPiece(key, zone.end - i, shown);
+        out.push(...shown.split("\n"));
+      } catch (e) {
+        // The WHOLE zone raw, never its sides rescanned: they spent no ordinal of their own in any count of the zones.
+        refused(zone.deco.view, e);
+        publishRaw(key);
+        out.push(...lines.slice(i, zone.end));
+      }
+      i = zone.end - 1;
+      continue;
+    }
     const { deco, payload, end } = zone;
     try {
-      const data: Scope = payload === null ? {} : payload.data;
       const dressing: Dressing = dressingOf(zone);
+      const drawAt = (d: Scope, width?: number): string =>
+        renderView(deco.view, d, dirs, undefined, width === undefined ? options : { ...options, width }, dressing);
+      const read =
+        payload === null
+          ? { data: {}, bare: {} }
+          : readingOf(payload, deco.view, dirs, dressing.type, maxBoxWidth(options), drawAt);
+      const data: Scope = read.data;
       // The host is handed the PARSED zone as WRITTEN (`bare`), in the grammar a block hands over and with lists
       // unsplit: the styled cells and their marks are the render's alone.
-      const injected = host?.inject?.(deco.view, namedFields(payload === null ? {} : payload.bare), cwd);
+      const injected = host?.inject?.(deco.view, namedFields(read.bare), cwd);
       const rendered = renderView(deco.view, data, dirs, injected, options, dressing);
       // Raw over hollow, the narrowest of the three readings: render.ts owns the other two, and what is left here is
       // both of them passing while the fields all arrived BLANK (.tayomi/specs/fix/carrier-guards.md).
@@ -555,7 +878,7 @@ export function renderDecorated(
       }
       if (deco.view === strictView) outcome = okOutcome();
       // The render's own trailing blank is dropped, so the zone keeps the line structure the raw table had around it.
-      const shown = rendered.replace(TRAILING_BLANKS_RE, "");
+      const shown = holdLeadingBlank(rendered.replace(TRAILING_BLANKS_RE, ""));
       publishPiece(key, end - i, shown);
       out.push(...shown.split("\n"));
       i = end - 1;
@@ -601,6 +924,14 @@ export function decoratedZones(text: string): DecoratedZone[] {
   for (let i = 0; i < lines.length; i++) {
     const zone = zoneAt(lines, fences, starts, i);
     if (zone === null) continue;
+    // A split draws nothing of its own: what a reader judges is the two zones it lays out, read as they are drawn.
+    for (const side of zone.sides ?? []) {
+      zones.push({ view: side.deco.view, data: side.payload?.bare ?? {}, dressing: dressingOf(side), at: starts[side.at] });
+    }
+    if (zone.sides !== undefined) {
+      i = zone.end - 1;
+      continue;
+    }
     // The payload as WRITTEN: a reader compares words an author typed, and the styled cells are the render's alone.
     zones.push({
       view: zone.deco.view,
@@ -658,7 +989,9 @@ export function zoneSpans(text: string): ZoneSpan[] {
  */
 export function cutStreamingDecorated(
   text: string,
-  resolves?: (name: string, type?: string) => boolean
+  resolves?: (name: string, type?: string) => boolean,
+  dirs?: string | string[],
+  options?: RenderOptions
 ): string {
   if (!text.includes(DECORATOR_HINT)) return text;
   const lines = text.split("\n");
@@ -676,11 +1009,45 @@ export function cutStreamingDecorated(
       deco = at;
     }
   }
-  if (last === -1) return text;
-  if (resolves !== undefined && deco !== null && !resolves(deco.view, deco.type)) return text;
-  const first = last + 1;
-  const shape = first < end ? shapeOf(lines[first]) : undefined;
-  const after = runEnd(shape, lines, first, end);
-  if (after < end) return text; // a line past the run exists: the zone is closed
-  return last === 0 ? "" : lines.slice(0, last).join("\n") + "\n";
+  // A split still reading its sides is withheld from ITS line: its first side alone on screen would be drawn full width
+  // and then jump into a column. The last decorator above can be its own second side, already closed, or none at all.
+  let cut = -1;
+  for (let i = 0; i < end && cut === -1; i++) {
+    const at = parseDecorator(lines[i]);
+    if (at?.view !== SPLIT_VIEW || fenceAt(fences, starts[i]) !== undefined) continue;
+    if (resolves !== undefined && !resolves(SPLIT_VIEW)) continue;
+    if (splitAt(lines, fences, starts, i, end).open) cut = i;
+  }
+  // An aside whose column can still take what is arriving is withheld whole: a paragraph shown below it now would have
+  // to jump into the column at the next flush. Measured, since only a drawing knows where the zone's height runs out.
+  for (let i = 0; i < end && dirs !== undefined; i++) {
+    const at = parseDecorator(lines[i]);
+    if (at?.view !== ASIDE_VIEW || fenceAt(fences, starts[i]) !== undefined) continue;
+    if (resolves !== undefined && !resolves(ASIDE_VIEW)) continue;
+    const zone = zoneAt(lines, fences, starts, i);
+    if (zone === null) continue;
+    // Refused while its zone is still arriving, as an unclosed fence is: refused for good, it withholds nothing.
+    const shape = i + 1 < end ? shapeOf(lines[i + 1]) : undefined;
+    let open = zone.refused && (i + 1 >= end || (shape !== undefined && runEnd(shape, lines, i + 1, end) >= end));
+    if (!zone.refused) {
+      try {
+        open = floatAt(lines, fences, starts, zone, end, dirs, options).open;
+      } catch {
+        open = false;
+      }
+    }
+    if (open) {
+      cut = cut === -1 ? i : Math.min(cut, i);
+      break;
+    }
+    i = zone.end - 1;
+  }
+  if (last !== -1 && (resolves === undefined || deco === null || resolves(deco.view, deco.type))) {
+    const first = last + 1;
+    const shape = first < end ? shapeOf(lines[first]) : undefined;
+    // No line past the run yet: the zone can still grow.
+    if (runEnd(shape, lines, first, end) >= end) cut = cut === -1 ? last : Math.min(cut, last);
+  }
+  if (cut === -1) return text;
+  return cut === 0 ? "" : lines.slice(0, cut).join("\n") + "\n";
 }

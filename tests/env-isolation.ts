@@ -13,9 +13,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ENGINES_DIR_ENV, ENV_PREFIX } from "../src/data/markup.js";
+import { ENTRYPOINT_ENV } from "../src/platform/surface.js";
 
 for (const name of Object.keys(process.env)) {
   if (name.startsWith(ENV_PREFIX)) delete process.env[name];
 }
+// A suite run by a desktop agent inherits its entrypoint, and every hook case would answer null.
+delete process.env[ENTRYPOINT_ENV];
 
 process.env[ENGINES_DIR_ENV] = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-register-"));

@@ -1,0 +1,24 @@
+# split.view: two zones side by side, each drawn by its own view in a column of its own.
+#
+# ONE way in, a decorator over two zones written back to back:
+#
+#   @{view:split}
+#   ```mermaid
+#   flowchart TD
+#       A[source] --> B[render]
+#   ```
+#   > The text that explains the diagram,
+#   > folded into the right-hand column.
+#
+# A side is any decorated zone (`@{view:box}` over its table, `@{view:banner}` over its quote),
+# or a bare payload taking the view its shape names: a mermaid fence is `mermaid`, a markdown
+# fence is `markdown`, a quote is `quote`. ONE blank line may part the two sides, and a quote written first needs it, since a
+# quote ends on nothing else. A split is never a side: one cannot nest in another.
+#
+# NO BODY, on purpose. The carrier reads the two zones before any template loads and the engine
+# lays them out (layout/aside.ts): each side starts on half the width, a side narrower than its
+# half hands the rest to the other, and the taller side is asked again under the other's height,
+# which only a diagram answers. Too narrow for two columns, the sides stack, each at full width.
+#
+# Where this hook does not run, the decorator line is one harmless line of prose and each side
+# shows as it would alone: the diagram draws itself and the quote is a quote.

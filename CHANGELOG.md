@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.8.0
+
+- Diagrams are drawn by `@tayomi/mermaid2term`, which replaces `@tayomi/termaid-ts`
+- An unasked diagram draws in mermaid's `default` theme with `padless` frames, instead of shades only
+- A drawing whose first row opens on blanks keeps its indent, below prose as at the head of a message
+- `CC_VIEWS_MERMAID_BORDERS` picks the frame: `default`, `padless` or `borderless`
+- A `<br>` in a diagram label draws a two-line label, and a frontmatter `title` is drawn
+- The briefing no longer tells a model to keep diagram labels on one line
+- `NOTE`, `TIP`, `IMPORTANT` and `CAUTION` bands take the hue markdown draws them in, instead of the neutral fill
+- `columns` and `lines` draw up to eight columns side by side, instead of showing a table past four raw
+- A table past four columns that does not fit draws each row as an entry, one `Header: value` line per cell
+- `columns` and `lines` take a markdown table only: a fenced `rows:` block under them now draws empty columns
+- A capped column takes back the room the rest of its row leaves free, instead of folding in a table half as wide as the terminal
+- An indented line in a fenced block continues the value or the item above it, instead of vanishing
+- A fenced block holding a line no field claims now shows raw, where it used to render without that line
+- `@{view:split}` lays the two zones written under it side by side, a diagram beside its text or two diagrams
+- A bare mermaid fence or quote under a split takes the `mermaid` or `quote` view
+- A bare ```markdown fence under a split is drawn as markdown: headings, lists, quotes, rules, code and bold
+- `@{view:markdown}` draws a ```markdown fence alone, at the terminal's width
+- A split side wanting less than half the width hands the rest to the other, and the sides stack when too narrow
+- A diagram in a split column may turn its declared direction to match the other side's height
+- `@{view:aside}` sets one zone aside, and the paragraphs after it flow in the column at its right
+- An aside appears whole once its column is filled, instead of its text jumping into the column
+- Under Claude Desktop the hook draws nothing, and Desktop shows the message as the model wrote it
+
 ## 2.7.0
 
 - The payload a view takes is scored on the names the BLOCK carries, never on the fields a list splits into

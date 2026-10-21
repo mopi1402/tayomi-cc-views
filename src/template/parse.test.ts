@@ -14,6 +14,7 @@ import {
   ENGINE_REF,
   FIELD_CONTENT,
   FIELD_HEAD,
+  FIELD_LABEL,
   FIELD_ROWS,
   FIELD_TYPE,
   FIELDS,
@@ -242,6 +243,18 @@ describe("the payload a view accepts", () => {
 
   it("derives the table from a body spending its rows", () => {
     expect(parseTemplate(lines(ref(FIELD_ROWS), ref(FIELD_HEAD))).payload).toBe(PAYLOAD_TABLE);
+  });
+
+  it("keeps the table for a view spending its two anchors alone, however many middle columns exist", () => {
+    // A middle column is optional: counting the ones left unspent against a view scored a two-column table into the
+    // quote the day the widest row grew, and every such view fell open to raw markdown.
+    const anchors = lines(
+      `${FIELDS} ${FIELD_ROWS} ${FIELD_LABEL} ${FIELD_CONTENT}`,
+      `${EACH} ${FIELD_ROWS}`,
+      `${ref(FIELD_LABEL)} ${ref(FIELD_CONTENT)}`,
+      END
+    );
+    expect(parseTemplate(anchors).payload).toBe(PAYLOAD_TABLE);
   });
 
   it("falls to the table for a sectioned view spending its OWN names, the one shape that yields any", () => {

@@ -59,9 +59,10 @@ process.env.CC_VIEWS_NO_YIELD = "1";
 // The engine register is a side effect: generating images has nothing to write there, and a
 // directory of its own proves it rather than hoping for it.
 process.env.CC_VIEWS_ENGINES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-gallery-"));
-// No theme NAMED here, deliberately: the gallery must show what an unasked diagram draws, which is
-// the neutral one, shades of ours and every colour the source declares for itself.
+// No theme and no border mode NAMED here, deliberately: the gallery must show what an unasked
+// diagram draws, mermaid's own default palette in padless frames.
 delete process.env.CC_VIEWS_MERMAID_THEME;
+delete process.env.CC_VIEWS_MERMAID_BORDERS;
 
 const { handleMessageDisplay } = await import(`file://${path.join(REPO, "dist", "index.js")}`);
 

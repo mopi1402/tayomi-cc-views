@@ -9,7 +9,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { renderView, ANSI_RE } from "../index.js";
-import { ASIDE_GUTTER, ASIDE_MIN_MAIN, asideMainWidth } from "./aside.js";
+import {
+  ASIDE_GUTTER,
+  ASIDE_MIN_MAIN,
+  SPLIT_MIN_SIDE,
+  asideMainWidth,
+  composeFlow,
+  composeSplit,
+  type Side,
+} from "./aside.js";
 import { BOX_CHROME } from "./box.js";
 import { printedWidth } from "./measure.js";
 
@@ -256,5 +264,106 @@ describe("an aside naming a view that resolves nowhere", () => {
     expect(out).toContain("╰");
     expect(rowWith(out, "ONLY the main flow, and the box still stands")).toHaveLength(1);
     expect(regionRows(out)).toHaveLength(0);
+  });
+});
+
+// composeSplit is driven with SIDES built here, so what is measured is the arithmetic and never a view's own layout.
+describe("two zones split side by side", () => {
+  /** A paragraph of `length` letters, folded at whatever width it is handed, and unfolded under no ceiling. */
+  const prose = (length: number, letter: string): Side => (width) => {
+    const text = letter.repeat(length);
+    const rows: string[] = [];
+    for (let at = 0; at < text.length; at += width) rows.push(text.slice(at, at + width));
+    return rows;
+  };
+  /** A drawing of a fixed footprint, refusing any width under it, the way a diagram refuses to fold. */
+  const drawing = (cols: number, lines: number, letter: string): Side => (width, height) => {
+    if (width < cols) throw new Error("only fits folded");
+    return new Array<string>(height !== undefined && height < lines ? height : lines).fill(letter.repeat(cols));
+  };
+  /** How wide the split drew its left side: where the separator sits on the first row. */
+  const SEPARATOR = "│";
+  /** The blanks either side of the separator: the gutter less the glyph itself, halved. */
+  const PAD = (ASIDE_GUTTER - SEPARATOR.length) / 2;
+  const leftWidthOf = (rows: string[]): number => printedWidth(rows[0].split(SEPARATOR)[0]) - PAD;
+  const CONTENT = 100;
+  const ROOM = CONTENT - ASIDE_GUTTER;
+
+  it("keeps each side at what it wants when both fit, the separator on one column down the rows", () => {
+    const narrow = 10;
+    // Even heights, so no side is asked again and what is measured is the widths alone.
+    const out = composeSplit(drawing(narrow, 3, "D"), drawing(30, 3, "p"), CONTENT);
+    expect(leftWidthOf(out)).toBe(narrow);
+    expect(out).toHaveLength(3);
+    expect(out.map((r) => r.replace(ANSI_RE, "").indexOf(SEPARATOR))).toEqual(new Array(3).fill(narrow + PAD));
+    expect(out[0].replace(ANSI_RE, "")).toContain("p".repeat(30));
+  });
+
+  it("hands what a narrow side leaves to the wide one, which folds no earlier than that", () => {
+    const narrow = 10;
+    const out = composeSplit(drawing(narrow, 1, "D"), prose(ROOM, "p"), CONTENT);
+    expect(out[0].replace(ANSI_RE, "")).toContain("p".repeat(ROOM - narrow));
+  });
+
+  it("shares the room in halves when both sides want more than half of it", () => {
+    const out = composeSplit(prose(ROOM, "a"), prose(ROOM, "b"), CONTENT);
+    expect(leftWidthOf(out)).toBe(Math.floor(ROOM / 2));
+  });
+
+  it("STACKS the sides, each at the whole width, when half the room is no column", () => {
+    const tight = 2 * SPLIT_MIN_SIDE - 1 + ASIDE_GUTTER;
+    const out = composeSplit(prose(10, "a"), prose(10, "b"), tight);
+    expect(out).toEqual(["a".repeat(10), "", "b".repeat(10)]);
+  });
+
+  it("STACKS when a side cannot be drawn in the column it would get", () => {
+    const out = composeSplit(drawing(ROOM, 1, "D"), drawing(ROOM, 1, "E"), CONTENT);
+    expect(out).toEqual(["D".repeat(ROOM), "", "E".repeat(ROOM)]);
+  });
+
+  it("asks the taller side again under the other's height, and keeps the shorter drawing", () => {
+    const out = composeSplit(drawing(10, 9, "D"), prose(20, "p"), CONTENT);
+    expect(out).toHaveLength(1);
+  });
+});
+
+describe("a figure with what follows it flowed beside", () => {
+  const CONTENT = 100;
+  const ROOM = CONTENT - ASIDE_GUTTER;
+  const FIGURE_COLS = 10;
+  const FIGURE_ROWS = 5;
+  /** A figure of a fixed footprint, refusing any width under it. */
+  const figure = (cols = FIGURE_COLS): Side => (width) => {
+    if (width < cols) throw new Error("only fits folded");
+    return new Array<string>(FIGURE_ROWS).fill("F".repeat(cols));
+  };
+  /** A unit `rows` high, as wide as the column it is handed. */
+  const unit = (rows: number, letter: string): Side => (width) => new Array<string>(rows).fill(letter.repeat(width));
+  const SEPARATOR = "│";
+  const right = (row: string): string => row.replace(ANSI_RE, "").split(SEPARATOR)[1].trim();
+
+  it("takes each unit WHOLE while it fits under the figure, a blank between two, and stops at the first that does not", () => {
+    // 2 rows, then a blank and 2 more: 5. The third would need 8.
+    const flow = composeFlow(figure(), [unit(2, "a"), unit(2, "b"), unit(1, "c")], CONTENT)!;
+    expect(flow.taken).toBe(2);
+    expect(flow.rows).toHaveLength(FIGURE_ROWS);
+    expect(flow.rows.map(right).map((r) => r[0] ?? "")).toEqual(["a", "a", "", "b", "b"]);
+  });
+
+  it("hands the column every width the figure leaves", () => {
+    const flow = composeFlow(figure(), [unit(1, "a")], CONTENT)!;
+    expect(right(flow.rows[0])).toBe("a".repeat(ROOM - FIGURE_COLS));
+  });
+
+  it("ends the flow at a unit that cannot be drawn in the column, never skipping it", () => {
+    const refusing = (): string[] => {
+      throw new Error("no");
+    };
+    const flow = composeFlow(figure(), [refusing, unit(1, "b")], CONTENT)!;
+    expect(flow.taken).toBe(0);
+  });
+
+  it("draws nothing beside a figure that leaves the column under its floor", () => {
+    expect(composeFlow(figure(ROOM - ASIDE_MIN_MAIN + 1), [unit(1, "a")], CONTENT)).toBeUndefined();
   });
 });

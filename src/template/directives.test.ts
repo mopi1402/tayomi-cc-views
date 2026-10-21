@@ -222,9 +222,11 @@ describe("an @each declaration", () => {
   it("caps a column to a fraction of the width, and STACKS what no longer fits", () => {
     const line = `[${ref("wide")}]`;
     const wide = "a-very-long-value-here";
-    const scope = { rows: [{ state: "ok", wide, text: "tail" }] };
+    // A tail filling the rest of the row, or the cap would hand that room back to the column (next case).
+    const text = "t".repeat(LIMIT);
+    const scope = { rows: [{ state: "ok", wide, text }] };
     const lists = { rows: ["state", "wide", "text"] };
-    const capped = render([`${EACH} rows cap="1/10"`, line, END], scope, NO_TABLES, lists);
+    const capped = render([`${EACH} rows cap="1/10"`, line + ref("text"), END], scope, NO_TABLES, lists);
     const uncapped = render([`${EACH} rows`, line, END], scope, NO_TABLES, lists);
     expect(uncapped[0]).toContain(wide);
     // The cap governs the width of a ROW, never how much of the value survives: every row fits the cell, and the
@@ -233,6 +235,15 @@ describe("an @each declaration", () => {
     expect(rows.length).toBeGreaterThan(1);
     for (const row of rows) expect(printedWidth(row)).toBe(Math.floor(LIMIT / 10));
     expect(rows.join("").split(" ").join("")).toBe(wide);
+  });
+
+  it("hands the room a short tail leaves back to a capped column, never past its value", () => {
+    const line = `[${ref("wide")}]${ref("text")}`;
+    const wide = "a-very-long-value-here";
+    const scope = { rows: [{ state: "ok", wide, text: "tail" }] };
+    const lists = { rows: ["state", "wide", "text"] };
+    const out = render([`${EACH} rows cap="1/10"`, line, END], scope, NO_TABLES, lists);
+    expect(out).toEqual([`[${CELL_MARK}${wide}${CELL_MARK}]tail`]);
   });
 });
 

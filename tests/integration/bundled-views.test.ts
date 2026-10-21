@@ -449,10 +449,25 @@ describe("the columns view the package ships", () => {
     expect(plainly(render(MSG)).split("\n")[0]).toBe(`Status  ${BAR}  all green`);
   });
 
-  it("hands back the raw markdown one column past the ceiling", () => {
-    // The fail-open the whole carrier is built on: too wide to draw is still a valid
-    // table, and the reader gets the one markdown already renders.
-    expect(render(wide(MAX_COLUMNS + 1))).toBe(wide(MAX_COLUMNS + 1));
+  it("draws a table past four columns side by side while it fits", () => {
+    const n = MAX_COLUMNS + 1;
+    const cells = Array.from({ length: n }, (_, i) => `c${i + 1}`).join(`  ${BAR}  `);
+    expect(plainly(render(wide(n))).split("\n")[0].trimEnd()).toBe(cells);
+  });
+
+  it("folds it into entries when it does not, every cell on a line under its label", () => {
+    const n = MAX_COLUMNS + 1;
+    // Each cell alone wider than the width shared n ways, so no side-by-side reading fits.
+    const long = (i: number): string => `c${i + 1}${" mot".repeat(options.width / n)}`;
+    const msg = lines(
+      "@{view:columns}",
+      `|${" |".repeat(n)}`,
+      `|${" --- |".repeat(n)}`,
+      `|${Array.from({ length: n }, (_, i) => ` ${long(i)} |`).join("")}`
+    );
+    const drawn = plainly(render(msg));
+    for (let i = 1; i < n; i++) expect(drawn).toContain(`${BAR}  c${i + 1} mot`);
+    expect(drawn).not.toContain(`${BAR}  c2 mot${" mot".repeat(options.width / n - 1)}  ${BAR}`);
   });
 
   it("answers the kind, because it SPENDS the tone slot, and changes nothing else", () => {
@@ -1056,5 +1071,36 @@ describe("a view composed of other views", () => {
     expect(rows.filter((l) => l.includes("╭"))).toHaveLength(1);
     expect(rows.filter((l) => l.includes("╰"))).toHaveLength(1);
     for (const l of rows) expect(printedWidth(l)).toBeLessThanOrEqual(WIDE);
+  });
+});
+
+describe("the markdown view the package ships", () => {
+  const SPLIT = "@{view:split}";
+  const QUOTE = "> à côté";
+  const prose = (...body: string[]): string[] => ["```markdown", ...body, "```"];
+
+  it("draws a bare markdown fence as a split side, its bullets drawn and its source gone", () => {
+    const drawn = plainly(render(lines(SPLIT, ...prose("## Titre", "- un point **gras**"), "", QUOTE)));
+    expect(drawn).toContain("Titre");
+    expect(drawn).toContain("• un point gras");
+    expect(drawn).toContain("à côté");
+    expect(drawn).not.toContain("```");
+    expect(drawn).not.toContain("**");
+    // Side by side: the heading and the quote share a row.
+    expect(drawn.split("\n").some((l) => l.includes("Titre") && l.includes("à côté"))).toBe(true);
+  });
+
+  it("draws it alone under its own decorator", () => {
+    expect(plainly(render(lines("@{view:markdown}", ...prose("- seul"))))).toBe("• seul");
+  });
+
+  it("keeps a code fence INSIDE a longer markdown fence, as markdown does", () => {
+    const msg = lines("@{view:markdown}", "````markdown", "avant", "```", "pnpm test", "```", "après", "````");
+    expect(plainly(render(msg)).split("\n")).toEqual(["avant", "  pnpm test", "après"]);
+  });
+
+  it("shows the whole zone raw when the fence never closes", () => {
+    const msg = lines("@{view:markdown}", "```markdown", "- jamais fermé");
+    expect(render(msg)).toBe(msg);
   });
 });

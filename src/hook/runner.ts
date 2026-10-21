@@ -9,6 +9,7 @@ import { awaitEarlier, recordDelta, sweepStale } from "../platform/stream-state.
 import { DEFAULT_STATE_DIR } from "../platform/scratch.js";
 import { composeRole, holdElection } from "../platform/peers.js";
 import { journal } from "../platform/journal.js";
+import { drawsAnsi } from "../platform/surface.js";
 import { gatherPieces, setComposition, sweepCompose } from "../platform/compose.js";
 import { declaredViews } from "../template/load.js";
 import { parseStdin, readStdin, stringField } from "@tayomi/utils";
@@ -43,6 +44,8 @@ export async function handleMessageDisplay(
   options?: RenderOptions
 ): Promise<string | null> {
   try {
+    // Before the election: a client that cannot read ANSI gets the original text, and no peer is told otherwise.
+    if (!drawsAnsi()) return null;
     if (payload === null || typeof payload !== "object") return null;
     const d = payload as Record<string, unknown>;
     const id = stringField(d, "message_id") || "nomsg";

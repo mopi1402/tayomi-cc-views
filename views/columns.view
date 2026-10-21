@@ -1,4 +1,6 @@
 # columns.view: two to four columns, split by vertical bars. No border, no title, no rule.
+# Up to eight side by side while they fit; past that, the carrier folds each row, one
+# `Header: value` line per cell.
 #
 # The way in is a decorator over a plain markdown table, which is the whole point: where
 # this hook does not run, the reader still gets a real table.
@@ -12,10 +14,10 @@
 # this view never prints it. An empty label cell continues the row above, so a long entry
 # spans several rows under one label.
 #
-# ONE file draws every width, two, three or four columns, and no conditional is involved:
+# ONE file draws every width, two to eight columns, and no conditional is involved:
 # a column NO row carries is dropped together with the separator written just before it
 # (the hollow rule, src/layout/columns.ts). So the two ends are the anchors, `label` first
-# and `content` last WHATEVER the arity, and `mid1` then `mid2` fill in between. The
+# and `content` last WHATEVER the arity, and `mid1` to `mid6` fill in between. The
 # header of the table decides, and every row below must hold that same count.
 #
 # The HEADER row spends the TONE SLOT, so ONE file dresses every kind and no second template
@@ -61,10 +63,6 @@
 # plain. An opener is also what a hollow column can take away safely, having no closer
 # to leave orphaned behind it.
 #
-# The fenced form works too, for a message with no table to give: a `rows:` list whose
-# every item is `- <label> <the rest of the line>`. There every declared field is assigned,
-# so nothing is hollow and all four columns draw.
-#
 # A RULE between entries, because the bar alone runs unbroken: two folded entries beside
 # each other otherwise read as one block of four rows.
 #
@@ -87,12 +85,12 @@
 # An empty label still continues the entry above, and no rule parts the two. That law is the
 # engine's, not this file's, so lines.view and box.view answer the same way.
 @tone teal
-@fields rows label mid1 mid2 content
+@fields rows label mid1 mid2 mid3 mid4 mid5 mid6 content
 @box bare
 @each rows cap="1/3"
-@head {{b}}{{tone}}${label}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid1}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid2}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${content}{{/}}
-@head @rule ${label}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid1}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid2}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${content}
-${label}{{dim}}  │  {{/}}${mid1}{{dim}}  │  {{/}}${mid2}{{dim}}  │  {{/}}${content}
-@rule ${label}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid1}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid2}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${content}
+@head {{b}}{{tone}}${label}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid1}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid2}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid3}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid4}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid5}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${mid6}{{/}}{{dim}}  │  {{/}}{{b}}{{tone}}${content}{{/}}
+@head @rule ${label}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid1}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid2}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid3}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid4}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid5}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid6}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${content}
+${label}{{dim}}  │  {{/}}${mid1}{{dim}}  │  {{/}}${mid2}{{dim}}  │  {{/}}${mid3}{{dim}}  │  {{/}}${mid4}{{dim}}  │  {{/}}${mid5}{{dim}}  │  {{/}}${mid6}{{dim}}  │  {{/}}${content}
+@rule ${label}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid1}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid2}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid3}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid4}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid5}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${mid6}{{box_rule}}──{{/}}{{dim}}│{{/}}{{box_rule}}──{{/}}${content}
 @end
 @endbox

@@ -301,49 +301,10 @@ export function renderBody(
       // has to fit its column, or it is the one cell that overflows. Only where this loop DRAWS it, on the same
       // condition as below: a template spending the header elsewhere (box.view makes it the frame's title) would
       // otherwise pad every label to a width nothing in the list occupies.
-      const fields = objectLists[eachField];
-      const headRow = peek(scope, FIELD_HEAD);
-      const measured = heads.length && isRow(headRow) ? [...items, headRow] : items;
-      const pad: PadCtx = {
-        widths: columnWidths(measured, fields, [...heads, ...inner], tables),
-        hollow: hollowFields(measured, fields),
-        tail: fields && fields.length ? fields[fields.length - 1] : undefined,
-      };
-      if (capDecl) {
-        const cap = Math.max(
-          MIN_CELL,
-          Math.floor((limit * Number(capDecl[1])) / Number(capDecl[2]))
-        );
-        for (const f of Object.keys(pad.widths)) {
-          pad.widths[f] = Math.min(pad.widths[f], cap);
-        }
-      }
-      // Only when the payload carried a row for it: a template declaring @head against a table that headed nothing
-      // draws NOTHING here, which is what makes one file answer both.
-      if (heads.length && isRow(lookup(scope, FIELD_HEAD))) {
-        const headScope: Scope = { ...scope, ...(peek(scope, FIELD_HEAD) as Scope) };
-        for (const l of heads) {
-          out.push(
-            readsHere(IN_EACH, RULE) && isRuleLine(l)
-              ? ruleLine(l, headScope, tables, pad)
-              : subst(l, headScope, tables, pad)
-          );
-        }
-      }
       const label = labelDecl?.[1];
       const bullet = bulletDecl?.[1];
       const labelCol = scope.__labelWidth ?? 0;
-      // An item with nothing in its FIRST column opens no entry, it continues the one above, so nothing the template
-      // wrote to SEPARATE two entries may part them: neither a rule, nor a blank line.
-      // Read off the NEXT item: a template writes its separator after the row it closes.
-      const continues = (next: unknown): boolean => {
-        // The FIRST field standing in for the list itself: a list that is absent or empty has none, which is the same
-        // guard the length test used to spell, one step nearer what the line below actually reads.
-        const first = fields?.[0];
-        if (first === undefined || next === null || typeof next !== "object") return false;
-        return stringify((next as Record<string, unknown>)[first] ?? "").trim() === "";
-      };
-      items.forEach((item: unknown, idx: number) => {
+      const scopeOf = (item: unknown, idx: number): Scope => {
         const itemScope: Scope = {
           ...scope,
           __item: item,
@@ -362,6 +323,72 @@ export function renderBody(
         if (bullet != null) {
           itemScope.__bullet = subst(bullet, itemScope, tables) + HANG_MARK;
         }
+        return itemScope;
+      };
+      const fields = objectLists[eachField];
+      const headRow = peek(scope, FIELD_HEAD);
+      const measured = heads.length && isRow(headRow) ? [...items, headRow] : items;
+      const pad: PadCtx = {
+        widths: columnWidths(measured, fields, [...heads, ...inner], tables),
+        hollow: hollowFields(measured, fields),
+        tail: fields && fields.length ? fields[fields.length - 1] : undefined,
+      };
+      if (capDecl) {
+        const cap = Math.max(
+          MIN_CELL,
+          Math.floor((limit * Number(capDecl[1])) / Number(capDecl[2]))
+        );
+        const natural = { ...pad.widths };
+        for (const f of Object.keys(pad.widths)) {
+          pad.widths[f] = Math.min(pad.widths[f], cap);
+        }
+        // The cap guards the room of the rest of the row, so whatever room that rest never takes goes back to the
+        // columns it shortened. Measured on the row as DRAWN, leading cells emptied: separators, label, bullet, tail.
+        const blank = Object.fromEntries(Object.keys(natural).map((f) => [f, ""]));
+        const bare: PadCtx = { ...pad, widths: Object.fromEntries(Object.keys(natural).map((f) => [f, 0])) };
+        const headed = heads.length && isRow(headRow) ? [{ ...scope, ...(headRow as Scope) }] : [];
+        const drawn = (lines: string[], at: Scope): number[] =>
+          lines.filter((l) => !isRuleLine(l)).map((l) => printedWidth(subst(l, { ...at, ...blank }, tables, bare)));
+        const rest = Math.max(
+          0,
+          ...headed.flatMap((at) => drawn(heads, at)),
+          ...items.flatMap((item, idx) => drawn(inner, scopeOf(item, idx)))
+        );
+        let free = limit - rest - Object.values(pad.widths).reduce((a, b) => a + b, 0);
+        let short = Object.keys(pad.widths).filter((f) => pad.widths[f] < natural[f]);
+        while (free > 0 && short.length) {
+          for (const f of short) {
+            if (free === 0) break;
+            pad.widths[f]++;
+            free--;
+          }
+          short = short.filter((f) => pad.widths[f] < natural[f]);
+        }
+      }
+      // Only when the payload carried a row for it: a template declaring @head against a table that headed nothing
+      // draws NOTHING here, which is what makes one file answer both.
+      if (heads.length && isRow(lookup(scope, FIELD_HEAD))) {
+        const headScope: Scope = { ...scope, ...(peek(scope, FIELD_HEAD) as Scope) };
+        for (const l of heads) {
+          out.push(
+            readsHere(IN_EACH, RULE) && isRuleLine(l)
+              ? ruleLine(l, headScope, tables, pad)
+              : subst(l, headScope, tables, pad)
+          );
+        }
+      }
+      // An item with nothing in its FIRST column opens no entry, it continues the one above, so nothing the template
+      // wrote to SEPARATE two entries may part them: neither a rule, nor a blank line.
+      // Read off the NEXT item: a template writes its separator after the row it closes.
+      const continues = (next: unknown): boolean => {
+        // The FIRST field standing in for the list itself: a list that is absent or empty has none, which is the same
+        // guard the length test used to spell, one step nearer what the line below actually reads.
+        const first = fields?.[0];
+        if (first === undefined || next === null || typeof next !== "object") return false;
+        return stringify((next as Record<string, unknown>)[first] ?? "").trim() === "";
+      };
+      items.forEach((item: unknown, idx: number) => {
+        const itemScope = scopeOf(item, idx);
         const joined = continues(items[idx + 1]);
         for (const l of inner) {
           const rule = readsHere(IN_EACH, RULE) && isRuleLine(l);

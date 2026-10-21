@@ -11,6 +11,7 @@ import {
   BARE,
   BOX,
   DIAGRAM,
+  MARKDOWN,
   DECLS,
   EACH,
   END,
@@ -110,6 +111,7 @@ export const TAKES: Record<string, string> = {
   [TONE]: ARG_TAG,
   // Nothing after it, and nothing it could take: it names the KIND of the block's body, and a kind has no parameter.
   [DIAGRAM]: "",
+  [MARKDOWN]: "",
   [BOX]: opt(BARE),
   [HEAD]: ARG_TEXT,
   [RIGHT]: ARG_TEXT,

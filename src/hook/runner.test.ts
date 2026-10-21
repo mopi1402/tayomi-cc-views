@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { handleMessageDisplay, type MessageContext } from "./runner.js";
 import { readEarlier } from "../platform/stream-state.js";
+import { ENTRYPOINT_ENV } from "../platform/surface.js";
 import { COMPOSE_PROTOCOL, announce, peers, peersDir } from "../platform/peers.js";
 import {
   DECORATED_ZONE,
@@ -95,6 +96,18 @@ describe("handleMessageDisplay", () => {
     const out = await handleMessageDisplay(payload(id, 2, "```", true), undefined, options);
     expect(shown(out)).toContain("NOTE");
     expect(shown(out)).toContain("- carried");
+  });
+
+  it("answers NOTHING under the desktop app, so a zone reaches it as the model wrote it", async () => {
+    vi.stubEnv(ENTRYPOINT_ENV, "claude-desktop");
+    const out = await handleMessageDisplay(payload(msg(), 0, "```view:note\nnote:\n- x\n```", true), undefined, options);
+    expect(out).toBeNull();
+  });
+
+  it("still draws in the terminal", async () => {
+    vi.stubEnv(ENTRYPOINT_ENV, "cli");
+    const out = await handleMessageDisplay(payload(msg(), 0, "```view:note\nnote:\n- x\n```", true), undefined, options);
+    expect(shown(out)).toContain("NOTE");
   });
 
   it("returns null on an incomplete prefix when the delta alone carries no zone", async () => {

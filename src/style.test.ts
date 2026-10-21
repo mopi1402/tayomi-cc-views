@@ -23,6 +23,7 @@ import {
   dropInert,
   extendTags,
   fillTone,
+  holdLeadingBlank,
   inert,
   isTag,
   markCode,
@@ -56,6 +57,7 @@ const COLOURS = [
   "chip", "title", "box_rule",
   "pass", "warn", "fail", "high", "med", "low",
   "warning", "error", "success", "info",
+  "note", "tip", "important", "caution",
 ];
 /** A sequence the palette does NOT carry, so a registration test owns its own value. */
 const MAGENTA = "\x1b[35m";
@@ -528,6 +530,24 @@ describe("the tone slot", () => {
   });
 });
 
+describe("the alert markers", () => {
+  /** Each marker in the hue markdown draws its alert box in, so a band and its fallback agree. */
+  const ALERT_HUES: Record<string, string> = {
+    note: "blue",
+    tip: "green",
+    important: "purple",
+    warning: "yellow",
+    caution: "red",
+  };
+
+  it("wears its alert's hue, as ink and as a fill", () => {
+    for (const [marker, hue] of Object.entries(ALERT_HUES)) {
+      expect(renderTags(tagMark(marker))).toBe(renderTags(tagMark(hue)));
+      expect(renderTags(tagMark(marker + BG))).toBe(renderTags(tagMark(hue + BG)));
+    }
+  });
+});
+
 describe("a cap, the foreground painting a chip's own fill", () => {
   /**
    * This table IS the defect: the caps used to spend `{{tone}}`, which is bold, and a terminal promotes a bold
@@ -971,5 +991,19 @@ describe("the enumeration of tag names", () => {
       expect(isTag(name + suffix)).toBe(true);
       expect(tagNames()).not.toContain(name + suffix);
     }
+  });
+});
+
+describe("a drawing opening on a blank", () => {
+  const INDENT = "   ";
+  it("is held behind a sequence that is no blank, so a trimmed head keeps its indent", () => {
+    for (const blank of [INDENT, "\t"]) {
+      expect(holdLeadingBlank(`${blank}row`).trimStart().replace(ANSI_RE, "")).toBe(`${blank}row`);
+    }
+  });
+
+  it("is left alone when it opens on ink, there being nothing a trim could take", () => {
+    expect(holdLeadingBlank("row")).toBe("row");
+    expect(holdLeadingBlank("")).toBe("");
   });
 });

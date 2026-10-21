@@ -5,13 +5,23 @@ import { WRAP_MARKS } from "../data/marks.js";
 import { holdsCells, wrapLine } from "../layout/wrap.js";
 import { dropInert, fillTone, inert, markCode, renderTags, toneClass } from "../style.js";
 import { nameField, type Scope } from "../scope.js";
-import { FIELD_CONTENT, FIELD_FLOW, FIELD_TONE, FIELD_TYPE, PAYLOAD_FENCE } from "../data/language.js";
-import { DIAGRAM_INFO, FENCE, NL } from "../data/markup.js";
+import {
+  FIELD_CONTENT,
+  FIELD_FLOW,
+  FIELD_TONE,
+  FIELD_TYPE,
+  PAYLOAD_FENCE,
+  PAYLOAD_MARKDOWN,
+  SPLIT_VIEW,
+  ASIDE_VIEW,
+} from "../data/language.js";
+import { DIAGRAM_INFO, FENCE, MARKDOWN_INFO, NL } from "../data/markup.js";
 import { renderBody } from "./directives.js";
 import { loadTemplate, viewsDir } from "./load.js";
 import { maxBoxWidth } from "../platform/tty-width.js";
 import { renderDiagram } from "../diagram.js";
-import { inertData, namedFields, parseData } from "./view-data.js";
+import { drawMarkdown } from "../markdown.js";
+import { inertData, namedFields, readData } from "./view-data.js";
 import type { RenderOptions } from "../options.js";
 
 /** What a CARRIER learned about one zone, beyond the view's name and its data. Both OPTIONAL, both fail open. */
@@ -41,6 +51,28 @@ export interface Traced {
   read: Set<string>;
 }
 
+/**
+ * The box one side of a split is drawn in: a width already RESOLVED by the caller, never clamped to the floor a terminal
+ * gets, and the height a diagram tightens toward.
+ */
+export interface Column {
+  width: number;
+  height?: number;
+}
+
+/** One view drawn inside a column of a split: what renderView does, in a box the caller has already measured. */
+export function renderColumn(
+  name: string,
+  data: Scope | string,
+  dir: string | string[],
+  injected: Scope | undefined,
+  options: RenderOptions | undefined,
+  dressing: Dressing | undefined,
+  column: Column
+): string {
+  return traceView(name, data, dir, injected, options, dressing, column).out;
+}
+
 /** The render, discarding what it recorded. What the runtime spends, and what every host has always called. */
 export function renderView(
   name: string,
@@ -59,13 +91,16 @@ export function traceView(
   dir: string | string[] = viewsDir(),
   injected?: Scope,
   options?: RenderOptions,
-  dressing?: Dressing
+  dressing?: Dressing,
+  column?: Column
 ): Traced {
-  const { tables, objectLists, body, labelWidth, tone, spendsSlots, diagram, payload } =
+  // Its zones are composed by the carrier that read them (decorator.ts): reached here, a layout was handed a payload.
+  if (name === SPLIT_VIEW || name === ASIDE_VIEW) throw new Error(`view ${name}: lays out the zones under its decorator, never a payload`);
+  const { tables, objectLists, body, labelWidth, tone, spendsSlots, diagram, markdown, payload } =
     loadTemplate(name, dir, dressing?.type);
   // Resolved here rather than at the render below, because a DIAGRAM body is drawn to a width and that happens on the
   // way in. The layers under this one still receive it as a value and never probe for it.
-  const limit = maxBoxWidth(options);
+  const limit = column?.width ?? maxBoxWidth(options);
   // The FORM refuses before any field is read: a payload shape arrived (only a decorator says which), and it must be
   // the ONE this template accepts. Deciding on field names instead was the leak: a table whose first cell spelt
   // `content` fed a view that only ever promised to take a quote. A template expecting NO shape polices none: it
@@ -80,18 +115,25 @@ export function traceView(
   if (diagram && dressing?.payload !== PAYLOAD_FENCE) {
     throw new Error(`view ${name}: a diagram arrives under its own ${FENCE}${DIAGRAM_INFO} fence`);
   }
+  if (markdown && dressing?.payload !== PAYLOAD_MARKDOWN) {
+    throw new Error(`view ${name}: markdown arrives under its own ${FENCE}${MARKDOWN_INFO} fence`);
+  }
   // Either pre-parsed data (callers, tests) or the raw block text (the hook). Parsed here so the view's @fields
   // directive drives the split, and neutralised here because raw block text came from the MESSAGE. A caller handing
   // pre-parsed data owns its own provenance.
   // Rows read a SECOND way, HERE where the template is known: splitting a list is @fields' business, no carrier's.
   // PRE-PARSED data alone: a fenced block's `rows` were split by @fields already, and deriving would move its render.
-  let scope: Scope =
-    typeof data === "string"
-      ? (inertData(parseData(data, objectLists)) as Scope)
-      : (namedFields(data, objectLists) as Scope);
+  let scope: Scope;
+  if (typeof data === "string") {
+    const read = readData(data, objectLists);
+    if (read.stray.length) throw new Error(`view ${name}: no field claims the line "${read.stray[0]}"`);
+    scope = inertData(read.data) as Scope;
+  } else {
+    scope = namedFields(data, objectLists) as Scope;
+  }
   // The same body with the author's breaks spent as spaces, for a view that draws ONE band. Derived HERE so every way
   // in yields it (a decorator's quote and a fenced block alike), and never over a diagram, whose lines are its syntax.
-  if (!diagram && typeof scope[FIELD_CONTENT] === "string" && scope[FIELD_FLOW] === undefined) {
+  if (!diagram && !markdown && typeof scope[FIELD_CONTENT] === "string" && scope[FIELD_FLOW] === undefined) {
     // A paragraph break DROPS rather than doubling the space: one band is one paragraph however the author spaced it.
     const flow = scope[FIELD_CONTENT].split(NL).filter((l) => l !== "");
     scope = { ...scope, [FIELD_FLOW]: flow.join(" ") };
@@ -104,9 +146,21 @@ export function traceView(
     scope = {
       ...scope,
       [FIELD_CONTENT]: inert(
-        renderDiagram(String(scope[FIELD_CONTENT] ?? ""), limit, options?.stateDir)
+        renderDiagram(
+          String(scope[FIELD_CONTENT] ?? ""),
+          limit,
+          options?.stateDir,
+          undefined,
+          undefined,
+          column?.height,
+          column !== undefined
+        )
       ),
     };
+  }
+  if (markdown) {
+    // Raw like the diagram's, and drawn to the same width: the drawing neutralises the message text before it styles.
+    scope = { ...scope, [FIELD_CONTENT]: drawMarkdown(String(scope[FIELD_CONTENT] ?? ""), limit) };
   }
   // "Raw over hollow", first two readings (.tayomi/specs/fix/carrier-guards.md). Whether DATA arrived, never whether
   // the template printed: a view drawing literal furniture always puts ink on screen. A template spending no slot is

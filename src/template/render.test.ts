@@ -14,7 +14,7 @@ import { VIEW_EXT } from "../data/markup.js";
 import { hasControlMark } from "../data/marks.js";
 import { printedWidth } from "../layout/measure.js";
 import { ANSI_RE, renderTags, tagMark } from "../style.js";
-import { renderView, traceView } from "./render.js";
+import { renderColumn, renderView, traceView } from "./render.js";
 import { parseTemplate } from "./parse.js";
 import { diagramCachePath } from "../diagram.js";
 import { maxBoxWidth } from "../platform/tty-width.js";
@@ -78,6 +78,16 @@ describe("raw over hollow", () => {
   it("throws on a non-empty block that parsed to no fields at all", () => {
     view("${said}");
     expect(() => render("this is prose, not the data format")).toThrow(NAME);
+  });
+
+  it("throws on a block holding a line no field claims, so the author sees it raw rather than lose it", () => {
+    view("${content}");
+    expect(() => render("content: kept\nlost without a word")).toThrow(NAME);
+  });
+
+  it("draws an indented line as the continuation it is, never as a stray", () => {
+    view("${content}");
+    expect(plain(render("content: first\n  second"))).toContain("first\nsecond");
   });
 
   it("renders an EMPTY block, which is a static view summoned by its name alone", () => {
@@ -231,6 +241,7 @@ describe("raw over hollow", () => {
       [LANG.BOX]: "structure alone: it takes no argument at all",
       [LANG.DIAGRAM]:
         "names the KIND of the block's BODY, which is upstream of every field: it says the body is a diagram source, drawn before any scope exists",
+      [LANG.MARKDOWN]: "names the KIND of the block's BODY, as @diagram does: markdown drawn before any scope exists",
       [LANG.ENDBOX]: "a terminator, which takes none either",
       [LANG.ENDASIDE]: "a terminator, which takes none either",
       [LANG.END]: "a terminator, which takes none either",
@@ -522,7 +533,7 @@ describe("the payload shape a view accepts", () => {
 });
 
 // The diagram crosses this layer without a subprocess: the cache is seeded under the exact key the engine derives,
-// so what is pinned is the seam (raw source in, neutralised drawing out), never termaid's own output.
+// so what is pinned is the seam (raw source in, neutralised drawing out), never the renderer's own output.
 describe("a diagram template", () => {
   const SOURCE = "flowchart TD\n    A --> B";
   /** Holds a tag on purpose: valid diagram syntax, and exactly what neutralising must keep as TEXT. */
@@ -555,5 +566,24 @@ describe("a diagram template", () => {
     view(DIAGRAM_BODY);
     expect(() => draw({ content: SOURCE }, { payload: LANG.PAYLOAD_QUOTE })).toThrow();
     expect(() => draw({ content: SOURCE }, { payload: LANG.PAYLOAD_TABLE })).toThrow();
+  });
+});
+
+describe("a view drawn inside a column", () => {
+  /** Under the floor a terminal width is clamped to, which only a column may go below. */
+  const NARROW = 12;
+
+  it("folds at the column's own width, never at the floor a terminal is clamped to", () => {
+    expect(maxBoxWidth({ width: NARROW })).toBeGreaterThan(NARROW);
+    view("@box bare\n${content}\n@endbox");
+    const out = renderColumn(NAME, { content: "word ".repeat(10).trim() }, [dir], undefined, options, undefined, {
+      width: NARROW,
+    });
+    for (const line of plain(out).split("\n")) expect(printedWidth(line)).toBeLessThanOrEqual(NARROW);
+  });
+
+  it("refuses the split view as a payload's view: its zones are laid out by the carrier that read them", () => {
+    view("${content}", LANG.SPLIT_VIEW);
+    expect(() => renderView(LANG.SPLIT_VIEW, { content: "x" }, [dir], undefined, options)).toThrow(LANG.SPLIT_VIEW);
   });
 });
