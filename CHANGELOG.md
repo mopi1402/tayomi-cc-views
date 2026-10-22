@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.8.2
+
+- A code span holding a version, like `@2.8.1`, keeps its colour instead of printing `[38;2;…m` and pushing the frame out
+
 ## 2.8.1
 
 - An engine running in another Claude Code session no longer wins this session's election, which left every block raw
