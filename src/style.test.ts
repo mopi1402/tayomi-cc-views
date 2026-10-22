@@ -36,6 +36,8 @@ import {
   tagNames,
   tagSource,
   toneClass,
+  unglueVersions,
+  VERSION_MARK,
 } from "./style.js";
 import { printedWidth } from "./layout/measure.js";
 
@@ -1005,5 +1007,52 @@ describe("a drawing opening on a blank", () => {
   it("is left alone when it opens on ink, there being nothing a trim could take", () => {
     expect(holdLeadingBlank("row")).toBe("row");
     expect(holdLeadingBlank("")).toBe("");
+  });
+});
+
+describe("a sequence glued to a run Claude Code reads as `name@version`", () => {
+  const INK = renderTags(tagMark("blue"));
+  const FILL = renderTags(tagMark("blue_bg"));
+  const RESET = renderTags(RESET_MARK);
+  const VERSION = `${VERSION_MARK}2.8.1`;
+  const PACKAGE = "cc-views";
+  const LEAD = "ran";
+
+  it("opens one blank earlier, so no escape is glued to the run", () => {
+    expect(unglueVersions(`${LEAD} ${INK}${VERSION}${RESET}`)).toBe(`${LEAD}${INK} ${VERSION}${RESET}`);
+  });
+
+  it("does so for a package and its version too", () => {
+    const run = `${PACKAGE}${VERSION}`;
+    expect(unglueVersions(`${LEAD} ${INK}${run}${RESET}`)).toBe(`${LEAD}${INK} ${run}${RESET}`);
+  });
+
+  it("moves a run of sequences whole, a reset included", () => {
+    expect(unglueVersions(`${LEAD} ${RESET}${INK}${VERSION}`)).toBe(`${LEAD}${RESET}${INK} ${VERSION}`);
+  });
+
+  it("costs no column", () => {
+    const line = `${LEAD} ${INK}${VERSION}${RESET}`;
+    expect(printedWidth(unglueVersions(line))).toBe(printedWidth(line));
+  });
+
+  it("leaves a mention alone, an @ followed by a letter breaking nothing", () => {
+    const line = `${LEAD} ${INK}${VERSION_MARK}${PACKAGE}${RESET}`;
+    expect(unglueVersions(line)).toBe(line);
+  });
+
+  it("leaves a fill alone, which would paint the blank", () => {
+    const line = `${LEAD} ${FILL}${VERSION}${RESET}`;
+    expect(unglueVersions(line)).toBe(line);
+  });
+
+  it("leaves a run with no blank ahead of it, there being nowhere to open", () => {
+    const line = `${LEAD}${INK}${VERSION}${RESET}`;
+    expect(unglueVersions(line)).toBe(line);
+  });
+
+  it("stops the run at a blank, so a version further on moves nothing", () => {
+    const line = `${LEAD} ${INK}${PACKAGE} ${VERSION}${RESET}`;
+    expect(unglueVersions(line)).toBe(line);
   });
 });

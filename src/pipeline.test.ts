@@ -13,7 +13,7 @@ import path from "node:path";
 import { BLOCK_HINT, DECORATOR_CLOSE, DECORATOR_HINT, FENCE, VIEW_EXT } from "./data/markup.js";
 import { slice, transform, type DisplayHost } from "./pipeline.js";
 import { setDeferred } from "./platform/peers.js";
-import { ANSI_RE, tagMark } from "./style.js";
+import { ANSI_RE, VERSION_MARK, tagMark } from "./style.js";
 
 const NAME = "probe";
 /** A second view of the same shape, so one message can hold a zone that is deferred and a zone that is not. */
@@ -86,6 +86,14 @@ describe("transform", () => {
     const out = plain(render(msg));
     expect(out).toContain("said: one");
     expect(out).toContain("said: two");
+  });
+
+  it("glues no sequence to a version, which Claude Code would reprint raw", () => {
+    const version = `${VERSION_MARK}2.8.1`;
+    const out = render(block(NAME, `said: ran \`${version}\``));
+    expect(plain(out)).toContain(`ran ${version}`);
+    // eslint-disable-next-line security/detect-non-literal-regexp
+    expect(out).not.toMatch(new RegExp(`${ANSI_RE.source}${version}`));
   });
 
   it("hands back a message it has no business in, untouched", () => {

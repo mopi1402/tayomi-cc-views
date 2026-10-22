@@ -365,6 +365,25 @@ export const TAG_AT = tagRe("y");
 /** An escape sequence already on the line. Zero columns wide, so every measurement strips it. */
 export const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
+/** Where a run reads to Claude Code as `name@version`. */
+export const VERSION_MARK = "@";
+// eslint-disable-next-line security/detect-non-literal-regexp
+const GLUED_VERSION_RE = new RegExp(
+  `(${SPACE})((?:${ANSI_RE.source})+)(?=[^\\s${ESC}]*${VERSION_MARK}\\d)`,
+  "g"
+);
+
+/**
+ * Every sequence glued to a run holding `@<digit>`, opened one blank earlier. Claude Code reprints such a run raw and
+ * drops the escape in front of it, showing `[38;2;…m` and pushing the frame out (measured 2026-10-22). A fill stays
+ * put, since it would paint the blank.
+ */
+export function unglueVersions(s: string): string {
+  return s.replace(GLUED_VERSION_RE, (glued: string, blank: string, run: string) =>
+    (run.match(ANSI_RE) ?? []).some((seq) => capOf(seq) !== undefined) ? glued : run + blank
+  );
+}
+
 // What a span may not CROSS. A span is looked for on the line the layout already DREW, so a cell is still bracketed
 // here: markdown splits a row into cells before it looks for one, and without these a run opened in one column closed
 // in the next, eating both delimiters and the text between. A stacked row is a screen row of its own, same rule.
