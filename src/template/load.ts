@@ -11,7 +11,7 @@ import { createRequire as requireFrom } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ENGINE_NAME } from "../data/engine.js";
-import { VIEWS_DIR, VIEWS_PATH_ENV, VIEW_EXT } from "../data/markup.js";
+import { PROJECT_DIR_ENV, VIEWS_DIR, VIEWS_PATH_ENV, VIEW_EXT } from "../data/markup.js";
 import { parseTemplate, type Template } from "./parse.js";
 
 export { VIEWS_PATH_ENV, VIEW_EXT };
@@ -75,12 +75,14 @@ export function bundledViewsDir(): string {
 }
 
 // The DEFAULT search path: the adopter's explicit dirs first (CC_VIEWS_PATH, split like PATH), then the project's own
-// views/ (hooks run with cwd at the project root), then the plugin resolution above. First hit wins, so a project
-// template naming a standard view OVERRIDES it: the order IS the override contract.
+// views/, then the plugin resolution above. First hit wins, so a project template naming a standard view OVERRIDES it:
+// the order IS the override contract. The project is found from CLAUDE_PROJECT_DIR, the cwd only without it: a hook
+// inherits the session's cwd, and one `cd` into a subdir made every project view vanish.
 export function defaultViewsPath(): string[] {
   const configured = process.env[VIEWS_PATH_ENV] ?? "";
   const dirs = configured.split(path.delimiter).filter((dir) => dir !== "");
-  const search = [...dirs, path.join(process.cwd(), VIEWS_DIR), viewsDir()];
+  const projectRoot = process.env[PROJECT_DIR_ENV] || process.cwd();
+  const search = [...dirs, path.join(projectRoot, VIEWS_DIR), viewsDir()];
   // The package's own views close the path UNCONDITIONALLY (under a plugin root they would otherwise never be
   // consulted), and every earlier dir can still shadow them.
   const bundled = bundledViewsDir();

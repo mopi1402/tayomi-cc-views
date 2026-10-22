@@ -4,11 +4,11 @@
 // also ships must win, or an adopter can never redress a standard view; and a TYPE must never outrank the path, or the
 // same reasoning breaks one level down.
 
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { VIEWS_DIR, VIEW_EXT } from "../data/markup.js";
+import { PROJECT_DIR_ENV, VIEWS_DIR, VIEW_EXT } from "../data/markup.js";
 import {
   bundledViewsDir,
   declaredViews,
@@ -166,6 +166,18 @@ describe("the default search path", () => {
     const project = search.indexOf(path.join(process.cwd(), VIEWS_DIR));
     expect(project).toBeGreaterThanOrEqual(0);
     expect(project).toBeLessThan(search.length - 1);
+  });
+
+  it("finds the project's views/ from the PROJECT root, not from wherever the session cd'ed to", () => {
+    // A hook inherits the session's cwd, which follows a `cd views`: the project's eight views vanished from a sandbox
+    // session that way, drawn raw (2026-10-22). Claude Code pins the root in CLAUDE_PROJECT_DIR for every hook.
+    const root = mkdir();
+    vi.stubEnv(PROJECT_DIR_ENV, root);
+    try {
+      expect(defaultViewsPath()).toContain(path.join(root, VIEWS_DIR));
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("resolves the bundled dir to somewhere that actually holds the health check", () => {

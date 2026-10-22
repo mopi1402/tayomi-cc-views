@@ -12,7 +12,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ENGINES_DIR_ENV, ENV_PREFIX } from "../src/data/markup.js";
+import { ENGINES_DIR_ENV, ENV_PREFIX, PROJECT_DIR_ENV } from "../src/data/markup.js";
 import { ENTRYPOINT_ENV } from "../src/platform/surface.js";
 
 for (const name of Object.keys(process.env)) {
@@ -20,5 +20,7 @@ for (const name of Object.keys(process.env)) {
 }
 // A suite run by a desktop agent inherits its entrypoint, and every hook case would answer null.
 delete process.env[ENTRYPOINT_ENV];
+// A suite run from a hook inherits the project root, and the default search path would leave the worker's cwd.
+delete process.env[PROJECT_DIR_ENV];
 
 process.env[ENGINES_DIR_ENV] = fs.mkdtempSync(path.join(os.tmpdir(), "cc-views-register-"));

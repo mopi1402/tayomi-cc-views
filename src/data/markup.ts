@@ -87,6 +87,8 @@ export const NO_YIELD_ENV = `${ENV_PREFIX}NO_YIELD`;
 export const ENGINES_DIR_ENV = `${ENV_PREFIX}ENGINES_DIR`;
 /** Set to anything and the engine journals every flush under the register; absent, the recorder stays silent. */
 export const DEBUG_ENV = `${ENV_PREFIX}DEBUG`;
+/** Claude Code's own: the project root it hands every hook, which stays put when the session's cwd moves. */
+export const PROJECT_DIR_ENV = "CLAUDE_PROJECT_DIR";
 export const SCRATCH_DIR = `cc-${VIEWS}`;
 /** Where the engines registered on this machine announce themselves, one file each. */
 export const ENGINES_DIR = "engines";
