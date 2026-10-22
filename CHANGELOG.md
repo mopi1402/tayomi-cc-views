@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.8.1
+
+- An engine running in another Claude Code session no longer wins this session's election, which left every block raw
+- The project's own `views/` is found from `CLAUDE_PROJECT_DIR`, so a session that changed directory keeps its views
+
 ## 2.8.0
 
 - Diagrams are drawn by `@tayomi/mermaid2term`, which replaces `@tayomi/termaid-ts`
