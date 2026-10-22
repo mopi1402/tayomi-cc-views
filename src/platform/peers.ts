@@ -510,10 +510,13 @@ export function holdElection(
     let electorate = peers(dir, self);
     if (sessionId !== undefined && sessionId !== "") {
       if (!rosterCarries(sessionId, dir, self)) announceRoster(sessionId, dir, self);
-      // The roster's word outranks the legacy register's for one same engine: it was signed for THIS session.
+      // The roster's word outranks the legacy register's for one same engine: it was signed for THIS session. Every
+      // composing engine signs a roster, so a composing claim found only on the register belongs to ANOTHER session:
+      // elected here, it would take a voice it never uses. Only the mute, roster-less engines still come from there.
       const signed = rosterPeers(sessionId, dir, self);
       const signedPaths = new Set(signed.map((peer) => peer.path));
-      electorate = [...signed, ...electorate.filter((peer) => !signedPaths.has(peer.path))];
+      const unsigned = mutePeers(electorate).filter((peer) => !signedPaths.has(peer.path));
+      electorate = [...signed, ...unsigned];
     }
     setDeferred(electedLosses(electorate, self, cwd));
     setComposeRole(composedRole(electorate, self, cwd));

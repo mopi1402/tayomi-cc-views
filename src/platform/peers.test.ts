@@ -336,6 +336,20 @@ describe("the session roster", () => {
     holdElection([VIEW], SESSION, undefined, dir, self());
     expect(defersView(VIEW)).toBe(false); // the roster's word: no view claimed, nothing lost to it
   });
+
+  it("never elects a composing engine of ANOTHER session, which will never see this session's messages", () => {
+    // Two Claude Code sessions side by side: the neighbour's newer engine only ever announced on the machine-wide
+    // register. Elected here, it took the voice and every live engine stayed a speaker: nobody answered (2026-10-21).
+    announce(dir, other(NEWER, [VIEW]));
+    holdElection([VIEW], SESSION, undefined, dir, self());
+    expect([composeRole(), defersView(VIEW)]).toEqual(["off", false]);
+  });
+
+  it("still counts a pre-composition engine from the legacy register, the one that never signs a roster", () => {
+    announce(dir, { ...other(NEWER, [VIEW]), speaks: 0 });
+    holdElection([VIEW], SESSION, undefined, dir, self());
+    expect([composeRole(), defersView(VIEW)]).toEqual(["off", true]);
+  });
 });
 
 // The rule, in one line: composition engages only where the WHOLE electorate speaks it, and then exactly one engine of
