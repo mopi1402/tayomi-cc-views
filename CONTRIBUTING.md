@@ -103,6 +103,8 @@ Unit tests cannot catch a broken `files` whitelist, a mis-wired bin, or a resolu
 
 `prepublishOnly` opens on the publisher guard (`scripts/check-publisher.mjs`: pnpm or nothing) and chains the whole `pnpm verify`, so the wrong tool is refused outright and a red state cannot ship. The guard is not ceremony: an `npm publish` passes every gate and then uploads its OWN tarball, the ungated one (measured 2026-08-11, a 2.1.2 whose import threw, unpublished within the hour).
 
+A release is `pnpm version <number>`, then `pnpm release`: it publishes first and pushes `main` and the tag only once the registry took the version, so a red gate never leaves a tag on GitHub for a version npm does not hold.
+
 ## The eye test: `sandbox/`
 
 `sandbox/` is a pre-wired Claude Code project, and the only storey that exercises the WIRING: `verify:pack` feeds the bin directly, so it can never catch a hook Claude Code declines to run. The whole recipe (setup, the prompt to type, how to read the verdict, what to check when nothing appears) lives in [docs/contributing/manual-checks.md](docs/contributing/manual-checks.md).

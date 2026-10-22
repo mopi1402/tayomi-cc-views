@@ -36,7 +36,7 @@ What it does NOT answer, by construction:
 
 ## `RenderOptions`: names and sources
 
-- `viewsPath`: ordered template directories, first hit wins (the order IS the shadowing policy). Default, in override order: the `CC_VIEWS_PATH` dirs (PATH-like, split on the platform delimiter), then the project's own `views/` (the hook runs with cwd at the project root), then the `CLAUDE_PLUGIN_ROOT/views` resolution, then UNCONDITIONALLY the views bundled inside the package (home of `welcome`, the health check, which therefore resolves wherever the engine runs). A project template naming a standard view therefore overrides it.
+- `viewsPath`: ordered template directories, first hit wins (the order IS the shadowing policy). Default, in override order: the `CC_VIEWS_PATH` dirs (PATH-like, split on the platform delimiter), then the project's own `views/` (under `CLAUDE_PROJECT_DIR`, the cwd only when it is unset, since a session's `cd` moves the cwd a hook inherits), then the `CLAUDE_PLUGIN_ROOT/views` resolution, then UNCONDITIONALLY the views bundled inside the package (home of `welcome`, the health check, which therefore resolves wherever the engine runs). A project template naming a standard view therefore overrides it.
 - `width`: a NUMBER is a forced ceiling; a FUNCTION is a width source standing in for the probe (returns columns, or `null` to fall through).
 - `widthEnv`: the env var read as a forced ceiling. Default `CC_VIEWS_WIDTH`.
 - `stateDir`: where per-message stream state and the probed-width cache live. Default `os.tmpdir()/cc-views`. SELF-CLEANING: a message's state is dropped on its final delta, and a stale sweep prunes what a crashed stream left behind. Two hosts that must not share stream state pass two dirs.

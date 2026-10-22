@@ -74,6 +74,7 @@
     "check:plugin": "node scripts/assemble-plugin.mjs --check",
     "verify": "pnpm lint && pnpm typecheck && pnpm check:sidecars && pnpm check:vocabulary && pnpm build && pnpm test && pnpm verify:pack && pnpm check:catalogue && pnpm check:skill && pnpm check:steering && pnpm check:plugin",
     "prepublishOnly": "node scripts/check-publisher.mjs && pnpm verify",
+    "release": "pnpm publish --access public && git push origin main --follow-tags",
     "check:skill": "node scripts/check-skill.mjs",
     "check:steering": "node scripts/check-steering.mjs",
     "sync:version": "node scripts/sync-version.mjs",
