@@ -16,7 +16,9 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, "..");
-const FIXTURES = path.join(HERE, "gallery");
+// The first directory doubles as `check`'s samples (src/check.test.ts), one per view taking a payload. The layouts
+// take none and `check` cannot judge them, so their pictures are fed from a directory of their own.
+const FIXTURE_DIRS = [path.join(HERE, "gallery"), path.join(HERE, "gallery-layouts")];
 const OUT = path.join(REPO, "docs", "images", "gallery");
 
 // Settled on 2026-08-15: a GitHub code block truncates around the 91st character on a wide
@@ -77,13 +79,15 @@ async function toAnsi(block, id) {
   return JSON.parse(envelope).hookSpecificOutput.displayContent;
 }
 
-const fixtures = fs
-  .readdirSync(FIXTURES)
-  .filter((name) => name.endsWith(".md"))
-  .sort();
+const fixtures = FIXTURE_DIRS.flatMap((dir) =>
+  fs
+    .readdirSync(dir)
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => path.join(dir, name)),
+).sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
 
 if (fixtures.length === 0) {
-  process.stderr.write(`no fixture in ${path.relative(REPO, FIXTURES)}\n`);
+  process.stderr.write(`no fixture in ${FIXTURE_DIRS.map((dir) => path.relative(REPO, dir)).join(", ")}\n`);
   process.exit(1);
 }
 
@@ -91,8 +95,8 @@ fs.mkdirSync(OUT, { recursive: true });
 
 let failed = 0;
 for (const fixture of fixtures) {
-  const name = fixture.replace(/\.md$/, "");
-  const block = fs.readFileSync(path.join(FIXTURES, fixture), "utf8");
+  const name = path.basename(fixture, ".md");
+  const block = fs.readFileSync(fixture, "utf8");
   const target = path.join(OUT, `${name}.svg`);
 
   let ansi;

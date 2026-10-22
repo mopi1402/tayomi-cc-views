@@ -28,7 +28,7 @@ Titled frames, aligned rows, coloured chips: the answer stops looking like the s
 Nothing drawn ever reaches the model. No tokens spent. No influence on the next answer. The transcript keeps plain text.
 
 **✨ Nothing to write to start.**  
-Columns, ruled rows, framed summaries, bands, quotes and rules ship with the package. Yours come later.
+Columns, ruled rows, framed summaries, bands, quotes, rules, diagrams and side-by-side layouts ship with the package. Yours come later.
 
 **✨ Never worse than plain markdown.**  
 A failing view prints its own text in place. The rest still renders. Never a blank. Under a decorator, the payload stands alone. No hook, and it still reads. A real table, a real quote, a real alert box.
@@ -49,14 +49,15 @@ column is the name you write, as `@{view:box}`, over ordinary markdown.
 | `banner` | <img src="docs/images/gallery/banner.svg" alt="A single warning band reading: 1226 tests pass but 5 are skipped"/> |
 
 <details>
-<summary>Three more: ruled rows, a set-apart line, and a diagram</summary>
+<summary>Five more: ruled rows, a set-apart line, a diagram, and two layouts side by side</summary>
 
 | View | Render |
 | --- | --- |
 | `lines` | <img src="docs/images/gallery/lines.svg" alt="Three files, each ruled underneath, and what changed in each"/> |
 | `quote` | <img src="docs/images/gallery/quote.svg" alt="A passage set apart behind a coloured bar, its first line bold"/> |
 | `mermaid` | <img src="docs/images/gallery/mermaid.svg" alt="A flowchart from commit through verify, branching to publish on pass and to stop on fail"/> |
-| `markdown` | <img src="docs/images/gallery/markdown.svg" alt="A release note in markdown: a bold heading, a nested bullet list, a numbered list and a quote, each folded under its marker"/> |
+| `split` | <img src="docs/images/gallery/split.svg" alt="A release-gate flowchart on the left and, in the column beside it, a markdown heading and three bullets explaining it"/> |
+| `aside` | <img src="docs/images/gallery/aside.svg" alt="A three-step flowchart with paragraphs and a list flowing in the column at its right, and a last line back at full width below it"/> |
 
 A diagram draws in mermaid's own `default` palette, in `padless` frames, so it looks here as it
 does on a forge. A `classDef` or a `style` in the source still paints what it names.
