@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The README no longer asks a plugin to sign its engine on at `SessionStart`: nothing needs it
+
 ## 2.8.3
 
 - The first message of a session is drawn again when two engines share it, instead of printing raw
