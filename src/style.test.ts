@@ -10,6 +10,8 @@ import { CELL_MARK, STACK_MARK } from "./data/marks.js";
 import {
   ANSI_RE,
   CHIP_CHROME,
+  INERT_DASH,
+  INERT_DOT,
   INERT_STAR,
   INERT_TICK,
   RESET_MARK,
@@ -25,6 +27,7 @@ import {
   fillTone,
   holdLeadingBlank,
   inert,
+  inertListOpeners,
   isTag,
   markCode,
   overCode,
@@ -1054,5 +1057,32 @@ describe("a sequence glued to a run Claude Code reads as `name@version`", () => 
   it("stops the run at a blank, so a version further on moves nothing", () => {
     const line = `${LEAD} ${INK}${PACKAGE} ${VERSION}${RESET}`;
     expect(unglueVersions(line)).toBe(line);
+  });
+});
+
+describe("a drawn line the host's markdown would read as a list item", () => {
+  const INK = renderTags(tagMark("blue"));
+  const CELL = "Rendre SessionStart obligatoire";
+  const PAD = "  │  ";
+
+  it("swaps an ordered marker's dot, the digits kept", () => {
+    expect(inertListOpeners(`1. ${CELL}${PAD}x`)).toBe(`1${INERT_DOT} ${CELL}${PAD}x`);
+  });
+
+  it("swaps a bullet's dash", () => {
+    expect(inertListOpeners(`- ${CELL}`)).toBe(`${INERT_DASH} ${CELL}`);
+  });
+
+  it("swaps on every line, behind an indent", () => {
+    const drawn = [`1. ${CELL}`, `2. ${CELL}`, `   - ${CELL}`].join("\n");
+    expect(inertListOpeners(drawn)).toBe(
+      [`1${INERT_DOT} ${CELL}`, `2${INERT_DOT} ${CELL}`, `   ${INERT_DASH} ${CELL}`].join("\n")
+    );
+  });
+
+  it("leaves what markdown would not open a list on, a line opening on a colour included", () => {
+    for (const line of ["1.5 ms", "-x", `a 1. ${CELL}`, `a - ${CELL}`, `    1. ${CELL}`, `${INK}- ${CELL}`]) {
+      expect(inertListOpeners(line)).toBe(line);
+    }
   });
 });

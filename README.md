@@ -126,10 +126,11 @@ Four kinds mermaid knows are NOT drawn: `requirementDiagram`, `sankey`, `radar` 
    }
    ```
 
-   The three session lines are OPTIONAL. When several engines are installed (a plugin's, a project's), each view is
-   drawn by exactly one of them, elected per session: SessionStart signs the roster, SessionEnd tears it down, and a
-   first message finding no roster recreates it, so nothing breaks without them. The `prompt` line is how a fleet mixing
-   engine generations gets NAMED to you, once per session, instead of silently degrading.
+   The three session lines are OPTIONAL: without them everything draws. When several engines are installed (a
+   plugin's, a project's), each view is drawn by exactly one of them, elected per session, and the `start` line makes
+   this engine known to the others from the session's start, which an older engine sharing the session relies on. The
+   `end` line tidies the session away. The `prompt` line is how a fleet mixing engine generations gets NAMED to you,
+   once per session, instead of silently degrading.
 
 3. **Copy/paste this prompt:**
 
@@ -240,6 +241,16 @@ await runMessageDisplayHook(undefined, {
   viewsPath: ["./views", "/path/to/my-plugin/views"], // first hit wins
 });
 ```
+
+Signing the engine on from your plugin's `SessionStart` hook is recommended, with the SAME options: a plugin is the engine most likely to share a session with another one, and signed on there it agrees with them before the session's first message (see the `start` line above):
+
+```ts
+import { runSessionStartHook } from "@tayomi/cc-views";
+
+await runSessionStartHook({ viewsPath: ["./views", "/path/to/my-plugin/views"] });
+```
+
+A hook that already reads stdin for its own work calls `handleSessionStart(payload, options)` with the parsed payload instead.
 
 `viewsPath` order is your policy: list the consumer's directory first and your users can shadow any of your views by simply naming a file the same. Append `bundledViewsDir()` last to keep `view:welcome` (the health check) resolvable through your hook too. For tests, `handleMessageDisplay(payload, host?, options?)` takes a parsed payload and returns the output string (or `null`) with no stdin/stdout anywhere. Width, state dir and the rest of `RenderOptions` are covered in the [integration reference](docs/architecture/display-host.md).
 

@@ -805,6 +805,25 @@ export const INERT_STAR = "∗"; // ASTERISK OPERATOR
 const inertMarkdown = (s: string): string =>
   s.split(CODE_TICK).join(INERT_TICK).split(EMPHASIS_STAR).join(INERT_STAR);
 
+// A drawn line OPENING like a list item is one to the host's markdown pass too: it re-indents every line after it as
+// the item's continuation, shearing a table's rows off their columns (measured 2026-10-23, Claude Code, a `columns`
+// cell reading "1. ..."). The marker's punctuation takes a one-column lookalike, so the line says nothing to markdown.
+export const INERT_DOT = "․"; // ONE DOT LEADER
+export const INERT_DASH = "‐"; // HYPHEN
+const ORDERED_MARK = ".";
+const BULLET_MARK = "-";
+const LIST_OPENER_RE = new RegExp(
+  `^(${SPACE}{0,3})(?:(\\d{1,9})\\${ORDERED_MARK}|\\${BULLET_MARK})(?=${SPACE}|$)`,
+  "gm"
+);
+
+/** Every drawn line opening with an ordered or bullet list marker, its punctuation swapped for a lookalike. */
+export function inertListOpeners(s: string): string {
+  return s.replace(LIST_OPENER_RE, (_: string, lead: string, digits: string | undefined) =>
+    digits === undefined ? lead + INERT_DASH : lead + digits + INERT_DOT
+  );
+}
+
 /**
  * Code spans as MARKS. It runs BEFORE fillTone and renderTags, so the style a span interrupts is still an unresolved
  * mark here and, where it is the tone slot, not yet even a colour: the terminator cannot be a sequence.

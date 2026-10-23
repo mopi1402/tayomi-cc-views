@@ -3,7 +3,7 @@
 
 import { WRAP_MARKS } from "../data/marks.js";
 import { holdsCells, wrapLine } from "../layout/wrap.js";
-import { dropInert, fillTone, inert, markCode, renderTags, toneClass } from "../style.js";
+import { dropInert, fillTone, inert, inertListOpeners, markCode, renderTags, toneClass } from "../style.js";
 import { nameField, type Scope } from "../scope.js";
 import {
   FIELD_CONTENT,
@@ -217,5 +217,5 @@ export function traceView(
   // it protected is text by then.
   const drawn = renderTags(fillTone(markCode(out.join("\n")), cls));
   const bare = WRAP_MARKS.reduce((s, m) => s.split(m).join(""), dropInert(drawn));
-  return { out: bare, read };
+  return { out: inertListOpeners(bare), read };
 }

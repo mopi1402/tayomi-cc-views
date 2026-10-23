@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The first message of a session is drawn again when two engines share it, instead of printing raw
+- The README shows a plugin how to sign its engine on at `SessionStart`
+- A drawn line opening like `1. ` or `- ` keeps its columns instead of being sheared by Claude Code's list layout
+
 ## 2.8.2
 
 - A code span holding a version, like `@2.8.1`, keeps its colour instead of printing `[38;2;…m` and pushing the frame out

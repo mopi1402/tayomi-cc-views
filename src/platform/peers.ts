@@ -483,6 +483,45 @@ export function claimMuteWarning(sessionId: string, mute: Peer[], dir: string = 
 }
 
 /**
+ * How long an engine's FIRST flush in a session lets its siblings sign before the election reads the roster. Every
+ * engine starts that flush at once, and one reading first took itself for alone: nobody answered and the message
+ * showed raw (2.8.1, measured 2026-10-23). Siblings sign within a few ms; the rest is a loaded machine's margin.
+ */
+export const ROSTER_SETTLE_MS = 150;
+
+/** Beside an engine's roster entry once its first flush has waited. Not JSON, so no reader takes it for a claim. */
+const SETTLED_MARK = ".settled";
+
+/**
+ * Sign this session's roster ahead of the election, and wait {@link ROSTER_SETTLE_MS} on this engine's first flush in
+ * the session, signed at SessionStart or not: a sibling may sign only at its own first flush (measured 1/20 without).
+ */
+export async function settleRoster(
+  views: string[],
+  sessionId: string | undefined,
+  dir: string = peersDir(),
+  me: Peer = SELF,
+  settleMs: number = ROSTER_SETTLE_MS
+): Promise<void> {
+  const off = process.env[NO_YIELD_ENV];
+  if (sessionId === undefined || sessionId === "" || (off !== undefined && off !== "")) return;
+  const self = { ...me, views: views.slice(0, MAX_VIEWS) };
+  const settled = entryPath(rosterDir(sessionId, dir), self.path) + SETTLED_MARK;
+  try {
+    if (fs.existsSync(settled)) return;
+    if (!rosterCarries(sessionId, dir, self)) announceRoster(sessionId, dir, self);
+  } catch {
+    return; // the election's own net signs what this could not
+  }
+  await new Promise((resolve) => setTimeout(resolve, settleMs));
+  try {
+    writeAtomic(settled, "");
+  } catch {
+    // unmarked, the next flush waits once more: slower, never wrong
+  }
+}
+
+/**
  * Announce this engine, then hold the election and install what this flush lost and the part it plays. Announcing
  * precedes drawing ALWAYS: an engine registered only while it drew would vanish once it deferred, and the two would
  * take turns. The legacy register is rewritten every flush (engines from before the election believe nothing else);

@@ -7,7 +7,7 @@
 import { deferredZoneKeys, slice, type DisplayHost } from "../pipeline.js";
 import { awaitEarlier, recordDelta, sweepStale } from "../platform/stream-state.js";
 import { DEFAULT_STATE_DIR } from "../platform/scratch.js";
-import { composeRole, holdElection } from "../platform/peers.js";
+import { composeRole, holdElection, settleRoster } from "../platform/peers.js";
 import { journal } from "../platform/journal.js";
 import { drawsAnsi } from "../platform/surface.js";
 import { gatherPieces, setComposition, sweepCompose } from "../platform/compose.js";
@@ -64,7 +64,9 @@ export async function handleMessageDisplay(
     // proximity tie-break reads the project's own directory. The same election casts this flush's PART in the
     // composition: off answers alone as always, a speaker publishes its zones as pieces and answers nothing, the one
     // assembler splices the pieces in and is the flush's single defined answer.
-    holdElection(declaredViews(options?.viewsPath), ctx.sessionId, cwd);
+    const views = declaredViews(options?.viewsPath);
+    await settleRoster(views, ctx.sessionId);
+    holdElection(views, ctx.sessionId, cwd);
     const role = composeRole();
     setComposition(role === "off" ? null : id);
     const resolved = typeof host === "function" ? host(ctx) : host;

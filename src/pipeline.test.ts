@@ -13,7 +13,7 @@ import path from "node:path";
 import { BLOCK_HINT, DECORATOR_CLOSE, DECORATOR_HINT, FENCE, VIEW_EXT } from "./data/markup.js";
 import { slice, transform, type DisplayHost } from "./pipeline.js";
 import { setDeferred } from "./platform/peers.js";
-import { ANSI_RE, VERSION_MARK, tagMark } from "./style.js";
+import { ANSI_RE, VERSION_MARK, tagMark, inertListOpeners } from "./style.js";
 
 const NAME = "probe";
 /** A second view of the same shape, so one message can hold a zone that is deferred and a zone that is not. */
@@ -255,7 +255,7 @@ describe("the two carriers, on one payload", () => {
   it("draws what the payload actually said, so the identity is not two blanks", () => {
     const out = plain(render(table, host));
     expect(out).toContain(HEADLINE);
-    for (const item of ITEMS) expect(out).toContain(`- ${item}`);
+    for (const item of ITEMS) expect(out).toContain(inertListOpeners(`- ${item}`));
     expect(out).toContain("3s");
   });
 });

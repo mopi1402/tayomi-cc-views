@@ -11,6 +11,7 @@ import { ENGINES_DIR, ENGINES_DIR_ENV, NO_YIELD_ENV, SCRATCH_DIR } from "../data
 import {
   COMPOSE_PROTOCOL,
   PEER_STALE_MS,
+  ROSTER_SETTLE_MS,
   SESSION_STALE_MS,
   announce,
   announceRoster,
@@ -28,6 +29,7 @@ import {
   rosterDir,
   rosterHolds,
   rosterPeers,
+  settleRoster,
   type Peer,
 } from "./peers.js";
 
@@ -304,6 +306,43 @@ describe("the session roster", () => {
   it("is recreated by the first flush that finds its own signature missing, the net under the wire", () => {
     holdElection([VIEW], SESSION, undefined, dir, self());
     expect(rosterHolds(SESSION, dir, self())).toBe(true);
+  });
+
+  it("lets a sibling starting the SAME first flush sign before the election reads the roster", async () => {
+    // Every engine starts a session's first flush at once: the one reading first took itself for alone and the
+    // message showed raw. The sibling here signs AFTER this engine did, inside the settle.
+    const signing = settleRoster([VIEW], SESSION, dir, self());
+    setTimeout(() => announceRoster(SESSION, dir, { ...other(NEWER), views: [VIEW] }), ROSTER_SETTLE_MS / 3);
+    await signing;
+    holdElection([VIEW], SESSION, undefined, dir, self());
+    expect(defersView(VIEW)).toBe(true); // the newer sibling was seen, and won
+  });
+
+  it("still waits when this engine signed at SessionStart, a sibling signing only at ITS first flush", async () => {
+    announceRoster(SESSION, dir, { ...self(), views: [VIEW] }); // this engine's SessionStart
+    const settling = settleRoster([VIEW], SESSION, dir, self());
+    setTimeout(() => announceRoster(SESSION, dir, { ...other(NEWER), views: [VIEW] }), ROSTER_SETTLE_MS / 3);
+    await settling;
+    holdElection([VIEW], SESSION, undefined, dir, self());
+    expect(defersView(VIEW)).toBe(true);
+  });
+
+  it("waits once per session: the flushes after the first cost no delay", async () => {
+    const forever = 60 * 60 * 1000; // a wait the suite would time out on, were it paid
+    await settleRoster([VIEW], SESSION, dir, self());
+    await settleRoster([VIEW], SESSION, dir, self(), forever);
+    expect(rosterHolds(SESSION, dir, self())).toBe(true);
+  });
+
+  it("leaves the settled mark out of the electorate, an older engine reading the roster included", async () => {
+    await settleRoster([VIEW], SESSION, dir, self());
+    expect(rosterPeers(SESSION, dir, other(NEWER))).toHaveLength(1); // self's claim alone, no phantom from the mark
+  });
+
+  it("waits for nothing and signs nothing with no session to name", async () => {
+    const forever = 60 * 60 * 1000;
+    await settleRoster([VIEW], undefined, dir, self(), forever);
+    expect(rosterHolds(SESSION, dir, self())).toBe(false);
   });
 
   it("re-signs a roster whose claim went STALE, so a view born mid-session keeps one voice", () => {

@@ -19,7 +19,7 @@ import {
 } from "./decorator.js";
 import { setDeferred } from "../platform/peers.js";
 import { VIEW_EXT, bundledViewsDir } from "../template/load.js";
-import { ANSI_RE, INERT_STAR, renderTags, tagMark } from "../style.js";
+import { ANSI_RE, INERT_STAR, renderTags, tagMark, inertListOpeners } from "../style.js";
 import { hasControlMark } from "../data/marks.js";
 import {
   DIAGRAM,
@@ -644,8 +644,8 @@ describe("a two-column table as named fields", () => {
 
   it("builds a LIST from item cells, a continuation row appending to it", () => {
     const out = draw(`| ${HEADLINE} | it shipped |`, `| ${NOTES} | - one |`, "| | - two |");
-    expect(out).toContain("- one");
-    expect(out).toContain("- two");
+    expect(out).toContain(inertListOpeners("- one"));
+    expect(out).toContain(inertListOpeners("- two"));
   });
 
   it("still hands `rows` over untouched, which is what keeps every existing view drawing", () => {

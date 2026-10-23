@@ -4,6 +4,7 @@
 //
 // The witness is character-exact: its prose is 7 characters, so the opening fence starts at 7 and its line closes at 19.
 
+import { inertListOpeners } from "../style.js";
 import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
@@ -110,7 +111,7 @@ describe("a view block arriving on a stream", () => {
   it("renders a closed block the same whether the flush is the last or not", () => {
     expect(shown(WITNESS)).toBe(shown(WITNESS, true));
     expect(shown(WITNESS)).not.toContain(FENCE);
-    expect(shown(WITNESS)).toContain("- first");
+    expect(shown(WITNESS)).toContain(inertListOpeners("- first"));
   });
 });
 
