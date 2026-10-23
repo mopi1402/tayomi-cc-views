@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.8.3
 
 - The first message of a session is drawn again when two engines share it, instead of printing raw
 - The README shows a plugin how to sign its engine on at `SessionStart`
