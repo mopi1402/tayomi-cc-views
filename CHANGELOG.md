@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2.9.0
 
+- A drawing leaves for Claude Code only as plain text: the engine reads it with the markdown parser Claude Code bundles (marked 15.0.12) and makes every construct that parser would restyle inert, a one-column lookalike for its markup, so `_a_`, `~a~`, `<b>`, `[x](url)`, `\|`, or a line opening on `#`, `>` or `+` no longer shear a frame
+- A URL in a view stays one link instead of printing twice with `[2m` beside it: the sequence glued to its end, which the URL would swallow, moves behind the blank that follows, and with no blank the URL is made inert
+- A suite feeds every view fifty hostile values, as text and as code, through that parser, and a sentinel fails when the installed Claude Code stops bundling it
+- An email in a code span, like `name@example.com`, keeps its colour instead of printing `[38;2;…m` and pushing the frame out: no sequence is glued to any run Claude Code links as an email, a version included: it opens one character ahead, or right after the address at the start of a line, the way a first column draws
 - The README no longer asks a plugin to sign its engine on at `SessionStart`: nothing needs it
 
 ## 2.8.3
