@@ -39,8 +39,8 @@ import {
   tagNames,
   tagSource,
   toneClass,
-  unglueVersions,
-  VERSION_MARK,
+  unglueAutolinks,
+  AUTOLINK_MARK,
 } from "./style.js";
 import { printedWidth } from "./layout/measure.js";
 
@@ -1013,50 +1013,75 @@ describe("a drawing opening on a blank", () => {
   });
 });
 
-describe("a sequence glued to a run Claude Code reads as `name@version`", () => {
+describe("a sequence glued to a run Claude Code reads as an email", () => {
   const INK = renderTags(tagMark("blue"));
   const FILL = renderTags(tagMark("blue_bg"));
   const RESET = renderTags(RESET_MARK);
-  const VERSION = `${VERSION_MARK}2.8.1`;
+  const VERSION = `${AUTOLINK_MARK}2.8.1`;
   const PACKAGE = "cc-views";
+  const EMAIL = `first.last-ext${AUTOLINK_MARK}example.com`;
   const LEAD = "ran";
 
   it("opens one blank earlier, so no escape is glued to the run", () => {
-    expect(unglueVersions(`${LEAD} ${INK}${VERSION}${RESET}`)).toBe(`${LEAD}${INK} ${VERSION}${RESET}`);
+    expect(unglueAutolinks(`${LEAD} ${INK}${VERSION}${RESET}`)).toBe(`${LEAD}${INK} ${VERSION}${RESET}`);
   });
 
   it("does so for a package and its version too", () => {
     const run = `${PACKAGE}${VERSION}`;
-    expect(unglueVersions(`${LEAD} ${INK}${run}${RESET}`)).toBe(`${LEAD}${INK} ${run}${RESET}`);
+    expect(unglueAutolinks(`${LEAD} ${INK}${run}${RESET}`)).toBe(`${LEAD}${INK} ${run}${RESET}`);
+  });
+
+  it("does so for an email, whatever follows the @", () => {
+    expect(unglueAutolinks(`${LEAD} ${INK}${EMAIL}${RESET}`)).toBe(`${LEAD}${INK} ${EMAIL}${RESET}`);
+  });
+
+
+  it("opens before any character no address holds, which then takes the ink", () => {
+    for (const ahead of ["(", "│", "/", "!"])
+      expect(unglueAutolinks(`${LEAD}${ahead}${INK}${EMAIL}${RESET}`)).toBe(`${LEAD}${INK}${ahead}${EMAIL}${RESET}`);
+  });
+
+  it("keeps a character of two code units whole", () => {
+    const line = `🦀${INK}${EMAIL}${RESET}`;
+    expect(unglueAutolinks(line)).toBe(`${INK}🦀${EMAIL}${RESET}`);
   });
 
   it("moves a run of sequences whole, a reset included", () => {
-    expect(unglueVersions(`${LEAD} ${RESET}${INK}${VERSION}`)).toBe(`${LEAD}${RESET}${INK} ${VERSION}`);
+    expect(unglueAutolinks(`${LEAD} ${RESET}${INK}${VERSION}`)).toBe(`${LEAD}${RESET}${INK} ${VERSION}`);
   });
 
   it("costs no column", () => {
-    const line = `${LEAD} ${INK}${VERSION}${RESET}`;
-    expect(printedWidth(unglueVersions(line))).toBe(printedWidth(line));
+    const line = `${LEAD} ${INK}${EMAIL}${RESET}`;
+    expect(printedWidth(unglueAutolinks(line))).toBe(printedWidth(line));
   });
 
-  it("leaves a mention alone, an @ followed by a letter breaking nothing", () => {
-    const line = `${LEAD} ${INK}${VERSION_MARK}${PACKAGE}${RESET}`;
-    expect(unglueVersions(line)).toBe(line);
+  it("leaves a run no address starts, which nothing links", () => {
+    const mention = `${AUTOLINK_MARK}${PACKAGE}`;
+    for (const run of [PACKAGE, mention, `${PACKAGE} ${VERSION}`, `/${PACKAGE}`, "https://example.com", "www.example.com"]) {
+      const line = `${LEAD} ${INK}${run}${RESET}`;
+      expect(unglueAutolinks(line)).toBe(line);
+    }
   });
 
-  it("leaves a fill alone, which would paint the blank", () => {
-    const line = `${LEAD} ${FILL}${VERSION}${RESET}`;
-    expect(unglueVersions(line)).toBe(line);
+  it("opens a fill after the address, which ahead of it would paint the character", () => {
+    expect(unglueAutolinks(`${LEAD} ${FILL}${EMAIL}${RESET}`)).toBe(`${LEAD} ${EMAIL}${FILL}${RESET}`);
   });
 
-  it("leaves a run with no blank ahead of it, there being nowhere to open", () => {
-    const line = `${LEAD}${INK}${VERSION}${RESET}`;
-    expect(unglueVersions(line)).toBe(line);
+  it("opens after the address at the start of a line, the way a first column draws", () => {
+    expect(unglueAutolinks(`${INK}${EMAIL}${RESET}`)).toBe(`${EMAIL}${INK}${RESET}`);
+    expect(unglueAutolinks(`${LEAD}\n${INK}${EMAIL}   │${RESET}`)).toBe(`${LEAD}\n${EMAIL}${INK}   │${RESET}`);
   });
 
-  it("stops the run at a blank, so a version further on moves nothing", () => {
-    const line = `${LEAD} ${INK}${PACKAGE} ${VERSION}${RESET}`;
-    expect(unglueVersions(line)).toBe(line);
+  it("opens after the address behind a letter of an address, or an @", () => {
+    expect(unglueAutolinks(`${LEAD}${INK}${EMAIL}${RESET}`)).toBe(`${LEAD}${EMAIL}${INK}${RESET}`);
+    expect(unglueAutolinks(`${AUTOLINK_MARK}${INK}${VERSION}${RESET}`)).toBe(`${AUTOLINK_MARK}${VERSION}${INK}${RESET}`);
+  });
+
+  it("leaves no sequence glued to an address, whatever stands ahead of it", () => {
+    for (const ahead of ["", " ", "(", "x", "\n", "🦀"])
+      for (const seq of [INK, FILL, `${RESET}${INK}`])
+        for (const run of [EMAIL, VERSION, `${PACKAGE}${VERSION}`])
+          expect(unglueAutolinks(`${LEAD}${ahead}${seq}${run}${RESET}`)).not.toMatch(`m${run}`);
   });
 });
 

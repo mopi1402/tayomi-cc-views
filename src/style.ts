@@ -365,23 +365,39 @@ export const TAG_AT = tagRe("y");
 /** An escape sequence already on the line. Zero columns wide, so every measurement strips it. */
 export const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
-/** Where a run reads to Claude Code as `name@version`. */
-export const VERSION_MARK = "@";
+/** What makes a run an email to Claude Code's markdown: `name@domain.tld`, and `name@2.8.1` alike. */
+export const AUTOLINK_MARK = "@";
+// The characters of an email's local part, as marked's GFM `email` rule reads them. Every SGR sequence ENDS in them
+// (`…;249m`), so the parser takes its tail for the start of the address.
+const LOCAL_PART = "A-Za-z0-9._+\\-";
+// marked's GFM `email` rule, read in Claude Code's 2.1.310 bundle, its local part left optional: the tail of the
+// sequence glued in front of it supplies one.
+const EMAIL = `[${LOCAL_PART}]*${AUTOLINK_MARK}[A-Za-z0-9_\\-]+(?:\\.[A-Za-z0-9_\\-]*[A-Za-z0-9])+(?![\\-_])`;
 // eslint-disable-next-line security/detect-non-literal-regexp
-const GLUED_VERSION_RE = new RegExp(
-  `(${SPACE})((?:${ANSI_RE.source})+)(?=[^\\s${ESC}]*${VERSION_MARK}\\d)`,
-  "g"
+const OPEN_AHEAD_RE = new RegExp(
+  `([^${LOCAL_PART}${AUTOLINK_MARK}${ESC}\\r\\n])((?:${ANSI_RE.source})+)(?=${EMAIL})`,
+  "gu"
 );
+// eslint-disable-next-line security/detect-non-literal-regexp
+const OPEN_AFTER_RE = new RegExp(`((?:${ANSI_RE.source})+)(${EMAIL})`, "g");
 
 /**
- * Every sequence glued to a run holding `@<digit>`, opened one blank earlier. Claude Code reprints such a run raw and
- * drops the escape in front of it, showing `[38;2;…m` and pushing the frame out (measured 2026-10-22). A fill stays
- * put, since it would paint the blank.
+ * No sequence glued to a run Claude Code links as an email. Its markdown (marked's GFM autolink) would start the
+ * address inside the escape: the escape is cut, printed as `[38;2;…m`, and pushes the frame out (measured 2026-10-22
+ * on `@2.8.1`, 2026-10-24 on `name@domain.com`). An URL never cuts one: marked starts it at `http`, `ftp` or
+ * `www.`, after the sequence. Claude Code draws a link in its own style, so the address never shows the ink anyway.
+ *
+ * The sequence opens one character earlier when one stands ahead that no address holds: a blank costs nothing, any
+ * other character takes the ink. Otherwise, at the start of a line, behind a letter of an address, or for a fill that
+ * would paint the character ahead, it opens right after the address. Either way the sequence ends behind a character
+ * no address holds, and costs no column.
  */
-export function unglueVersions(s: string): string {
-  return s.replace(GLUED_VERSION_RE, (glued: string, blank: string, run: string) =>
-    (run.match(ANSI_RE) ?? []).some((seq) => capOf(seq) !== undefined) ? glued : run + blank
-  );
+export function unglueAutolinks(s: string): string {
+  return s
+    .replace(OPEN_AHEAD_RE, (glued: string, ahead: string, run: string) =>
+      (run.match(ANSI_RE) ?? []).some((seq) => capOf(seq) !== undefined) ? glued : run + ahead
+    )
+    .replace(OPEN_AFTER_RE, (_glued: string, run: string, email: string) => email + run);
 }
 
 // What a span may not CROSS. A span is looked for on the line the layout already DREW, so a cell is still bracketed

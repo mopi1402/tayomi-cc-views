@@ -26,7 +26,7 @@ import {
   zoneKey,
 } from "./platform/compose.js";
 import { parseData } from "./template/view-data.js";
-import { holdLeadingBlank, unglueVersions } from "./style.js";
+import { holdLeadingBlank, unglueAutolinks } from "./style.js";
 import {
   failedOutcome,
   okOutcome,
@@ -122,7 +122,7 @@ export function transform(
         : fenced
       : (decorated.outcome ?? fenced);
   if (verdict !== null && final === true) host?.onRendered?.(verdict.ok, verdict.error);
-  return decorated.out === text ? text : unglueVersions(decorated.out);
+  return decorated.out === text ? text : unglueAutolinks(decorated.out);
 }
 
 /**
