@@ -82,7 +82,8 @@
   },
   "dependencies": {
     "@tayomi/mermaid2term": "^1.0.1",
-    "@tayomi/utils": "^0.2.0"
+    "@tayomi/utils": "^0.2.0",
+    "marked": "15.0.12"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
